@@ -25,7 +25,7 @@ import { Chips } from "./Chips";
 import { Notice } from "./Notice";
 import { overlapping, summarize } from "./overlaps";
 import { TimePicker } from "./TimePicker";
-import { shortDate } from "./weekDate";
+import { shortDate, weekRange } from "./weekDate";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
 
 /** What the sheet hands back to App when the user saves. */
@@ -278,7 +278,7 @@ export function QuickAddSheet(props: Props) {
                   <Text style={styles.repeatHint}>
                     {form.repeat
                       ? "Shows up in every week"
-                      : `Only ${shortDate(weekStart, 0)} – ${shortDate(weekStart, 6)}`}
+                      : `Only ${weekRange(weekStart)}`}
                   </Text>
                 </View>
                 <Switch

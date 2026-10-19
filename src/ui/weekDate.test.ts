@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMonths, addWeeks, dayKey, monthGrid, monthOfWeek, monthTitle, shortDate, weekStartOf, weeksBetween, weeksOfYear } from "./weekDate";
+import { addMonths, addWeeks, dayKey, monthGrid, monthOfWeek, monthTitle, shortDate, weekRange, weekStartOf, weeksBetween, weeksOfYear } from "./weekDate";
 
 describe("weekDate", () => {
   it("finds the Monday of any day in the week", () => {
@@ -12,6 +12,12 @@ describe("weekDate", () => {
   it("crosses months and years", () => {
     expect(addWeeks("2026-12-28", 1)).toBe("2027-01-04");
     expect(addWeeks("2026-11-02", -1)).toBe("2026-10-26");
+  });
+
+  it("writes a week's dates the short European way", () => {
+    expect(weekRange("2026-11-02")).toBe("2. – 8.11.");
+    expect(weekRange("2026-10-26")).toBe("26.10. – 1.11.");
+    expect(weekRange("2026-12-28")).toBe("28.12. – 3.1.");
   });
 
   it("labels days", () => {

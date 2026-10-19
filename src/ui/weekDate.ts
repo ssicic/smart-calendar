@@ -27,6 +27,20 @@ export function addWeeks(weekStart: string, n: number): string {
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/**
+ * The week's dates the short European way: "2. – 8.11." within a month,
+ * "26.10. – 1.11." across two months.
+ */
+export function weekRange(weekStart: string): string {
+  const first = fromKey(weekStart);
+  const last = fromKey(weekStart);
+  last.setDate(last.getDate() + 6);
+  const end = `${last.getDate()}.${last.getMonth() + 1}.`;
+  return first.getMonth() === last.getMonth()
+    ? `${first.getDate()}. – ${end}`
+    : `${first.getDate()}.${first.getMonth() + 1}. – ${end}`;
+}
+
 /** "20 Oct" for day `dayIndex` (0 = Monday) of the week. */
 export function shortDate(weekStart: string, dayIndex: number): string {
   const d = fromKey(weekStart);

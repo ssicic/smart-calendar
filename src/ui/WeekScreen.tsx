@@ -10,7 +10,7 @@ import { SleepSheet } from "./SleepSheet";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { MonthView } from "./MonthView";
-import { addMonths, addWeeks, dateKey, monthOfWeek, monthTitle, shortDate, weekStartOf, weeksBetween, type Month } from "./weekDate";
+import { addMonths, addWeeks, dateKey, monthOfWeek, monthTitle, weekRange, weekStartOf, weeksBetween, type Month } from "./weekDate";
 import { WeekView } from "./WeekView";
 import { clock, rowsByDay, type WeekRow } from "./weekRows";
 import { YearView } from "./YearView";
@@ -107,13 +107,14 @@ export function WeekScreen() {
             ? "Next week"
             : weekOffset === -1
               ? "Last week"
-              : `Week of ${shortDate(weekStart, 0)}`;
+              : weekRange(weekStart);
   const subtitle =
     view === "month"
       ? "Tap a day to open its week"
       : view === "year"
         ? "Tap a month to open it"
-        : `${shortDate(weekStart, 0)} – ${shortDate(weekStart, 6)} · ${plannedHours}h planned · ${freeHours}h free`;
+        : // The dates go here only when the title is "This/Next/Last week"; otherwise the title is the dates.
+          `${Math.abs(weekOffset) <= 1 ? `${weekRange(weekStart)} · ` : ""}${plannedHours}h planned · ${freeHours}h free`;
 
   /** The ‹ and › arrows: one week, month or year back or forward. */
   const step = (n: number) => {

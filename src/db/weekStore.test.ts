@@ -1,7 +1,8 @@
 // Runs the real SQL against Node's built-in SQLite, in memory. Same SQLite
 // engine as on the phone, so schema mistakes show up here first.
 import { createRequire } from "node:module";
-import { DEFAULT_SLEEP, planningWindows } from "../engine";
+import { DEFAULT_SLEEP, planWeek, planningWindows } from "../engine";
+import { nextSlot, storedId } from "../ui/itemActions";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_SETTINGS,
@@ -134,6 +135,36 @@ describe("weekStore", () => {
     await keepPlacement(db, "p1"); // "Bring back to this week"
     expect((await loadWeek(db, W1, W2)).week.placements).toEqual([{ ...p, state: "kept" }]);
     expect((await loadWeek(db, W2, W3)).week.items[0]?.timesPerWeek).toBe(3); // nothing left queued
+  });
+
+  it("remembers a suggested new slot through lock and unlock (same steps as the app)", async () => {
+    await insertItem(db, gym);
+    let n = 0;
+    const newId = () => `s${n++}`;
+    const reload = async () => {
+      const { week } = await loadWeek(db, W1, W2);
+      return { week, plan: planWeek(week) };
+    };
+
+    let { week, plan } = await reload();
+    const first = plan.placements.find((p) => p.itemId === "g")!;
+    const r = nextSlot(week, plan, first.id, newId); // "Suggest new slot"
+    if (!r.ok) throw new Error(r.error);
+    await savePlacement(db, W1, r.placement);
+    const slot = { start: r.placement.start, end: r.placement.end };
+    expect(slot.start).not.toBe(first.start);
+
+    ({ plan } = await reload());
+    const moved = plan.placements.find((p) => p.id === r.placement.id)!;
+    expect(moved).toMatchObject({ ...slot, state: "kept" });
+
+    await savePlacement(db, W1, { ...moved, id: storedId(moved, newId), state: "locked" }); // "Lock here"
+    ({ plan } = await reload());
+    expect(plan.placements.find((p) => p.id === moved.id)).toMatchObject({ ...slot, state: "locked" });
+
+    await keepPlacement(db, moved.id); // "Unlock"
+    ({ plan } = await reload());
+    expect(plan.placements.find((p) => p.id === moved.id)).toMatchObject({ ...slot, state: "kept" });
   });
 
   it("turns sessions locked by older versions (every move locked) into kept ones", async () => {
