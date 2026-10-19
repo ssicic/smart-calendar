@@ -17,6 +17,7 @@ import type { RowKind, WeekRow } from "./weekRows";
 
 export type ActionId =
   | "move"
+  | "rename"
   | "suggest"
   | "lock"
   | "unlock"
@@ -38,11 +39,12 @@ export interface Action {
 /** The actions for one kind of row, in the order they're shown. */
 export function actionsFor(kind: RowKind, title: string): Action[] {
   const remove: Action = { id: "delete", label: `Delete ${title}`, destructive: true };
+  const rename: Action = { id: "rename", label: "Rename" };
   switch (kind) {
     case "fixed":
     case "rest":
       // The scheduler never moves these, so there is nothing to lock.
-      return [{ id: "move", label: "Move" }, remove];
+      return [{ id: "move", label: "Move" }, rename, remove];
     case "suggested":
     case "kept":
       return [
@@ -50,6 +52,7 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
         { id: "suggest", label: "Suggest new slot" },
         { id: "lock", label: "Lock here" },
         { id: "done", label: "Done" },
+        rename,
         { ...remove, label: `Delete ${title} (every week)` },
         { id: "queue", label: "Move to queue (next week)" },
       ];
@@ -58,14 +61,28 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
       return [
         { id: "unlock", label: "Unlock (to move it)" },
         { id: "done", label: "Done" },
+        rename,
         { ...remove, label: `Delete ${title} (every week)` },
         { id: "queue", label: "Move to queue (next week)" },
       ];
     case "done":
-      return [{ id: "undone", label: "Not done yet" }, { ...remove, label: `Delete ${title} (every week)` }];
+      return [{ id: "undone", label: "Not done yet" }, rename, { ...remove, label: `Delete ${title} (every week)` }];
     case "skipped":
       return [{ id: "unqueue", label: "Bring back to this week" }];
   }
+}
+
+/** Why a new name can't be used, or undefined if it's fine. */
+export function renameProblem(title: string): string | undefined {
+  const clean = title.trim();
+  if (!clean) return "Give it a name.";
+  if (clean.length > 60) return "Keep the name under 60 characters.";
+  return undefined;
+}
+
+/** Other events with the same kind and name (e.g. "Work" Tuesday to Friday), offered "rename all". */
+export function sameNameEvents(rows: WeekRow[], row: WeekRow): WeekRow[] {
+  return rows.filter((r) => r.id !== row.id && r.kind === row.kind && r.title === row.title);
 }
 
 /**

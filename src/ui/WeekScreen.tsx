@@ -30,7 +30,7 @@ export function WeekScreen() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const data = useWeek(db, weekStart);
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = data;
-  const { categories, groupActions, setRowCategory } = data;
+  const { categories, groupActions, setRowCategory, rename } = data;
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
@@ -305,6 +305,7 @@ export function WeekScreen() {
         categories={categories}
         groupActions={groupActions}
         onSetCategory={setRowCategory}
+        onRename={rename}
         onAction={act}
         onMove={move}
         checkMove={(row, day, minute) => moveProblem(week, plan, allRows, row, day, minute)}

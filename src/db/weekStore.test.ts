@@ -20,6 +20,9 @@ import {
   keepPlacement,
   insertCategory,
   insertEvents,
+  renameEvent,
+  renameEventsNamed,
+  renameItem,
   loadCategories,
   setCategory,
   insertItem,
@@ -156,6 +159,19 @@ describe("weekStore", () => {
     expect((await loadCategories(db)).map((c) => c.id)).toEqual(reversed);
     await insertCategory(db, { id: "c2", name: "Family", color: "#6366F1" });
     expect((await loadCategories(db)).at(-1)?.id).toBe("c2");
+  });
+
+  it("renames one event, all events with that name, or a flexible item", async () => {
+    await insertEvents(db, "fixed", [1, 2, 3].map((d) => ({ id: `w${d}`, title: "Work", start: d * 1440 + 540, end: d * 1440 + 1020 })), null);
+    await insertEvents(db, "rest", [{ id: "r1", title: "Work", start: 600, end: 660 }], null);
+    await insertItem(db, gym);
+    await renameEvent(db, "w1", "Office");
+    await renameEventsNamed(db, "fixed", "Work", "Deep work");
+    await renameItem(db, "g", "Climbing");
+    const { week } = await loadWeek(db, W1, W2);
+    expect(week.fixed.map((e) => e.title)).toEqual(["Office", "Deep work", "Deep work"]);
+    expect(week.rest[0]?.title).toBe("Work"); // other kind: untouched
+    expect(week.items[0]?.title).toBe("Climbing");
   });
 
   it("round-trips flexible items, with and without preferred windows", async () => {

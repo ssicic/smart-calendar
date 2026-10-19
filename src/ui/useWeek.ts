@@ -13,6 +13,9 @@ import {
   insertCategory,
   insertEvents,
   insertItem,
+  renameEvent,
+  renameEventsNamed,
+  renameItem,
   loadCategories,
   loadWeek,
   moveEvent,
@@ -202,7 +205,18 @@ export function useWeek(db: Db, weekStart: string) {
       await refresh();
     });
 
+  /** New name for a row: an event (or, with `all`, every event with its name) or a flexible item. */
+  const rename = (row: WeekRow, title: string, all = false) =>
+    attempt(async () => {
+      if (row.kind === "fixed" || row.kind === "rest") {
+        if (all) await renameEventsNamed(db, row.kind, row.title, title);
+        else await renameEvent(db, row.id, title);
+      } else if (row.itemId) await renameItem(db, row.itemId, title);
+      await refresh();
+    });
+
   return {
+    rename,
     week,
     categories,
     groupActions,

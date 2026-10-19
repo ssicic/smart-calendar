@@ -7,6 +7,8 @@ import {
   moveProblem,
   moveSession,
   nextSlot,
+  renameProblem,
+  sameNameEvents,
   storedId,
   weekMinute,
 } from "./itemActions";
@@ -29,18 +31,18 @@ const week: WeekInput = {
 
 describe("actionsFor", () => {
   it("follows the agreed order for a suggested session", () => {
-    expect(actionsFor("suggested", "Gym").map((a) => a.id)).toEqual(["move", "suggest", "lock", "done", "delete", "queue"]);
+    expect(actionsFor("suggested", "Gym").map((a) => a.id)).toEqual(["move", "suggest", "lock", "done", "rename", "delete", "queue"]);
   });
   it("offers Lock here for kept sessions too", () => {
     expect(actionsFor("kept", "Gym").map((a) => a.id)).toEqual(actionsFor("suggested", "Gym").map((a) => a.id));
   });
 
   it("offers unlock instead of lock once locked, and no way to move it", () => {
-    expect(actionsFor("locked", "Gym").map((a) => a.id)).toEqual(["unlock", "done", "delete", "queue"]);
+    expect(actionsFor("locked", "Gym").map((a) => a.id)).toEqual(["unlock", "done", "rename", "delete", "queue"]);
   });
   it("never offers lock for fixed events and rest blocks", () => {
-    expect(actionsFor("fixed", "Work").map((a) => a.id)).toEqual(["move", "delete"]);
-    expect(actionsFor("rest", "Nap").map((a) => a.id)).toEqual(["move", "delete"]);
+    expect(actionsFor("fixed", "Work").map((a) => a.id)).toEqual(["move", "rename", "delete"]);
+    expect(actionsFor("rest", "Nap").map((a) => a.id)).toEqual(["move", "rename", "delete"]);
   });
 });
 
@@ -140,5 +142,20 @@ describe("forceMoveSession", () => {
   });
   it("still stays inside the week", () => {
     expect(forceMoveSession(plan, gym.id, weekMinute(6, h(23.5)), newId).ok).toBe(false);
+  });
+});
+
+describe("rename", () => {
+  it("needs a name of reasonable length", () => {
+    expect(renameProblem("  ")).toBe("Give it a name.");
+    expect(renameProblem("x".repeat(61))).toMatch(/under 60/);
+    expect(renameProblem(" Deep work ")).toBeUndefined();
+  });
+
+  it("finds the other events with the same name and kind", () => {
+    const row = (id: string, title: string, kind: "fixed" | "rest") => ({ id, title, kind, start: 0, end: 60 });
+    const work = row("w1", "Work", "fixed");
+    const rows = [work, row("w2", "Work", "fixed"), row("w3", "Work", "rest"), row("c", "Class", "fixed")];
+    expect(sameNameEvents(rows, work).map((r) => r.id)).toEqual(["w2"]);
   });
 });

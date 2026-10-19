@@ -354,6 +354,21 @@ export async function moveEvent(db: Db, id: string, start: number, end: number, 
   });
 }
 
+/** Renames one event (in every week it's in). */
+export async function renameEvent(db: Db, id: string, title: string): Promise<void> {
+  await db.runAsync("UPDATE events SET title = ? WHERE id = ?", [title, id]);
+}
+
+/** Renames every event of this kind that has this name, e.g. all "Work" blocks. */
+export async function renameEventsNamed(db: Db, kind: "fixed" | "rest", oldTitle: string, title: string): Promise<void> {
+  await db.runAsync("UPDATE events SET title = ? WHERE kind = ? AND title = ?", [title, kind, oldTitle]);
+}
+
+/** Renames a flexible item (all its sessions, every week). */
+export async function renameItem(db: Db, itemId: string, title: string): Promise<void> {
+  await db.runAsync("UPDATE flexible_items SET title = ? WHERE id = ?", [title, itemId]);
+}
+
 /** Deletes the event from every week, with its one-week changes. */
 export async function deleteEvent(db: Db, id: string): Promise<void> {
   await db.withTransactionAsync(async () => {

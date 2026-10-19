@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { DAY, dayOf } from "../engine";
 import type { Category } from "../db/weekStore";
 import { CategoryPicker } from "./CategoryPicker";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { Chips } from "./Chips";
-import { actionsFor, type ActionId, type EventScope } from "./itemActions";
+import { actionsFor, renameProblem, sameNameEvents, type ActionId, type EventScope } from "./itemActions";
 import { overlapping, summarize } from "./overlaps";
 import { parseTime } from "./quickAdd";
 import { TimePicker } from "./TimePicker";
@@ -35,6 +35,8 @@ interface Props {
   groupActions: GroupActions;
   /** Changes the row's group (for a flexible session: the whole item, every week). */
   onSetCategory: (row: WeekRow, categoryId: string | null) => Promise<string | undefined>;
+  /** New name; `all` = every event of this kind with the same name. */
+  onRename: (row: WeekRow, title: string, all: boolean) => Promise<string | undefined>;
 }
 
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
@@ -45,7 +47,9 @@ const SCOPES: { value: EventScope; label: string }[] = [
 
 export function ItemActionsSheet(props: Props) {
   const { row, rows, repeats, onAction, onMove, checkMove, onClose, categories, groupActions, onSetCategory } = props;
-  const [mode, setMode] = useState<"menu" | "move">("menu");
+  const [mode, setMode] = useState<"menu" | "move" | "rename">("menu");
+  const [newTitle, setNewTitle] = useState("");
+  const [renameAll, setRenameAll] = useState(false);
   const [error, setError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [moveDay, setMoveDay] = useState(0);
@@ -61,7 +65,9 @@ export function ItemActionsSheet(props: Props) {
     setConfirmDelete(false);
     setWarningsOff(false);
     setScope("week");
+    setRenameAll(false);
     if (row) {
+      setNewTitle(row.title);
       setMoveDay(dayOf(row.start));
       setMoveTime(clock(row.start));
     }
@@ -88,10 +94,21 @@ export function ItemActionsSheet(props: Props) {
 
   const run = async (action: ActionId, deleteScope?: EventScope) => {
     if (action === "move") return setMode("move");
+    if (action === "rename") return setMode("rename");
     // Deleting can't be undone, so the first tap only asks for a second one
     // (for a repeating event: which weeks, which is the second tap).
     if (action === "delete" && !confirmDelete) return setConfirmDelete(true);
     const err = await onAction(row, action, deleteScope);
+    if (err) setError(err);
+    else onClose();
+  };
+
+  // "Work" Mon–Fri is five events: offer renaming them all at once.
+  const sameName = row.kind === "fixed" || row.kind === "rest" ? sameNameEvents(rows, row) : [];
+  const saveRename = async () => {
+    const bad = renameProblem(newTitle);
+    if (bad) return setError(bad);
+    const err = await props.onRename(row, newTitle.trim(), renameAll);
     if (err) setError(err);
     else onClose();
   };
@@ -174,6 +191,41 @@ export function ItemActionsSheet(props: Props) {
                   </Pressable>
                 );
               })}
+            </View>
+          ) : mode === "rename" ? (
+            <View style={styles.move}>
+              <Text style={styles.label}>New name</Text>
+              <TextInput
+                style={styles.input}
+                value={newTitle}
+                onChangeText={(t) => {
+                  setNewTitle(t);
+                  setError(undefined);
+                }}
+                autoFocus
+                selectTextOnFocus
+                returnKeyType="done"
+                onSubmitEditing={saveRename}
+              />
+              {!isEvent && <Text style={styles.hint}>Renames every session of {row.title}, every week.</Text>}
+              {sameName.length > 0 && (
+                <Chips
+                  options={[
+                    { value: "one", label: "Just this one" },
+                    { value: "all", label: `All ${sameName.length + 1} called ${row.title}` },
+                  ]}
+                  isSelected={(v) => (v === "all") === renameAll}
+                  onPress={(v) => setRenameAll(v === "all")}
+                />
+              )}
+              <View style={styles.moveButtons}>
+                <Pressable onPress={() => setMode("menu")} style={styles.secondary} accessibilityRole="button">
+                  <Text style={styles.secondaryText}>Back</Text>
+                </Pressable>
+                <Pressable onPress={saveRename} style={styles.primary} accessibilityRole="button">
+                  <Text style={styles.primaryText}>Save name</Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <View style={styles.move}>
@@ -259,6 +311,16 @@ const styles = StyleSheet.create({
   scopeButton: { flex: 1, alignItems: "center", justifyContent: "center" },
   center: { textAlign: "center" },
   move: { gap: 10 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: "#111827",
+  },
+  hint: { fontSize: 13, color: "#6B7280" },
   group: { gap: 8, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   label: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
   moveButtons: { flexDirection: "row", gap: 12, marginTop: 6 },
