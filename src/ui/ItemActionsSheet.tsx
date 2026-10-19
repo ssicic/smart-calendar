@@ -1,23 +1,29 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { DAY, dayOf } from "../engine";
 import { Chips } from "./Chips";
 import { actionsFor, type ActionId } from "./itemActions";
+import { overlapping, summarize } from "./overlaps";
 import { parseTime } from "./quickAdd";
+import { TimePicker } from "./TimePicker";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
 
 interface Props {
   /** The tapped row; undefined hides the sheet. */
   row: WeekRow | undefined;
+  /** Everything currently on the calendar, for the overlap warning. */
+  rows: WeekRow[];
   /** Each handler returns an error message, or undefined when it worked. */
   onAction: (row: WeekRow, action: ActionId) => Promise<string | undefined>;
   onMove: (row: WeekRow, day: number, minuteOfDay: number) => Promise<string | undefined>;
+  /** Why the row can't move there (live, no saving), or undefined. */
+  checkMove: (row: WeekRow, day: number, minuteOfDay: number) => string | undefined;
   onClose: () => void;
 }
 
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
 
-export function ItemActionsSheet({ row, onAction, onMove, onClose }: Props) {
+export function ItemActionsSheet({ row, rows, onAction, onMove, checkMove, onClose }: Props) {
   const [mode, setMode] = useState<"menu" | "move">("menu");
   const [error, setError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -36,6 +42,21 @@ export function ItemActionsSheet({ row, onAction, onMove, onClose }: Props) {
   }, [row]);
 
   if (!row) return null;
+
+  // Live check of the picked slot. Flexible sessions can push suggestions
+  // aside but can't sit on fixed, rest, locked or done time.
+  const pickedStart = parseTime(moveTime);
+  const isEvent = row.kind === "fixed" || row.kind === "rest";
+  const clashes =
+    pickedStart === undefined
+      ? []
+      : overlapping(
+          rows,
+          [{ start: moveDay * DAY + pickedStart, end: moveDay * DAY + pickedStart + (row.end - row.start) }],
+          row.id,
+        );
+  const problem = pickedStart === undefined ? undefined : checkMove(row, moveDay, pickedStart);
+  const pushedAside = isEvent ? [] : clashes.filter((r) => r.kind === "suggested");
 
   const run = async (action: ActionId) => {
     if (action === "move") return setMode("move");
@@ -96,22 +117,32 @@ export function ItemActionsSheet({ row, onAction, onMove, onClose }: Props) {
             <View style={styles.move}>
               <Text style={styles.label}>Day</Text>
               <Chips options={DAY_OPTIONS} isSelected={(d) => d === moveDay} onPress={setMoveDay} />
-              <Text style={styles.label}>Start time</Text>
-              <TextInput
-                style={styles.input}
+              <Text style={styles.label}>Start  {moveTime}</Text>
+              <TimePicker
                 value={moveTime}
-                onChangeText={(t) => {
+                onChange={(t) => {
                   setMoveTime(t);
                   setError(undefined);
                 }}
-                placeholder="18:30"
-                onSubmitEditing={saveMove}
               />
+              {isEvent && !problem && clashes.length > 0 && (
+                <Text style={styles.warning}>Overlaps {summarize(clashes)}. You can still move it.</Text>
+              )}
+              {problem && <Text style={styles.blocked}>{problem}</Text>}
+              {!problem && pushedAside.length > 0 && (
+                <Text style={styles.warning}>{summarize(pushedAside)} will move to make room.</Text>
+              )}
               <View style={styles.moveButtons}>
                 <Pressable onPress={() => setMode("menu")} style={styles.secondary} accessibilityRole="button">
                   <Text style={styles.secondaryText}>Back</Text>
                 </Pressable>
-                <Pressable onPress={saveMove} style={styles.primary} accessibilityRole="button">
+                <Pressable
+                  onPress={saveMove}
+                  disabled={!!problem}
+                  style={[styles.primary, !!problem && styles.disabled]}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !!problem }}
+                >
                   <Text style={styles.primaryText}>Move here</Text>
                 </Pressable>
               </View>
@@ -152,19 +183,13 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: "#F1F5F9" },
   move: { gap: 10 },
   label: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
-  input: {
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: "#111827",
-  },
+  warning: { color: "#92400E", backgroundColor: "#FEF3C7", padding: 12, borderRadius: 10, lineHeight: 20 },
+  blocked: { color: "#B91C1C", backgroundColor: "#FEE2E2", padding: 12, borderRadius: 10, lineHeight: 20 },
   moveButtons: { flexDirection: "row", gap: 12, marginTop: 6 },
   secondary: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#F1F5F9" },
   secondaryText: { fontSize: 16, fontWeight: "700", color: "#374151" },
   primary: { flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#5B6CF0" },
+  disabled: { opacity: 0.4 },
   primaryText: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
   error: { color: "#B91C1C", fontWeight: "600" },
 });

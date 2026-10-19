@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ItemActionsSheet } from "./ItemActionsSheet";
+import { moveProblem } from "./itemActions";
 import { QuickAddSheet } from "./QuickAddSheet";
 import { useWeek } from "./useWeek";
 import { shortDate, weekStartOf } from "./weekDate";
@@ -24,6 +25,7 @@ export function WeekScreen() {
   // Hooks must run on every render in the same order, so this comes before
   // the early return below. It copes with `week` being undefined.
   const days = useMemo(() => (week && plan ? rowsByDay(week, plan) : []), [week, plan]);
+  const allRows = useMemo(() => days.flat(), [days]);
 
   if (!week || !plan) {
     return (
@@ -87,10 +89,18 @@ export function WeekScreen() {
       <QuickAddSheet
         visible={adding}
         week={week}
+        rows={allRows}
         onSave={async (r) => setSaveError(await add(r))}
         onClose={() => setAdding(false)}
       />
-      <ItemActionsSheet row={tapped} onAction={act} onMove={move} onClose={() => setTapped(undefined)} />
+      <ItemActionsSheet
+        row={tapped}
+        rows={allRows}
+        onAction={act}
+        onMove={move}
+        checkMove={(row, day, minute) => moveProblem(week, plan, allRows, row, day, minute)}
+        onClose={() => setTapped(undefined)}
+      />
     </SafeAreaView>
   );
 }

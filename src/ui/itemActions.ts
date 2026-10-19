@@ -9,7 +9,8 @@ import {
   type PlanResult,
   type WeekInput,
 } from "../engine";
-import type { RowKind } from "./weekRows";
+import { overlapping, summarize } from "./overlaps";
+import type { RowKind, WeekRow } from "./weekRows";
 
 export type ActionId =
   | "move"
@@ -104,4 +105,33 @@ export function moveEventTo(
   const end = newStart + (event.end - event.start);
   if (end > WEEK) return { ok: false, error: "It would run past Sunday midnight." };
   return { ok: true, start: newStart, end };
+}
+
+/**
+ * Why `row` can't move to (day, minuteOfDay), or undefined if it can. Uses
+ * the same functions as the real move, so the live warning and the result of
+ * tapping "Move here" always agree.
+ */
+export function moveProblem(
+  week: WeekInput,
+  plan: PlanResult,
+  rows: WeekRow[],
+  row: WeekRow,
+  day: number,
+  minuteOfDay: number,
+): string | undefined {
+  const start = weekMinute(day, minuteOfDay);
+  if (row.kind === "fixed" || row.kind === "rest") {
+    const r = moveEventTo(row, start);
+    return r.ok ? undefined : r.error;
+  }
+  const r = moveSession(week, plan, row.id, start, () => "check");
+  if (r.ok) return undefined;
+  // Name what's in the way, including the gap the scheduler keeps around things.
+  const gap = week.settings.bufferMin;
+  const near = overlapping(rows, [{ start: start - gap, end: start + (row.end - row.start) + gap }], row.id).filter(
+    (x) => x.kind !== "suggested",
+  );
+  if (near.length === 0) return r.error;
+  return `Can't go here: too close to ${summarize(near)}` + (gap ? `. The planner keeps ${gap} min free around things.` : ".");
 }

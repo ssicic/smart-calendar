@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { checkNewItem, type WeekInput } from "../engine";
+import { DAY, checkNewItem, type WeekInput } from "../engine";
 import {
   EMPTY_FORM,
   parseQuickAdd,
@@ -9,9 +9,12 @@ import {
   type ParseResult,
   type QuickAddForm,
   type TimeOfDay,
+  parseTime,
 } from "./quickAdd";
 import { Chips } from "./Chips";
-import { DAY_NAMES } from "./weekRows";
+import { overlapping, summarize } from "./overlaps";
+import { TimePicker } from "./TimePicker";
+import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
 
 /** What the sheet hands back to App when the user saves. */
 export type QuickAddResult = Extract<ParseResult, { ok: true }>;
@@ -19,6 +22,8 @@ export type QuickAddResult = Extract<ParseResult, { ok: true }>;
 interface Props {
   visible: boolean;
   week: WeekInput;
+  /** Everything currently on the calendar, for the overlap warning. */
+  rows: WeekRow[];
   onSave: (result: QuickAddResult) => void;
   onClose: () => void;
 }
@@ -54,7 +59,7 @@ const IMPORTANCE_OPTIONS: { value: Importance; label: string }[] = [
 ];
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
 
-export function QuickAddSheet({ visible, week, onSave, onClose }: Props) {
+export function QuickAddSheet({ visible, week, rows, onSave, onClose }: Props) {
   // The form's state lives here. Every keystroke calls setForm, and React
   // redraws the sheet with the new values.
   const [form, setForm] = useState<QuickAddForm>(EMPTY_FORM);
@@ -98,6 +103,27 @@ export function QuickAddSheet({ visible, week, onSave, onClose }: Props) {
   };
 
   const isFlexible = form.kind === "flexible";
+
+  // Changing the start keeps the length, so "09:00–10:00" moved to 14:00
+  // becomes "14:00–15:00" without touching the end picker.
+  const setStart = (startTime: string) => {
+    const oldStart = parseTime(form.startTime) ?? 0;
+    const oldEnd = parseTime(form.endTime) ?? 0;
+    const length = oldEnd > oldStart ? oldEnd - oldStart : 60;
+    const start = parseTime(startTime) ?? 0;
+    update({ startTime, endTime: clock(Math.min(start + length, DAY - 15)) });
+  };
+
+  // Recomputed on every render: cheap, and always matches the current picks.
+  const startMin = parseTime(form.startTime);
+  const endMin = parseTime(form.endTime);
+  const clashes =
+    !isFlexible && startMin !== undefined && endMin !== undefined && endMin > startMin
+      ? overlapping(
+          rows,
+          form.days.map((d) => ({ start: d * DAY + startMin, end: d * DAY + endMin })),
+        )
+      : [];
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
@@ -171,24 +197,15 @@ export function QuickAddSheet({ visible, week, onSave, onClose }: Props) {
                     }
                   />
                 </Field>
-                <View style={styles.row}>
-                  <Field label="Start" half>
-                    <TextInput
-                      style={styles.input}
-                      value={form.startTime}
-                      onChangeText={(startTime) => update({ startTime })}
-                      placeholder="09:00"
-                    />
-                  </Field>
-                  <Field label="End" half>
-                    <TextInput
-                      style={styles.input}
-                      value={form.endTime}
-                      onChangeText={(endTime) => update({ endTime })}
-                      placeholder="17:00"
-                    />
-                  </Field>
-                </View>
+                <Field label={`Start  ${form.startTime}`}>
+                  <TimePicker value={form.startTime} onChange={setStart} />
+                </Field>
+                <Field label={`End  ${form.endTime}`}>
+                  <TimePicker value={form.endTime} onChange={(endTime) => update({ endTime })} />
+                </Field>
+                {clashes.length > 0 && (
+                  <Text style={styles.warning}>Already there: {summarize(clashes)}. You can still save it.</Text>
+                )}
               </>
             )}
 
@@ -211,7 +228,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: "90%",
+    height: "88%", // fixed, so buttons don't jump when warnings appear
     width: "100%",
     maxWidth: 560,
     alignSelf: "center",
