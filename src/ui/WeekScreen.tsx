@@ -81,7 +81,7 @@ export function WeekScreen() {
                 accessibilityState={{ selected: view === v }}
               >
                 <Text style={[styles.toggleText, view === v && styles.toggleTextOn]}>
-                  {v === "calendar" ? "Calendar" : "List"}
+                  {v === "calendar" ? "Calendar" : "Week"}
                 </Text>
               </Pressable>
             ))}
