@@ -1,0 +1,102 @@
+/**
+ * Time model: every timestamp is minutes since Monday 00:00 of the week being
+ * planned. A week spans [0, WEEK). Day d covers [d * DAY, (d + 1) * DAY).
+ */
+export const DAY = 24 * 60;
+export const WEEK = 7 * DAY;
+
+/** Half-open interval [start, end) in week-minutes. */
+export interface Interval {
+  start: number;
+  end: number;
+}
+
+/** Non-negotiable: work, classes, appointments. Never moved. */
+export interface FixedEvent extends Interval {
+  id: string;
+  title: string;
+}
+
+/** Protected time off. Treated like a fixed event by the scheduler. */
+export interface RestBlock extends Interval {
+  id: string;
+  title: string;
+}
+
+/** Something with a duration and frequency that the app places for you. */
+export interface FlexibleItem {
+  id: string;
+  title: string;
+  durationMin: number;
+  timesPerWeek: number;
+  /** Higher is scheduled first. */
+  priority: number;
+  /** Optional daily windows in minutes-of-day, e.g. { start: 18*60, end: 21*60 }. */
+  preferredWindows?: Interval[];
+  goalId?: string;
+}
+
+export type GoalHorizon = "year" | "quarter" | "month" | "week";
+
+export interface Goal {
+  id: string;
+  title: string;
+  horizon: GoalHorizon;
+  parentId?: string;
+}
+
+/**
+ * suggested: placed by the scheduler, may be moved on replan.
+ * locked:    the user touched it; the scheduler never moves it.
+ * done / skipped: logged outcome; occupies (done) or frees (skipped) time.
+ */
+export type PlacementState = "suggested" | "locked" | "done" | "skipped";
+
+export interface Placement extends Interval {
+  id: string;
+  itemId: string;
+  state: PlacementState;
+}
+
+export interface PlannerSettings {
+  /** Earliest minute-of-day the scheduler may place things. */
+  dayStart: number;
+  /** Latest minute-of-day a placement may end. */
+  dayEnd: number;
+  /** Gap kept between a placement and anything adjacent. */
+  bufferMin: number;
+  /** Free minutes per week the scheduler must leave unfilled. */
+  minFreeMinutes: number;
+}
+
+export interface WeekInput {
+  fixed: FixedEvent[];
+  rest: RestBlock[];
+  items: FlexibleItem[];
+  placements: Placement[];
+  settings: PlannerSettings;
+}
+
+export interface CapacityReport {
+  /** Placeable minutes after fixed, rest and kept placements. */
+  freeMinutes: number;
+  /** Minutes still needed by items that are not yet placed. */
+  requiredMinutes: number;
+  /** freeMinutes minus the protected minimum. */
+  budgetMinutes: number;
+  /** How far required exceeds budget (0 when it fits). */
+  overflowMinutes: number;
+  fits: boolean;
+}
+
+export interface Unplaced {
+  itemId: string;
+  missing: number;
+  reason: "no-slot" | "over-capacity";
+}
+
+export interface PlanResult {
+  placements: Placement[];
+  unplaced: Unplaced[];
+  capacity: CapacityReport;
+}
