@@ -102,6 +102,12 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (week_start, day)
   );
   `,
+  // Version 4: one-off events. week_start = the Monday of the only week the
+  // event is in; NULL = it repeats every week (all events before v4 do).
+  `
+  ALTER TABLE events ADD COLUMN week_start TEXT;
+  CREATE INDEX events_by_week ON events (week_start);
+  `,
 ];
 
 export async function migrate(db: Db): Promise<void> {
@@ -121,6 +127,7 @@ export interface EventRow {
   title: string;
   start_min: number;
   end_min: number;
+  week_start: string | null;
 }
 
 export interface ItemRow {
@@ -180,7 +187,11 @@ export interface LoadedWeek {
  * added to their item's times-per-week, so the planner fits them in.
  */
 export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string): Promise<LoadedWeek> {
-  const events = await db.getAllAsync<EventRow>("SELECT * FROM events ORDER BY start_min", []);
+  // Events that repeat every week, plus the one-off events of this week.
+  const events = await db.getAllAsync<EventRow>(
+    "SELECT * FROM events WHERE week_start IS NULL OR week_start = ? ORDER BY start_min",
+    [weekStart],
+  );
   const items = await db.getAllAsync<ItemRow>("SELECT * FROM flexible_items ORDER BY rowid", []);
   const placements = await db.getAllAsync<PlacementRow>(
     "SELECT id, item_id, start_min, end_min, state FROM placements WHERE week_start = ?",
@@ -218,17 +229,20 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
 
 // ---- Writes: what you plan ----
 
-export async function insertEvents(db: Db, kind: "fixed" | "rest", events: (FixedEvent | RestBlock)[]): Promise<void> {
+/** `weekStart`: the only week these events are in, or null to repeat them every week. */
+export async function insertEvents(
+  db: Db,
+  kind: "fixed" | "rest",
+  events: (FixedEvent | RestBlock)[],
+  weekStart: string | null,
+): Promise<void> {
   // `?` placeholders: the driver inserts values safely, so a title like
   // "Bob's class" can't break the SQL (or inject any).
   for (const e of events) {
-    await db.runAsync("INSERT INTO events (id, kind, title, start_min, end_min) VALUES (?, ?, ?, ?, ?)", [
-      e.id,
-      kind,
-      e.title,
-      e.start,
-      e.end,
-    ]);
+    await db.runAsync(
+      "INSERT INTO events (id, kind, title, start_min, end_min, week_start) VALUES (?, ?, ?, ?, ?, ?)",
+      [e.id, kind, e.title, e.start, e.end, weekStart],
+    );
   }
 }
 

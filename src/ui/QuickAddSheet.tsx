@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { DAY, checkNewItem, type WeekInput } from "../engine";
 import {
   EMPTY_FORM,
@@ -15,6 +15,7 @@ import { Chips } from "./Chips";
 import { Notice } from "./Notice";
 import { overlapping, summarize } from "./overlaps";
 import { TimePicker } from "./TimePicker";
+import { shortDate } from "./weekDate";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
 
 /** What the sheet hands back to App when the user saves. */
@@ -29,6 +30,8 @@ interface Props {
   onClose: () => void;
   /** Prefilled values, e.g. from holding a time on the calendar. */
   initial?: QuickAddForm;
+  /** The week on screen (its Monday): where a non-repeating event goes. */
+  weekStart: string;
 }
 
 let idCounter = 0;
@@ -62,7 +65,7 @@ const IMPORTANCE_OPTIONS: { value: Importance; label: string }[] = [
 ];
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
 
-export function QuickAddSheet({ visible, week, rows, onSave, onClose, initial }: Props) {
+export function QuickAddSheet({ visible, week, rows, onSave, onClose, initial, weekStart }: Props) {
   // The form's state lives here. Every keystroke calls setForm, and React
   // redraws the sheet with the new values.
   const [form, setForm] = useState<QuickAddForm>(EMPTY_FORM);
@@ -199,9 +202,31 @@ export function QuickAddSheet({ visible, week, rows, onSave, onClose, initial }:
               </>
             ) : (
               <>
+                <View style={styles.repeatRow}>
+                  <View style={styles.repeatText}>
+                    <Text style={styles.repeatLabel}>Repeat every week</Text>
+                    <Text style={styles.repeatHint}>
+                      {form.repeat
+                        ? "Shows up in every week"
+                        : `Only ${shortDate(weekStart, 0)} – ${shortDate(weekStart, 6)}`}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={form.repeat}
+                    onValueChange={(repeat) => update({ repeat })}
+                    trackColor={{ true: "#5B6CF0", false: "#D1D5DB" }}
+                    thumbColor="#FFFFFF"
+                    accessibilityLabel="Repeat every week"
+                  />
+                </View>
                 <Field label="Days">
                   <Chips
-                    options={DAY_OPTIONS}
+                    // Just this week: show the dates too ("Thu 22"), since it's one specific day.
+                    options={
+                      form.repeat
+                        ? DAY_OPTIONS
+                        : DAY_OPTIONS.map((o) => ({ ...o, label: `${o.label} ${shortDate(weekStart, o.value).split(" ")[0]}` }))
+                    }
                     isSelected={(d) => form.days.includes(d)}
                     onPress={(d) =>
                       update({ days: form.days.includes(d) ? form.days.filter((x) => x !== d) : [...form.days, d] })
@@ -234,6 +259,10 @@ export function QuickAddSheet({ visible, week, rows, onSave, onClose, initial }:
 }
 
 const styles = StyleSheet.create({
+  repeatRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  repeatText: { flexShrink: 1, gap: 2 },
+  repeatLabel: { fontSize: 15, fontWeight: "600", color: "#111827" },
+  repeatHint: { fontSize: 13, color: "#6B7280" },
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
   sheet: {
     backgroundColor: "#FFFFFF",

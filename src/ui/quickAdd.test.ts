@@ -70,9 +70,15 @@ describe("parseQuickAdd", () => {
     ).toEqual({ ok: false, error: "End time must be after start time." });
   });
 
+  it("adds events to just this week unless Repeat every week is on", () => {
+    const base = { kind: "fixed" as const, title: "Dentist", days: [2], startTime: "10:00", endTime: "11:00" };
+    expect(parseQuickAdd(form(base), newId)).toMatchObject({ ok: true, repeat: false });
+    expect(parseQuickAdd(form({ ...base, repeat: true }), newId)).toMatchObject({ ok: true, repeat: true });
+  });
+
   it("prefills a Fixed event from a held calendar slot", () => {
     const f = formForSlot(2, 14 * 60 + 30);
-    expect(f).toMatchObject({ kind: "fixed", days: [2], startTime: "14:30", endTime: "15:30" });
+    expect(f).toMatchObject({ kind: "fixed", days: [2], startTime: "14:30", endTime: "15:30", repeat: false });
     expect(formForSlot(0, 23 * 60 + 30)).toMatchObject({ startTime: "23:00", endTime: "23:45" });
   });
 });

@@ -78,16 +78,24 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 4 });
   });
 
   it("round-trips and moves fixed events and rest blocks", async () => {
-    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }]);
-    await insertEvents(db, "rest", [{ id: "r1", title: "Bob's nap", start: 840, end: 900 }]);
+    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null);
+    await insertEvents(db, "rest", [{ id: "r1", title: "Bob's nap", start: 840, end: 900 }], null);
     await moveEvent(db, "w1", 600, 1080);
     const { week } = await loadWeek(db, W1, W2);
     expect(week.fixed).toEqual([{ id: "w1", title: "Work", start: 600, end: 1080 }]);
     expect(week.rest).toEqual([{ id: "r1", title: "Bob's nap", start: 840, end: 900 }]);
+  });
+
+  it("shows a one-off event only in its own week, and a repeating one in every week", async () => {
+    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null);
+    await insertEvents(db, "fixed", [{ id: "d1", title: "Dentist", start: 600, end: 660 }], W2);
+    expect((await loadWeek(db, W1, W2)).week.fixed.map((e) => e.id)).toEqual(["w1"]);
+    expect((await loadWeek(db, W2, W3)).week.fixed.map((e) => e.id)).toEqual(["w1", "d1"]);
+    expect((await loadWeek(db, W3, W3)).week.fixed.map((e) => e.id)).toEqual(["w1"]);
   });
 
   it("round-trips flexible items, with and without preferred windows", async () => {
@@ -97,7 +105,7 @@ describe("weekStore", () => {
   });
 
   it("rejects an event that ends before it starts", async () => {
-    await expect(insertEvents(db, "fixed", [{ id: "x", title: "X", start: 600, end: 500 }])).rejects.toThrow(/CHECK/);
+    await expect(insertEvents(db, "fixed", [{ id: "x", title: "X", start: 600, end: 500 }], null)).rejects.toThrow(/CHECK/);
   });
 
   it("keeps placements per week", async () => {

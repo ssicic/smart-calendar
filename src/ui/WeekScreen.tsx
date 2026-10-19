@@ -221,6 +221,7 @@ export function WeekScreen() {
       <QuickAddSheet
         visible={!!adding}
         initial={adding?.form}
+        weekStart={weekStart}
         week={week}
         rows={allRows}
         onSave={async (r) => setSaveError(await add(r))}

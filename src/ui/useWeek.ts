@@ -66,7 +66,7 @@ export function useWeek(db: Db, weekStart: string) {
   const add = (r: QuickAddResult) =>
     attempt(async () => {
       if (r.kind === "flexible") await insertItem(db, r.item);
-      else await insertEvents(db, r.kind, r.events);
+      else await insertEvents(db, r.kind, r.events, r.repeat ? null : weekStart);
       await refresh();
     });
 

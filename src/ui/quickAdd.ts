@@ -20,6 +20,8 @@ export interface QuickAddForm {
   days: number[]; // 0 = Monday
   startTime: string; // "09:00"
   endTime: string; // "17:00"
+  /** Off: only the week on screen. On: every week. */
+  repeat: boolean;
 }
 
 export const EMPTY_FORM: QuickAddForm = {
@@ -32,6 +34,7 @@ export const EMPTY_FORM: QuickAddForm = {
   days: [],
   startTime: "09:00",
   endTime: "10:00",
+  repeat: false,
 };
 
 /** Daily windows (minutes-of-day) behind each time-of-day choice. */
@@ -47,8 +50,8 @@ export const IMPORTANCE_PRIORITY: Record<Importance, number> = { low: 1, medium:
 /** Discriminated union: check `ok` first, then TypeScript knows which fields exist. */
 export type ParseResult =
   | { ok: true; kind: "flexible"; item: FlexibleItem }
-  | { ok: true; kind: "fixed"; events: FixedEvent[] }
-  | { ok: true; kind: "rest"; events: RestBlock[] }
+  | { ok: true; kind: "fixed"; events: FixedEvent[]; repeat: boolean }
+  | { ok: true; kind: "rest"; events: RestBlock[]; repeat: boolean }
   | { ok: false; error: string };
 
 /** "9:30" or "09:30" -> 570 minutes. "24:00" is allowed as an end time. */
@@ -97,7 +100,8 @@ export function parseQuickAdd(form: QuickAddForm, newId: () => string): ParseRes
   const events = [...form.days]
     .sort((a, b) => a - b)
     .map((d) => ({ id: newId(), title, start: d * DAY + start, end: d * DAY + end }));
-  return form.kind === "fixed" ? { ok: true, kind: "fixed", events } : { ok: true, kind: "rest", events };
+  const repeat = form.repeat;
+  return form.kind === "fixed" ? { ok: true, kind: "fixed", events, repeat } : { ok: true, kind: "rest", events, repeat };
 }
 
 /**
