@@ -26,6 +26,9 @@ export type ActionId =
   | "queue"
   | "unqueue";
 
+/** For a repeating event: change "Just this week" or "Every week". */
+export type EventScope = "week" | "every";
+
 export interface Action {
   id: ActionId;
   label: string;

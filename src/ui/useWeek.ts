@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { isWeekend, planWeek, sleepForDay, type FixedEvent } from "../engine";
 import {
+  changeEventForWeek,
   deleteEvent,
   deleteItem,
   keepPlacement,
@@ -34,6 +35,7 @@ import {
   storedId,
   weekMinute,
   type ActionId,
+  type EventScope,
 } from "./itemActions";
 import type { GroupActions } from "./ManageGroupsSheet";
 import type { QuickAddResult } from "./QuickAddSheet";
@@ -72,6 +74,11 @@ export function useWeek(db: Db, weekStart: string) {
 
   const week = loaded?.week;
   const plan = useMemo(() => (week ? planWeek(week) : undefined), [week]);
+  const repeatingEventIds = useMemo(() => new Set(loaded?.repeatingEventIds), [loaded]);
+
+  /** Only repeating events have a choice; one-off events always change "every week" (their only week). */
+  const scopeFor = (row: WeekRow, scope: EventScope): EventScope =>
+    repeatingEventIds.has(row.id) ? scope : "every";
 
   const add = (r: QuickAddResult) =>
     attempt(async () => {
@@ -80,14 +87,17 @@ export function useWeek(db: Db, weekStart: string) {
       await refresh();
     });
 
-  const act = (row: WeekRow, action: ActionId) =>
+  /** `scope`: for a repeating event's Delete, just this week or every week. */
+  const act = (row: WeekRow, action: ActionId, scope: EventScope = "every") =>
     attempt(async () => {
       if (!week || !plan) return;
       const p = plan.placements.find((x) => x.id === row.id);
 
       if (action === "delete") {
-        if (row.kind === "fixed" || row.kind === "rest") await deleteEvent(db, row.id);
-        else if (row.itemId) await deleteItem(db, row.itemId);
+        if (row.kind === "fixed" || row.kind === "rest") {
+          if (scopeFor(row, scope) === "week") await changeEventForWeek(db, row.id, weekStart, null);
+          else await deleteEvent(db, row.id);
+        } else if (row.itemId) await deleteItem(db, row.itemId);
       } else if (action === "unlock" || action === "undone" || action === "unqueue") {
         await keepPlacement(db, row.id); // stays at this time, just not locked/done/queued
       } else if (p && (action === "lock" || action === "done")) {
@@ -102,8 +112,11 @@ export function useWeek(db: Db, weekStart: string) {
       await refresh();
     });
 
-  /** `force`: the user saw the warning and chose "Move anyway". */
-  const move = (row: WeekRow, day: number, minuteOfDay: number, force = false) =>
+  /**
+   * `force`: the user saw the warning and chose "Move anyway". `scope`: for a
+   * repeating event, move it just this week (the default, also for dragging) or every week.
+   */
+  const move = (row: WeekRow, day: number, minuteOfDay: number, force = false, scope: EventScope = "week") =>
     attempt(async () => {
       if (!week || !plan) return;
       const newStart = weekMinute(day, minuteOfDay);
@@ -113,7 +126,8 @@ export function useWeek(db: Db, weekStart: string) {
         if (!event) return;
         const r = moveEventTo(event, newStart);
         if (!r.ok) return r.error;
-        await moveEvent(db, event.id, r.start, r.end);
+        if (scopeFor(row, scope) === "week") await changeEventForWeek(db, event.id, weekStart, r);
+        else await moveEvent(db, event.id, r.start, r.end, weekStart);
       } else {
         const r = force
           ? forceMoveSession(plan, row.id, newStart, newId)
@@ -194,6 +208,7 @@ export function useWeek(db: Db, weekStart: string) {
     groupActions,
     setRowCategory,
     plan,
+    repeatingEventIds,
     queuedForNextWeek: loaded?.queuedForNextWeek ?? [],
     sleep,
     windDownMin: loaded?.sleep.windDownMin ?? 0,

@@ -6,6 +6,9 @@ import { nextSlot, storedId } from "../ui/itemActions";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_SETTINGS,
+  applyExceptions,
+  changeEventForWeek,
+  deleteEvent,
   deleteCategory,
   deleteItem,
   reorderCategories,
@@ -81,12 +84,13 @@ describe("weekStore", () => {
       sleep: DEFAULT_SLEEP,
       overrides: [],
       queuedForNextWeek: [],
+      repeatingEventIds: [],
     });
   });
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 6 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 7 });
   });
 
   it("round-trips and moves fixed events and rest blocks", async () => {
@@ -265,6 +269,41 @@ describe("weekStore", () => {
     expect(loaded.queuedForNextWeek).toEqual([]);
   });
 
+  it("moves or removes a repeating event just for one week", async () => {
+    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null);
+    await insertEvents(db, "fixed", [{ id: "d1", title: "Dentist", start: 600, end: 660 }], W1);
+    expect((await loadWeek(db, W1, W2)).repeatingEventIds).toEqual(["w1"]);
+
+    await changeEventForWeek(db, "w1", W1, { start: 700, end: 1180 });
+    await changeEventForWeek(db, "w1", W1, { start: 720, end: 1200 }); // second change overwrites
+    expect((await loadWeek(db, W1, W2)).week.fixed).toEqual([
+      { id: "d1", title: "Dentist", start: 600, end: 660 },
+      { id: "w1", title: "Work", start: 720, end: 1200 }, // sorted by its new time
+    ]);
+    expect((await loadWeek(db, W2, W3)).week.fixed).toEqual([{ id: "w1", title: "Work", start: 540, end: 1020 }]);
+
+    await changeEventForWeek(db, "w1", W2, null);
+    expect((await loadWeek(db, W2, W3)).week.fixed).toEqual([]);
+    expect((await loadWeek(db, W3, W4)).week.fixed.map((e) => e.id)).toEqual(["w1"]);
+  });
+
+  it("moving every week drops the shown week's one-week change, others stay", async () => {
+    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null);
+    await changeEventForWeek(db, "w1", W1, { start: 720, end: 1200 });
+    await changeEventForWeek(db, "w1", W2, null);
+    await moveEvent(db, "w1", 480, 960, W1);
+    expect((await loadWeek(db, W1, W2)).week.fixed[0]).toMatchObject({ start: 480, end: 960 });
+    expect((await loadWeek(db, W2, W3)).week.fixed).toEqual([]);
+    expect((await loadWeek(db, W3, W4)).week.fixed[0]).toMatchObject({ start: 480, end: 960 });
+
+    await deleteEvent(db, "w1"); // every week, and its one-week changes with it
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM event_exceptions").get()).toEqual({ n: 0 });
+  });
+
+  it("refuses a one-week change that ends before it starts", async () => {
+    await expect(changeEventForWeek(db, "w1", W1, { start: 600, end: 600 })).rejects.toThrow();
+  });
+
   it("saves sleep settings", async () => {
     const mine = { ...DEFAULT_SLEEP, weekend: { wake: 600, bed: 1470 } };
     await saveSleep(db, mine);
@@ -293,5 +332,25 @@ describe("weekStore", () => {
     // Same queue id again: the INSERT fails, so the skipped placement must not be saved either.
     await expect(queuePlacement(db, W1, { ...p, id: "p2" }, W2, "q1")).rejects.toThrow();
     expect((await loadWeek(db, W1, W2)).week.placements.map((x) => x.id)).toEqual(["p1"]);
+  });
+});
+
+describe("applyExceptions", () => {
+  const row = (id: string, start: number) => ({
+    id, kind: "fixed" as const, title: id, start_min: start, end_min: start + 60, week_start: null, category_id: null,
+  });
+
+  it("moves, removes, and leaves other events alone", () => {
+    const out = applyExceptions(
+      [row("a", 0), row("b", 100), row("c", 200)],
+      [
+        { event_id: "a", start_min: 500, end_min: 560 },
+        { event_id: "b", start_min: null, end_min: null },
+      ],
+    );
+    expect(out.map((e) => [e.id, e.start_min, e.end_min])).toEqual([
+      ["a", 500, 560],
+      ["c", 200, 260],
+    ]);
   });
 });

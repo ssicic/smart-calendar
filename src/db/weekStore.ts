@@ -149,6 +149,18 @@ const MIGRATIONS: string[] = [
   ALTER TABLE events ADD COLUMN category_id TEXT;
   ALTER TABLE flexible_items ADD COLUMN category_id TEXT;
   `,
+  // Version 7: changes to a repeating event for one week only ("Just this
+  // week"). A row moves the event that week; NULL times = not on that week.
+  `
+  CREATE TABLE event_exceptions (
+    event_id   TEXT NOT NULL,
+    week_start TEXT NOT NULL,
+    start_min  INTEGER,
+    end_min    INTEGER,
+    PRIMARY KEY (event_id, week_start),
+    CHECK ((start_min IS NULL AND end_min IS NULL) OR end_min > start_min)
+  );
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -199,7 +211,25 @@ export interface PlacementRow {
   state: "kept" | "locked" | "done" | "skipped";
 }
 
+/** One week's change to a repeating event: moved there, or (null times) removed. */
+export interface ExceptionRow {
+  event_id: string;
+  start_min: number | null;
+  end_min: number | null;
+}
+
 // ---- Pure converters between rows and engine objects ----
+
+/** Applies this week's "just this week" changes: moves events, drops removed ones. */
+export function applyExceptions(events: EventRow[], exceptions: ExceptionRow[]): EventRow[] {
+  const byId = new Map(exceptions.map((x) => [x.event_id, x]));
+  return events.flatMap((e) => {
+    const x = byId.get(e.id);
+    if (!x) return [e];
+    if (x.start_min === null || x.end_min === null) return [];
+    return [{ ...e, start_min: x.start_min, end_min: x.end_min }];
+  });
+}
 
 export function eventFromRow(r: EventRow): FixedEvent | RestBlock {
   return {
@@ -238,6 +268,8 @@ export interface LoadedWeek {
   overrides: DayOverride[];
   /** Titles of sessions already queued for the week after this one. */
   queuedForNextWeek: { itemId: string; title: string }[];
+  /** Ids of the events that repeat every week (the others are one-offs). */
+  repeatingEventIds: string[];
 }
 
 /**
@@ -246,10 +278,16 @@ export interface LoadedWeek {
  */
 export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string): Promise<LoadedWeek> {
   // Events that repeat every week, plus the one-off events of this week.
-  const events = await db.getAllAsync<EventRow>(
+  const allEvents = await db.getAllAsync<EventRow>(
     "SELECT * FROM events WHERE week_start IS NULL OR week_start = ? ORDER BY start_min",
     [weekStart],
   );
+  const exceptions = await db.getAllAsync<ExceptionRow>(
+    "SELECT event_id, start_min, end_min FROM event_exceptions WHERE week_start = ?",
+    [weekStart],
+  );
+  // Re-sort: a moved event may now come earlier or later.
+  const events = applyExceptions(allEvents, exceptions).sort((a, b) => a.start_min - b.start_min);
   const items = await db.getAllAsync<ItemRow>("SELECT * FROM flexible_items ORDER BY rowid", []);
   const placements = await db.getAllAsync<PlacementRow>(
     "SELECT id, item_id, start_min, end_min, state FROM placements WHERE week_start = ?",
@@ -282,6 +320,7 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
       settings: { ...DEFAULT_SETTINGS, dayWindows: planningWindows(sleep, overrides) },
     },
     queuedForNextWeek: queuedNext.map((q) => ({ itemId: q.item_id, title: q.title })),
+    repeatingEventIds: events.filter((e) => e.week_start === null).map((e) => e.id),
   };
 }
 
@@ -304,12 +343,37 @@ export async function insertEvents(
   }
 }
 
-export async function moveEvent(db: Db, id: string, start: number, end: number): Promise<void> {
-  await db.runAsync("UPDATE events SET start_min = ?, end_min = ? WHERE id = ?", [start, end, id]);
+/**
+ * Moves the event in every week it's in. `weekStart`: the week it was moved
+ * from, whose "just this week" change is dropped so it shows the new time too.
+ */
+export async function moveEvent(db: Db, id: string, start: number, end: number, weekStart?: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("UPDATE events SET start_min = ?, end_min = ? WHERE id = ?", [start, end, id]);
+    if (weekStart) await db.runAsync("DELETE FROM event_exceptions WHERE event_id = ? AND week_start = ?", [id, weekStart]);
+  });
 }
 
+/** Deletes the event from every week, with its one-week changes. */
 export async function deleteEvent(db: Db, id: string): Promise<void> {
-  await db.runAsync("DELETE FROM events WHERE id = ?", [id]);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM event_exceptions WHERE event_id = ?", [id]);
+    await db.runAsync("DELETE FROM events WHERE id = ?", [id]);
+  });
+}
+
+/** "Just this week" for a repeating event: move it (times) or remove it (null) in `weekStart` only. */
+export async function changeEventForWeek(
+  db: Db,
+  id: string,
+  weekStart: string,
+  times: { start: number; end: number } | null,
+): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO event_exceptions (event_id, week_start, start_min, end_min) VALUES (?, ?, ?, ?)
+     ON CONFLICT(event_id, week_start) DO UPDATE SET start_min = excluded.start_min, end_min = excluded.end_min`,
+    [id, weekStart, times?.start ?? null, times?.end ?? null],
+  );
 }
 
 export async function insertItem(db: Db, item: FlexibleItem): Promise<void> {
