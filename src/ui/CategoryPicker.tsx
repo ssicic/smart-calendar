@@ -1,23 +1,26 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Category } from "../db/weekStore";
-import { PALETTE, newCategoryProblem, unusedColor } from "./categories";
+import { PALETTE, categoryNameProblem, unusedColor } from "./categories";
+import { ManageGroupsSheet, type GroupActions } from "./ManageGroupsSheet";
 
 interface Props {
   categories: Category[];
   /** The picked group, or null for none. */
   selected: string | null;
   onSelect: (categoryId: string | null) => void;
-  /** Saves a new group; returns its id, or an error message. */
-  onAdd: (name: string, color: string) => Promise<{ id: string } | { error: string }>;
+  /** Add, edit, delete and reorder groups. */
+  actions: GroupActions;
 }
 
 /**
  * Optional activity group: tap a group to pick it, tap it again to clear.
- * "+ New group" opens a small form (name + colour) right here.
+ * "+ New group" opens a small form (name + colour) right here; "Edit" opens
+ * Manage groups (rename, recolour, delete, reorder).
  */
-export function CategoryPicker({ categories, selected, onSelect, onAdd }: Props) {
+export function CategoryPicker({ categories, selected, onSelect, actions }: Props) {
   const [adding, setAdding] = useState(false);
+  const [managing, setManaging] = useState(false);
   const [name, setName] = useState("");
   const [color, setColor] = useState(PALETTE[0]!);
   const [error, setError] = useState<string>();
@@ -30,9 +33,9 @@ export function CategoryPicker({ categories, selected, onSelect, onAdd }: Props)
   };
 
   const save = async () => {
-    const problem = newCategoryProblem(name, categories);
+    const problem = categoryNameProblem(name, categories);
     if (problem) return setError(problem);
-    const r = await onAdd(name.trim(), color);
+    const r = await actions.add(name.trim(), color);
     if ("error" in r) return setError(r.error);
     setAdding(false);
     onSelect(r.id);
@@ -59,6 +62,16 @@ export function CategoryPicker({ categories, selected, onSelect, onAdd }: Props)
         {!adding && (
           <Pressable onPress={open} style={[styles.chip, styles.newChip]} accessibilityRole="button">
             <Text style={styles.newText}>+ New group</Text>
+          </Pressable>
+        )}
+        {!adding && categories.length > 0 && (
+          <Pressable
+            onPress={() => setManaging(true)}
+            style={[styles.chip, styles.newChip]}
+            accessibilityRole="button"
+            accessibilityLabel="Manage groups"
+          >
+            <Text style={styles.newText}>Edit</Text>
           </Pressable>
         )}
       </View>
@@ -100,6 +113,12 @@ export function CategoryPicker({ categories, selected, onSelect, onAdd }: Props)
           </View>
         </View>
       )}
+      <ManageGroupsSheet
+        visible={managing}
+        categories={categories}
+        actions={actions}
+        onClose={() => setManaging(false)}
+      />
     </View>
   );
 }

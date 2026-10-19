@@ -344,6 +344,29 @@ export async function insertCategory(db: Db, c: Category): Promise<void> {
   );
 }
 
+/** Renames a group and/or changes its colour. */
+export async function updateCategory(db: Db, c: Category): Promise<void> {
+  await db.runAsync("UPDATE categories SET name = ?, color = ? WHERE id = ?", [c.name, c.color, c.id]);
+}
+
+/** Deletes a group. Its events and items stay, with no group. One transaction. */
+export async function deleteCategory(db: Db, id: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("UPDATE events SET category_id = NULL WHERE category_id = ?", [id]);
+    await db.runAsync("UPDATE flexible_items SET category_id = NULL WHERE category_id = ?", [id]);
+    await db.runAsync("DELETE FROM categories WHERE id = ?", [id]);
+  });
+}
+
+/** Saves the group order: `ids` lists every group, first one first. */
+export async function reorderCategories(db: Db, ids: string[]): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    for (const [i, id] of ids.entries()) {
+      await db.runAsync("UPDATE categories SET position = ? WHERE id = ?", [i, id]);
+    }
+  });
+}
+
 /** Puts an event, or a flexible item (every session of it), in a group; null = no group. */
 export async function setCategory(
   db: Db,

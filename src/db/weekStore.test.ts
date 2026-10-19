@@ -6,7 +6,10 @@ import { nextSlot, storedId } from "../ui/itemActions";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_SETTINGS,
+  deleteCategory,
   deleteItem,
+  reorderCategories,
+  updateCategory,
   loadSleep,
   saveSleep,
   setOverride,
@@ -123,6 +126,32 @@ describe("weekStore", () => {
     ({ week } = await loadWeek(db, W1, W2));
     expect(week.items.find((i) => i.id === "g")?.categoryId).toBe("health");
     expect(week.fixed[0]).toEqual({ id: "w1", title: "Work", start: 540, end: 1020 });
+  });
+
+  it("renames a group and changes its colour", async () => {
+    await updateCategory(db, { id: "work", name: "Job", color: "#64748B" });
+    expect((await loadCategories(db))[0]).toEqual({ id: "work", name: "Job", color: "#64748B" });
+  });
+
+  it("deletes a group; its events and items stay, with no group", async () => {
+    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020, categoryId: "work" }], null);
+    await insertItem(db, { ...read, categoryId: "work" });
+    await insertItem(db, { ...gym, categoryId: "health" });
+    await deleteCategory(db, "work");
+    expect((await loadCategories(db)).map((c) => c.id)).not.toContain("work");
+    const { week } = await loadWeek(db, W1, W2);
+    expect(week.fixed[0]).toEqual({ id: "w1", title: "Work", start: 540, end: 1020 });
+    expect(week.items.map((i) => i.categoryId)).toEqual([undefined, "health"]);
+  });
+
+  it("saves a new group order, also for groups added later", async () => {
+    await insertCategory(db, { id: "c1", name: "Music", color: "#EF4444" });
+    const ids = (await loadCategories(db)).map((c) => c.id);
+    const reversed = [...ids].reverse();
+    await reorderCategories(db, reversed);
+    expect((await loadCategories(db)).map((c) => c.id)).toEqual(reversed);
+    await insertCategory(db, { id: "c2", name: "Family", color: "#6366F1" });
+    expect((await loadCategories(db)).at(-1)?.id).toBe("c2");
   });
 
   it("round-trips flexible items, with and without preferred windows", async () => {

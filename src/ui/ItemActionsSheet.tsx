@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { DAY, dayOf } from "../engine";
 import type { Category } from "../db/weekStore";
 import { CategoryPicker } from "./CategoryPicker";
+import type { GroupActions } from "./ManageGroupsSheet";
 import { Chips } from "./Chips";
 import { actionsFor, type ActionId } from "./itemActions";
 import { overlapping, summarize } from "./overlaps";
@@ -23,7 +24,7 @@ interface Props {
   checkMove: (row: WeekRow, day: number, minuteOfDay: number) => string | undefined;
   onClose: () => void;
   categories: Category[];
-  onAddCategory: (name: string, color: string) => Promise<{ id: string } | { error: string }>;
+  groupActions: GroupActions;
   /** Changes the row's group (for a flexible session: the whole item, every week). */
   onSetCategory: (row: WeekRow, categoryId: string | null) => Promise<string | undefined>;
 }
@@ -31,7 +32,7 @@ interface Props {
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
 
 export function ItemActionsSheet(props: Props) {
-  const { row, rows, onAction, onMove, checkMove, onClose, categories, onAddCategory, onSetCategory } = props;
+  const { row, rows, onAction, onMove, checkMove, onClose, categories, groupActions, onSetCategory } = props;
   const [mode, setMode] = useState<"menu" | "move">("menu");
   const [error, setError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -119,7 +120,7 @@ export function ItemActionsSheet(props: Props) {
                   if (err) setError(err);
                   else onClose();
                 }}
-                onAdd={onAddCategory}
+                actions={groupActions}
               />
             </View>
           )}

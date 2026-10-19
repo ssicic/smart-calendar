@@ -8,6 +8,7 @@ import {
   deleteEvent,
   deleteItem,
   keepPlacement,
+  deleteCategory,
   insertCategory,
   insertEvents,
   insertItem,
@@ -17,7 +18,9 @@ import {
   queuePlacement,
   savePlacement,
   saveSleep,
+  reorderCategories,
   setCategory,
+  updateCategory,
   setOverride,
   type Category,
   type Db,
@@ -32,6 +35,7 @@ import {
   weekMinute,
   type ActionId,
 } from "./itemActions";
+import type { GroupActions } from "./ManageGroupsSheet";
 import type { QuickAddResult } from "./QuickAddSheet";
 import type { SleepScope } from "./SleepSheet";
 import { addWeeks } from "./weekDate";
@@ -156,6 +160,26 @@ export function useWeek(db: Db, weekStart: string) {
     return err ? { error: err } : { id };
   };
 
+  /** Everything the group picker and Manage groups can change. */
+  const groupActions: GroupActions = {
+    add: addCategory,
+    edit: (c) =>
+      attempt(async () => {
+        await updateCategory(db, c);
+        await refresh();
+      }),
+    remove: (id) =>
+      attempt(async () => {
+        await deleteCategory(db, id);
+        await refresh();
+      }),
+    reorder: (ids) =>
+      attempt(async () => {
+        await reorderCategories(db, ids);
+        await refresh();
+      }),
+  };
+
   /** Puts a row in a group (null = none). For a flexible session that's its item, so every week. */
   const setRowCategory = (row: WeekRow, categoryId: string | null) =>
     attempt(async () => {
@@ -167,7 +191,7 @@ export function useWeek(db: Db, weekStart: string) {
   return {
     week,
     categories,
-    addCategory,
+    groupActions,
     setRowCategory,
     plan,
     queuedForNextWeek: loaded?.queuedForNextWeek ?? [],

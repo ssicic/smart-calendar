@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PALETTE, categoryStyle, newCategoryProblem, tint, unusedColor } from "./categories";
+import { PALETTE, categoryStyle, categoryNameProblem, moveInList, tint, unusedColor } from "./categories";
 
 describe("categories", () => {
   it("tints a colour", () => {
@@ -15,10 +15,27 @@ describe("categories", () => {
 
   it("checks a new group's name", () => {
     const groups = [{ name: "Work" }, { name: "Health" }];
-    expect(newCategoryProblem("  ", groups)).toBe("Give the group a name.");
-    expect(newCategoryProblem(" work ", groups)).toBe("You already have Work.");
-    expect(newCategoryProblem("x".repeat(25), groups)).toMatch(/under 25/);
-    expect(newCategoryProblem("Music", groups)).toBeUndefined();
+    expect(categoryNameProblem("  ", groups)).toBe("Give the group a name.");
+    expect(categoryNameProblem(" work ", groups)).toBe("You already have Work.");
+    expect(categoryNameProblem("x".repeat(25), groups)).toMatch(/under 25/);
+    expect(categoryNameProblem("Music", groups)).toBeUndefined();
+  });
+
+  it("lets a group keep its own name when renaming, but not take another's", () => {
+    const groups = [{ id: "work", name: "Work" }, { id: "fun", name: "Fun" }];
+    expect(categoryNameProblem("WORK", groups, "work")).toBeUndefined();
+    expect(categoryNameProblem("fun", groups, "work")).toBe("You already have Fun.");
+    expect(categoryNameProblem("", groups, "work")).toBe("Give the group a name.");
+  });
+
+  it("moves a group up or down, and not past either end", () => {
+    const list = ["a", "b", "c"];
+    expect(moveInList(list, 1, -1)).toEqual(["b", "a", "c"]);
+    expect(moveInList(list, 1, 1)).toEqual(["a", "c", "b"]);
+    expect(moveInList(list, 0, -1)).toEqual(list);
+    expect(moveInList(list, 2, 1)).toEqual(list);
+    expect(moveInList(list, 5, -1)).toEqual(list);
+    expect(list).toEqual(["a", "b", "c"]); // unchanged
   });
 
   it("suggests a colour nobody uses yet", () => {
