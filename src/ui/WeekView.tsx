@@ -2,7 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { shortDate } from "./weekDate";
 import { DAY_NAMES, clock, type RowKind, type WeekRow } from "./weekRows";
 
-const KIND_STYLE: Record<RowKind, { bg: string; bar: string; label: string }> = {
+export const KIND_STYLE: Record<RowKind, { bg: string; bar: string; label: string }> = {
   fixed: { bg: "#EEF0F3", bar: "#6B7280", label: "Fixed" },
   rest: { bg: "#E8F6EE", bar: "#2F9E5B", label: "Rest" },
   suggested: { bg: "#EEF2FF", bar: "#5B6CF0", label: "Suggested" },

@@ -1,11 +1,12 @@
 import { useSQLiteContext } from "expo-sqlite";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ItemActionsSheet } from "./ItemActionsSheet";
 import { moveProblem } from "./itemActions";
 import { QuickAddSheet } from "./QuickAddSheet";
 import { useWeek } from "./useWeek";
+import { WeekGrid } from "./WeekGrid";
 import { shortDate, weekStartOf } from "./weekDate";
 import { WeekView } from "./WeekView";
 import { rowsByDay, type WeekRow } from "./weekRows";
@@ -21,6 +22,18 @@ export function WeekScreen() {
   const [adding, setAdding] = useState(false);
   const [tapped, setTapped] = useState<WeekRow>();
   const [saveError, setSaveError] = useState<string>();
+  const [view, setView] = useState<"calendar" | "list">("calendar");
+
+  // The clock, refreshed every minute, so the red "now" line moves.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer); // cleanup: stop the timer when the screen goes away
+  }, []);
+  const today =
+    weekStartOf(now) === weekStart
+      ? { day: (now.getDay() + 6) % 7, minute: now.getHours() * 60 + now.getMinutes() }
+      : undefined;
 
   // Hooks must run on every render in the same order, so this comes before
   // the early return below. It copes with `week` being undefined.
@@ -56,7 +69,24 @@ export function WeekScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.heading}>This week</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.heading}>This week</Text>
+          <View style={styles.toggle}>
+            {(["calendar", "list"] as const).map((v) => (
+              <Pressable
+                key={v}
+                onPress={() => setView(v)}
+                style={[styles.toggleItem, view === v && styles.toggleOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: view === v }}
+              >
+                <Text style={[styles.toggleText, view === v && styles.toggleTextOn]}>
+                  {v === "calendar" ? "Calendar" : "List"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
         <Text style={styles.sub}>
           {shortDate(weekStart, 0)} – {shortDate(weekStart, 6)} · {plannedHours}h planned · {freeHours}h free
         </Text>
@@ -75,6 +105,16 @@ export function WeekScreen() {
             (Flexible).
           </Text>
         </View>
+      ) : view === "calendar" ? (
+        <WeekGrid
+          days={days}
+          weekStart={weekStart}
+          dayStart={week.settings.dayStart}
+          dayEnd={week.settings.dayEnd}
+          onPressRow={setTapped}
+          today={today}
+          footer={queueFooter}
+        />
       ) : (
         <WeekView days={days} weekStart={weekStart} onPressRow={setTapped} footer={queueFooter} />
       )}
@@ -109,6 +149,12 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFFFFF" },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  toggle: { flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 10, padding: 3 },
+  toggleItem: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  toggleOn: { backgroundColor: "#FFFFFF", boxShadow: "0 1px 2px rgba(17,24,39,0.12)" },
+  toggleText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+  toggleTextOn: { color: "#111827" },
   heading: { fontSize: 26, fontWeight: "800", color: "#111827" },
   sub: { marginTop: 4, color: "#6B7280" },
   warn: { marginTop: 4, color: "#92400E", fontWeight: "600" },
