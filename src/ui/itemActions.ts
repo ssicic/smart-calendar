@@ -89,6 +89,18 @@ export function moveSession(
   return { ok: true, placement: { ...moved, id: storedId(moved, newId) } };
 }
 
+/**
+ * "Move anyway": put the session at `newStart` even if it overlaps something.
+ * The user decided, so no conflict check; it only has to stay inside the week.
+ */
+export function forceMoveSession(plan: PlanResult, placementId: string, newStart: number, newId: () => string): SlotResult {
+  const p = plan.placements.find((x) => x.id === placementId);
+  if (!p) return { ok: false, error: "That session no longer exists." };
+  const end = newStart + (p.end - p.start);
+  if (end > WEEK) return { ok: false, error: "It would run past Sunday midnight." };
+  return { ok: true, placement: { ...p, id: storedId(p, newId), start: newStart, end, state: "locked" } };
+}
+
 /** The next free slot after this session, kept there (locked) so it sticks. */
 export function nextSlot(week: WeekInput, plan: PlanResult, placementId: string, newId: () => string): SlotResult {
   const r = suggestAnotherSlot({ ...week, placements: plan.placements }, placementId);
@@ -127,11 +139,13 @@ export function moveProblem(
   }
   const r = moveSession(week, plan, row.id, start, () => "check");
   if (r.ok) return undefined;
-  // Name what's in the way, including the gap the scheduler keeps around things.
+  // Name what's in the way: a real overlap first, otherwise the buffer gap.
+  const len = row.end - row.start;
+  const kept = (rs: WeekRow[]) => rs.filter((x) => x.kind !== "suggested");
+  const direct = kept(overlapping(rows, [{ start, end: start + len }], row.id));
+  if (direct.length > 0) return `Overlaps ${summarize(direct)}.`;
   const gap = week.settings.bufferMin;
-  const near = overlapping(rows, [{ start: start - gap, end: start + (row.end - row.start) + gap }], row.id).filter(
-    (x) => x.kind !== "suggested",
-  );
-  if (near.length === 0) return r.error;
-  return `Can't go here: too close to ${summarize(near)}` + (gap ? `. The planner keeps ${gap} min free around things.` : ".");
+  const near = kept(overlapping(rows, [{ start: start - gap, end: start + len + gap }], row.id));
+  if (near.length > 0) return `Too close to ${summarize(near)}. The planner keeps ${gap} min free around things.`;
+  return r.error;
 }

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { DAY, planWeek, type WeekInput } from "../engine";
-import { actionsFor, moveEventTo, moveProblem, moveSession, nextSlot, storedId, weekMinute } from "./itemActions";
+import {
+  actionsFor,
+  forceMoveSession,
+  moveEventTo,
+  moveProblem,
+  moveSession,
+  nextSlot,
+  storedId,
+  weekMinute,
+} from "./itemActions";
 import { rowsByDay } from "./weekRows";
 
 const h = (x: number) => x * 60;
@@ -96,8 +105,11 @@ describe("moveProblem", () => {
   });
   it("names the blocker, including the buffer gap right after it", () => {
     expect(moveProblem(padded, plan, rows, gymRow, 0, h(17))).toBe(
-      "Can't go here: too close to Mon Work 09:00–17:00 (fixed). The planner keeps 15 min free around things.",
+      "Too close to Mon Work 09:00–17:00 (fixed). The planner keeps 15 min free around things.",
     );
+  });
+  it("says overlaps when it really overlaps", () => {
+    expect(moveProblem(padded, plan, rows, gymRow, 0, h(12))).toBe("Overlaps Mon Work 09:00–17:00 (fixed).");
   });
   it("falls back to the general error outside the day", () => {
     expect(moveProblem(padded, plan, rows, gymRow, 3, h(21.5))).toBe("That time is taken or outside 08:00–22:00.");
@@ -105,5 +117,24 @@ describe("moveProblem", () => {
   it("lets fixed events go anywhere inside the week", () => {
     const work = rows.find((r) => r.id === "work")!;
     expect(moveProblem(padded, plan, rows, work, 2, h(9))).toBeUndefined();
+  });
+});
+
+describe("forceMoveSession", () => {
+  const plan = planWeek(week);
+  const gym = plan.placements.find((p) => p.itemId === "gym")!;
+
+  it("puts the session on top of fixed time when the user insists", () => {
+    const r = forceMoveSession(plan, gym.id, weekMinute(0, h(10)), newId);
+    expect(r).toMatchObject({ ok: true, placement: { start: h(10), end: h(11), state: "locked" } });
+  });
+  it("and the planner keeps it there", () => {
+    const r = forceMoveSession(plan, gym.id, weekMinute(0, h(10)), newId);
+    if (!r.ok) throw new Error(r.error);
+    const replanned = planWeek({ ...week, placements: [r.placement] });
+    expect(replanned.placements.filter((p) => p.itemId === "gym")).toEqual([r.placement]);
+  });
+  it("still stays inside the week", () => {
+    expect(forceMoveSession(plan, gym.id, weekMinute(6, h(23.5)), newId).ok).toBe(false);
   });
 });

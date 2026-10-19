@@ -12,6 +12,7 @@ import {
   parseTime,
 } from "./quickAdd";
 import { Chips } from "./Chips";
+import { Notice } from "./Notice";
 import { overlapping, summarize } from "./overlaps";
 import { TimePicker } from "./TimePicker";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
@@ -66,6 +67,8 @@ export function QuickAddSheet({ visible, week, rows, onSave, onClose }: Props) {
   const [error, setError] = useState<string>();
   // Set when a flexible item doesn't fit; the next Save tap adds it anyway.
   const [warning, setWarning] = useState<string>();
+  // After one OK on the overlap note, stop showing it until the sheet reopens.
+  const [overlapOff, setOverlapOff] = useState(false);
 
   const update = (patch: Partial<QuickAddForm>) => {
     setForm((f) => ({ ...f, ...patch }));
@@ -77,6 +80,7 @@ export function QuickAddSheet({ visible, week, rows, onSave, onClose }: Props) {
     setForm(EMPTY_FORM);
     setError(undefined);
     setWarning(undefined);
+    setOverlapOff(false);
     onClose();
   };
 
@@ -203,8 +207,8 @@ export function QuickAddSheet({ visible, week, rows, onSave, onClose }: Props) {
                 <Field label={`End  ${form.endTime}`}>
                   <TimePicker value={form.endTime} onChange={(endTime) => update({ endTime })} />
                 </Field>
-                {clashes.length > 0 && (
-                  <Text style={styles.warning}>Already there: {summarize(clashes)}. You can still save it.</Text>
+                {!overlapOff && clashes.length > 0 && (
+                  <Notice text={`Already there: ${summarize(clashes)}.`} onDismiss={() => setOverlapOff(true)} />
                 )}
               </>
             )}

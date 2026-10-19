@@ -17,7 +17,15 @@ import {
   type Db,
   type LoadedWeek,
 } from "../db/weekStore";
-import { moveEventTo, moveSession, nextSlot, storedId, weekMinute, type ActionId } from "./itemActions";
+import {
+  forceMoveSession,
+  moveEventTo,
+  moveSession,
+  nextSlot,
+  storedId,
+  weekMinute,
+  type ActionId,
+} from "./itemActions";
 import type { QuickAddResult } from "./QuickAddSheet";
 import { addWeeks } from "./weekDate";
 import type { WeekRow } from "./weekRows";
@@ -81,7 +89,8 @@ export function useWeek(db: Db, weekStart: string) {
       await refresh();
     });
 
-  const move = (row: WeekRow, day: number, minuteOfDay: number) =>
+  /** `force`: the user saw the warning and chose "Move anyway". */
+  const move = (row: WeekRow, day: number, minuteOfDay: number, force = false) =>
     attempt(async () => {
       if (!week || !plan) return;
       const newStart = weekMinute(day, minuteOfDay);
@@ -93,7 +102,9 @@ export function useWeek(db: Db, weekStart: string) {
         if (!r.ok) return r.error;
         await moveEvent(db, event.id, r.start, r.end);
       } else {
-        const r = moveSession(week, plan, row.id, newStart, newId);
+        const r = force
+          ? forceMoveSession(plan, row.id, newStart, newId)
+          : moveSession(week, plan, row.id, newStart, newId);
         if (!r.ok) return r.error;
         await savePlacement(db, weekStart, r.placement);
       }
