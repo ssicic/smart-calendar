@@ -12,6 +12,8 @@ export interface WeekRow {
   start: number;
   end: number;
   kind: RowKind;
+  /** Set for flexible sessions: which item this is a session of. */
+  itemId?: string;
 }
 
 /** "17:15" from week-minutes. */
@@ -32,6 +34,7 @@ export function rowsByDay(input: WeekInput, plan: PlanResult): WeekRow[][] {
       start: p.start,
       end: p.end,
       kind: p.state,
+      itemId: p.itemId,
     })),
   ];
   const days: WeekRow[][] = [[], [], [], [], [], [], []];

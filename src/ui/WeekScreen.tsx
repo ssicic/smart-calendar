@@ -1,32 +1,28 @@
 import { useSQLiteContext } from "expo-sqlite";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { planWeek, type WeekInput } from "../engine";
-import { insertEvents, insertItem, loadWeek } from "../db/weekStore";
-import { QuickAddSheet, type QuickAddResult } from "./QuickAddSheet";
+import { ItemActionsSheet } from "./ItemActionsSheet";
+import { QuickAddSheet } from "./QuickAddSheet";
+import { useWeek } from "./useWeek";
+import { shortDate, weekStartOf } from "./weekDate";
 import { WeekView } from "./WeekView";
-import { rowsByDay } from "./weekRows";
+import { rowsByDay, type WeekRow } from "./weekRows";
 
 export function WeekScreen() {
   // The database opened by <SQLiteProvider> in App.tsx.
   const db = useSQLiteContext();
+  // Worked out once when the screen appears. (If the app stays open past
+  // Sunday midnight it keeps showing the old week until reopened.)
+  const [weekStart] = useState(() => weekStartOf(new Date()));
+  const { week, plan, queuedForNextWeek, add, act, move } = useWeek(db, weekStart);
 
-  // undefined = still loading from the database.
-  const [week, setWeek] = useState<WeekInput>();
   const [adding, setAdding] = useState(false);
+  const [tapped, setTapped] = useState<WeekRow>();
   const [saveError, setSaveError] = useState<string>();
 
-  // useEffect runs *after* the first render, for work outside React such as
-  // reading a database. [db] means: run again only if the database changes,
-  // which it never does, so in practice this runs once when the screen appears.
-  useEffect(() => {
-    loadWeek(db).then(setWeek);
-  }, [db]);
-
-  // Hooks must run on every render in the same order, so these come before
-  // the early return below. They cope with `week` being undefined.
-  const plan = useMemo(() => (week ? planWeek(week) : undefined), [week]);
+  // Hooks must run on every render in the same order, so this comes before
+  // the early return below. It copes with `week` being undefined.
   const days = useMemo(() => (week && plan ? rowsByDay(week, plan) : []), [week, plan]);
 
   if (!week || !plan) {
@@ -38,36 +34,29 @@ export function WeekScreen() {
   }
 
   const { capacity } = plan;
-  const plannedHours = Math.round(capacity.requiredMinutes / 6) / 10;
+  // Everything on the calendar except queued (skipped) sessions.
+  const plannedMinutes = plan.placements
+    .filter((p) => p.state !== "skipped")
+    .reduce((sum, p) => sum + (p.end - p.start), 0);
+  const plannedHours = Math.round(plannedMinutes / 6) / 10;
   const freeHours = Math.round(capacity.freeMinutes / 6) / 10;
   const unplacedSessions = plan.unplaced.reduce((sum, u) => sum + u.missing, 0);
   const isEmpty = week.fixed.length + week.rest.length + week.items.length === 0;
 
-  const addToWeek = async (r: QuickAddResult) => {
-    // Update the screen right away, then save. Building a new object (not
-    // mutating the old one) is what tells React something changed.
-    setWeek((w) => {
-      if (!w) return w;
-      if (r.kind === "flexible") return { ...w, items: [...w.items, r.item] };
-      if (r.kind === "fixed") return { ...w, fixed: [...w.fixed, ...r.events] };
-      return { ...w, rest: [...w.rest, ...r.events] };
-    });
-    try {
-      if (r.kind === "flexible") await insertItem(db, r.item);
-      else await insertEvents(db, r.kind, r.events);
-      setSaveError(undefined);
-    } catch (e) {
-      console.error(e);
-      setSaveError("Couldn't save that. It will be gone after a reload.");
-    }
-  };
+  const queueFooter =
+    queuedForNextWeek.length > 0 ? (
+      <View style={styles.queue}>
+        <Text style={styles.queueTitle}>Queued for next week</Text>
+        <Text style={styles.queueText}>{queuedForNextWeek.map((q) => q.title).join(", ")}</Text>
+      </View>
+    ) : undefined;
 
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.heading}>This week</Text>
         <Text style={styles.sub}>
-          {plannedHours}h planned · {freeHours}h free
+          {shortDate(weekStart, 0)} – {shortDate(weekStart, 6)} · {plannedHours}h planned · {freeHours}h free
         </Text>
         {unplacedSessions > 0 && (
           <Text style={styles.warn}>
@@ -85,7 +74,7 @@ export function WeekScreen() {
           </Text>
         </View>
       ) : (
-        <WeekView days={days} />
+        <WeekView days={days} weekStart={weekStart} onPressRow={setTapped} footer={queueFooter} />
       )}
       <Pressable
         style={styles.fab}
@@ -95,7 +84,13 @@ export function WeekScreen() {
       >
         <Text style={styles.fabText}>+</Text>
       </Pressable>
-      <QuickAddSheet visible={adding} week={week} onSave={addToWeek} onClose={() => setAdding(false)} />
+      <QuickAddSheet
+        visible={adding}
+        week={week}
+        onSave={async (r) => setSaveError(await add(r))}
+        onClose={() => setAdding(false)}
+      />
+      <ItemActionsSheet row={tapped} onAction={act} onMove={move} onClose={() => setTapped(undefined)} />
     </SafeAreaView>
   );
 }
@@ -110,6 +105,9 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: "#111827" },
   emptyText: { textAlign: "center", color: "#6B7280", lineHeight: 21 },
+  queue: { padding: 12, borderRadius: 10, backgroundColor: "#FEF3C7", gap: 2 },
+  queueTitle: { fontWeight: "700", color: "#92400E" },
+  queueText: { color: "#92400E" },
   fab: {
     position: "absolute",
     right: 20,

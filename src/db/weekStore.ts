@@ -1,7 +1,17 @@
 // Saves and loads the week in a local SQLite database on the device.
 // The engine never sees SQL: this module translates between table rows and
-// engine objects (FixedEvent, RestBlock, FlexibleItem).
-import type { FixedEvent, FlexibleItem, Interval, PlannerSettings, RestBlock, WeekInput } from "../engine";
+// engine objects (FixedEvent, RestBlock, FlexibleItem, Placement).
+import type {
+  FixedEvent,
+  FlexibleItem,
+  Interval,
+  Placement,
+  PlannerSettings,
+  RestBlock,
+  WeekInput,
+} from "../engine";
+
+type Param = string | number | null;
 
 /**
  * The few database methods we use. expo-sqlite's SQLiteDatabase has these, and
@@ -9,9 +19,11 @@ import type { FixedEvent, FlexibleItem, Interval, PlannerSettings, RestBlock, We
  */
 export interface Db {
   execAsync(sql: string): Promise<void>;
-  runAsync(sql: string, params: (string | number | null)[]): Promise<unknown>;
-  getAllAsync<T>(sql: string, params: (string | number | null)[]): Promise<T[]>;
-  getFirstAsync<T>(sql: string, params: (string | number | null)[]): Promise<T | null>;
+  runAsync(sql: string, params: Param[]): Promise<unknown>;
+  getAllAsync<T>(sql: string, params: Param[]): Promise<T[]>;
+  getFirstAsync<T>(sql: string, params: Param[]): Promise<T | null>;
+  /** Runs `task` as one transaction: all of its writes happen, or none do. */
+  withTransactionAsync(task: () => Promise<void>): Promise<void>;
 }
 
 const h = (hours: number) => hours * 60;
@@ -30,7 +42,7 @@ export const DEFAULT_SETTINGS: PlannerSettings = {
  * device hasn't seen yet. Never edit a step once shipped; add a new one.
  */
 const MIGRATIONS: string[] = [
-  // Version 1
+  // Version 1: what you plan. Fixed events and rest blocks repeat every week.
   `
   CREATE TABLE events (
     id        TEXT PRIMARY KEY,
@@ -47,6 +59,26 @@ const MIGRATIONS: string[] = [
     priority          INTEGER NOT NULL,
     preferred_windows TEXT, -- JSON array of {start, end}, or NULL for any time
     goal_id           TEXT
+  );
+  `,
+  // Version 2: what happened in a specific week. Only sessions you touched
+  // are stored (locked, done, skipped); suggestions are recomputed on load.
+  `
+  CREATE TABLE placements (
+    id         TEXT PRIMARY KEY,
+    week_start TEXT NOT NULL, -- Monday of the week, "YYYY-MM-DD"
+    item_id    TEXT NOT NULL,
+    start_min  INTEGER NOT NULL,
+    end_min    INTEGER NOT NULL CHECK (end_min > start_min),
+    state      TEXT NOT NULL CHECK (state IN ('locked', 'done', 'skipped'))
+  );
+  CREATE INDEX placements_by_week ON placements (week_start);
+  -- "Move to queue": one extra session of the item in target_week.
+  CREATE TABLE queue (
+    id           TEXT PRIMARY KEY,
+    item_id      TEXT NOT NULL,
+    placement_id TEXT NOT NULL, -- the skipped session it came from, for undo
+    target_week  TEXT NOT NULL
   );
   `,
 ];
@@ -80,6 +112,14 @@ export interface ItemRow {
   goal_id: string | null;
 }
 
+export interface PlacementRow {
+  id: string;
+  item_id: string;
+  start_min: number;
+  end_min: number;
+  state: "locked" | "done" | "skipped";
+}
+
 // ---- Pure converters between rows and engine objects ----
 
 export function eventFromRow(r: EventRow): FixedEvent | RestBlock {
@@ -99,19 +139,55 @@ export function itemFromRow(r: ItemRow): FlexibleItem {
   };
 }
 
-// ---- Reads and writes ----
+export function placementFromRow(r: PlacementRow): Placement {
+  return { id: r.id, itemId: r.item_id, start: r.start_min, end: r.end_min, state: r.state };
+}
 
-export async function loadWeek(db: Db): Promise<WeekInput> {
+// ---- Reads ----
+
+export interface LoadedWeek {
+  week: WeekInput;
+  /** Titles of sessions already queued for the week after this one. */
+  queuedForNextWeek: { itemId: string; title: string }[];
+}
+
+/**
+ * Everything needed to plan `weekStart`. Sessions queued *for* this week are
+ * added to their item's times-per-week, so the planner fits them in.
+ */
+export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string): Promise<LoadedWeek> {
   const events = await db.getAllAsync<EventRow>("SELECT * FROM events ORDER BY start_min", []);
   const items = await db.getAllAsync<ItemRow>("SELECT * FROM flexible_items ORDER BY rowid", []);
+  const placements = await db.getAllAsync<PlacementRow>(
+    "SELECT id, item_id, start_min, end_min, state FROM placements WHERE week_start = ?",
+    [weekStart],
+  );
+  // GROUP BY: one row per item with how many sessions were queued for it.
+  const queuedHere = await db.getAllAsync<{ item_id: string; n: number }>(
+    "SELECT item_id, COUNT(*) AS n FROM queue WHERE target_week = ? GROUP BY item_id",
+    [weekStart],
+  );
+  // JOIN: pull each queued session's title from flexible_items.
+  const queuedNext = await db.getAllAsync<{ item_id: string; title: string }>(
+    `SELECT q.item_id, i.title FROM queue q JOIN flexible_items i ON i.id = q.item_id
+     WHERE q.target_week = ? ORDER BY q.rowid`,
+    [nextWeekStart],
+  );
+
+  const extra = new Map(queuedHere.map((q) => [q.item_id, q.n]));
   return {
-    fixed: events.filter((e) => e.kind === "fixed").map(eventFromRow),
-    rest: events.filter((e) => e.kind === "rest").map(eventFromRow),
-    items: items.map(itemFromRow),
-    placements: [], // not saved yet: the plan is recomputed from the items
-    settings: DEFAULT_SETTINGS,
+    week: {
+      fixed: events.filter((e) => e.kind === "fixed").map(eventFromRow),
+      rest: events.filter((e) => e.kind === "rest").map(eventFromRow),
+      items: items.map(itemFromRow).map((i) => ({ ...i, timesPerWeek: i.timesPerWeek + (extra.get(i.id) ?? 0) })),
+      placements: placements.map(placementFromRow),
+      settings: DEFAULT_SETTINGS,
+    },
+    queuedForNextWeek: queuedNext.map((q) => ({ itemId: q.item_id, title: q.title })),
   };
 }
+
+// ---- Writes: what you plan ----
 
 export async function insertEvents(db: Db, kind: "fixed" | "rest", events: (FixedEvent | RestBlock)[]): Promise<void> {
   // `?` placeholders: the driver inserts values safely, so a title like
@@ -125,6 +201,14 @@ export async function insertEvents(db: Db, kind: "fixed" | "rest", events: (Fixe
       e.end,
     ]);
   }
+}
+
+export async function moveEvent(db: Db, id: string, start: number, end: number): Promise<void> {
+  await db.runAsync("UPDATE events SET start_min = ?, end_min = ? WHERE id = ?", [start, end, id]);
+}
+
+export async function deleteEvent(db: Db, id: string): Promise<void> {
+  await db.runAsync("DELETE FROM events WHERE id = ?", [id]);
 }
 
 export async function insertItem(db: Db, item: FlexibleItem): Promise<void> {
@@ -141,4 +225,52 @@ export async function insertItem(db: Db, item: FlexibleItem): Promise<void> {
       item.goalId ?? null,
     ],
   );
+}
+
+/** Removes the item and everything that points at it, in one transaction. */
+export async function deleteItem(db: Db, itemId: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM placements WHERE item_id = ?", [itemId]);
+    await db.runAsync("DELETE FROM queue WHERE item_id = ?", [itemId]);
+    await db.runAsync("DELETE FROM flexible_items WHERE id = ?", [itemId]);
+  });
+}
+
+// ---- Writes: what happened this week ----
+
+/** Insert or overwrite one session of `weekStart` (lock, move, done). */
+export async function savePlacement(db: Db, weekStart: string, p: Placement): Promise<void> {
+  if (p.state === "suggested") throw new Error("Suggested placements are not stored");
+  await db.runAsync(
+    `INSERT OR REPLACE INTO placements (id, week_start, item_id, start_min, end_min, state)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [p.id, weekStart, p.itemId, p.start, p.end, p.state],
+  );
+}
+
+/** Forget a stored session (unlock, "not done", undo queue): it becomes a suggestion again. */
+export async function forgetPlacement(db: Db, placementId: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM queue WHERE placement_id = ?", [placementId]);
+    await db.runAsync("DELETE FROM placements WHERE id = ?", [placementId]);
+  });
+}
+
+/** Skip this session and add one extra session of the same item to `targetWeek`. */
+export async function queuePlacement(
+  db: Db,
+  weekStart: string,
+  p: Placement,
+  targetWeek: string,
+  queueId: string,
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await savePlacement(db, weekStart, { ...p, state: "skipped" });
+    await db.runAsync("INSERT INTO queue (id, item_id, placement_id, target_week) VALUES (?, ?, ?, ?)", [
+      queueId,
+      p.itemId,
+      p.id,
+      targetWeek,
+    ]);
+  });
 }
