@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { DAY, type DaySleep } from "../engine";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
-import { layoutDay, visibleHours } from "./gridLayout";
+import { canDrag, dropTarget, layoutDay, visibleHours, type PlacedBlock } from "./gridLayout";
 import { shortDate } from "./weekDate";
 import { KIND_STYLE } from "./WeekView";
 
@@ -20,13 +20,16 @@ interface Props {
   onPressRow: (row: WeekRow) => void;
   /** Holding an empty half-hour: add something there. */
   onHoldSlot: (day: number, minuteOfDay: number) => void;
+  /** A block was dragged to another day and/or time. */
+  onDropRow: (row: WeekRow, day: number, minuteOfDay: number) => void;
   /** Today's column (0 = Monday) and minutes since midnight, if this is the current week. */
   today?: { day: number; minute: number };
   footer?: React.ReactNode;
 }
 
 /** Calendar view: one column per day, blocks as tall as they are long. */
-export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, onHoldSlot, today, footer }: Props) {
+export function WeekGrid(props: Props) {
+  const { days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, onHoldSlot, onDropRow, today, footer } = props;
   // Show an hour of sleep on each side, so there's always something to tap.
   const earliestWake = Math.min(...sleep.map((s) => s.wake));
   const latestBed = Math.max(...sleep.map((s) => Math.min(s.bed, DAY)));
@@ -45,6 +48,13 @@ export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, on
 
   const y = (minuteOfDay: number) => (minuteOfDay - from * 60) * PX_PER_MIN;
 
+  // Width of one day column, measured once the grid is drawn (needed to turn
+  // a sideways finger movement into "how many days").
+  const [columnWidth, setColumnWidth] = useState(40);
+  // The day of the block being dragged. While set, the list stops scrolling
+  // so the finger moves the block, and that column is drawn above the others.
+  const [dragDay, setDragDay] = useState<number>();
+
   return (
     <View style={styles.wrap}>
       <View style={styles.headerRow}>
@@ -59,8 +69,11 @@ export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, on
         ))}
       </View>
 
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent}>
-        <View style={[styles.grid, { height: hours.length * HOUR_PX }]}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} scrollEnabled={dragDay === undefined}>
+        <View
+          style={[styles.grid, { height: hours.length * HOUR_PX }]}
+          onLayout={(e) => setColumnWidth((e.nativeEvent.layout.width - GUTTER) / 7)}
+        >
           <View style={{ width: GUTTER }}>
             {hours.map((hr) => (
               <Text key={hr} style={[styles.hourLabel, { top: (hr - from) * HOUR_PX - 7 }]}>
@@ -70,7 +83,10 @@ export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, on
           </View>
 
           {laidOut.map((blocks, d) => (
-            <View key={d} style={[styles.column, today?.day === d && styles.todayColumn]}>
+            <View
+              key={d}
+              style={[styles.column, today?.day === d && styles.todayColumn, dragDay === d && styles.dragColumn]}
+            >
               {/* Half-hour slots under everything else: hold one to add an event there.
                   The top border of each full hour draws the hour line. */}
               {hours.flatMap((hr) =>
@@ -100,38 +116,18 @@ export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, on
                 />
               )}
 
-              {blocks.map((b) => {
-                const k = KIND_STYLE[b.row.kind];
-                const height = Math.max(16, (b.endMin - b.startMin) * PX_PER_MIN - 2);
-                return (
-                  <Pressable
-                    key={b.row.id}
-                    onPress={() => onPressRow(b.row)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${b.row.title}, ${DAY_NAMES[d]} ${clock(b.row.start)} to ${clock(b.row.end)}`}
-                    style={({ pressed }) => [
-                      styles.block,
-                      {
-                        top: y(b.startMin) + 1,
-                        height,
-                        left: `${(b.lane / b.lanes) * 100}%`,
-                        width: `${100 / b.lanes}%`,
-                        backgroundColor: k.bg,
-                        borderLeftColor: k.bar,
-                      },
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text
-                      style={styles.blockTitle}
-                      // Narrow side-by-side blocks: one line with "…" instead of breaking words.
-                      numberOfLines={b.lanes > 1 ? 1 : Math.max(1, Math.floor(height / 13))}
-                    >
-                      {b.row.title}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {blocks.map((b) => (
+                <DraggableBlock
+                  key={b.row.id}
+                  block={b}
+                  day={d}
+                  top={y(b.startMin) + 1}
+                  columnWidth={columnWidth}
+                  onPress={onPressRow}
+                  onDrop={onDropRow}
+                  onArm={setDragDay}
+                />
+              ))}
 
               {today?.day === d && today.minute >= from * 60 && today.minute <= to * 60 && (
                 <View style={[styles.nowLine, { top: y(today.minute) }]} />
@@ -141,6 +137,127 @@ export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, on
         </View>
         {footer && <View style={styles.footer}>{footer}</View>}
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * One block on the grid. Tap: the actions sheet. Hold, then drag: move it to
+ * another day or time; it snaps to the nearest column and quarter hour.
+ *
+ * PanResponder is React Native's built-in gesture helper: it reports how far
+ * the finger has moved (dx, dy) since it touched down. Holding first (instead
+ * of dragging right away) keeps normal scrolling working.
+ */
+function DraggableBlock(props: {
+  block: PlacedBlock;
+  day: number;
+  top: number;
+  columnWidth: number;
+  onPress: (row: WeekRow) => void;
+  onDrop: (row: WeekRow, day: number, minuteOfDay: number) => void;
+  /** The block's day while it is picked up, undefined when put down. */
+  onArm: (day: number | undefined) => void;
+}) {
+  const { block: b, day, top } = props;
+  const [offset, setOffset] = useState<{ dx: number; dy: number }>();
+  // The gesture handlers are made once, so they read the latest props via a ref.
+  const latest = useRef(props);
+  latest.current = props;
+  const armed = useRef(false); // set by holding the block
+  const active = useRef(false); // set once the finger starts dragging it
+
+  const pan = useRef(
+    PanResponder.create({
+      // Take over the touch from the Pressable (and the list) only once held.
+      onMoveShouldSetPanResponderCapture: () => armed.current,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        active.current = true;
+      },
+      onPanResponderMove: (_, g) => setOffset({ dx: g.dx, dy: g.dy }),
+      onPanResponderRelease: (_, g) => {
+        const p = latest.current;
+        const target = dropTarget(
+          { day: p.day, startMin: p.block.startMin, endMin: p.block.endMin },
+          g.dx,
+          g.dy,
+          p.columnWidth,
+          PX_PER_MIN,
+        );
+        const moved = target.day !== p.day || target.minute !== p.block.startMin;
+        if (moved) p.onDrop(p.block.row, target.day, target.minute);
+        finish();
+      },
+      onPanResponderTerminate: () => finish(),
+    }),
+  ).current;
+
+  function finish() {
+    armed.current = false;
+    active.current = false;
+    setOffset(undefined);
+    latest.current.onArm(undefined);
+  }
+
+  const k = KIND_STYLE[b.row.kind];
+  const height = Math.max(16, (b.endMin - b.startMin) * PX_PER_MIN - 2);
+  // Where it would land right now, shown in a small label while dragging.
+  const target =
+    offset &&
+    dropTarget({ day, startMin: b.startMin, endMin: b.endMin }, offset.dx, offset.dy, props.columnWidth, PX_PER_MIN);
+  return (
+    <View
+      {...pan.panHandlers}
+      style={[
+        styles.blockSlot,
+        { top, height, left: `${(b.lane / b.lanes) * 100}%`, width: `${100 / b.lanes}%` },
+        offset && styles.lifted,
+        offset && { transform: [{ translateX: offset.dx }, { translateY: offset.dy }] },
+      ]}
+    >
+      <Pressable
+        onPress={() => props.onPress(b.row)}
+        onLongPress={
+          canDrag(b.row)
+            ? () => {
+                armed.current = true;
+                setOffset({ dx: 0, dy: 0 });
+                props.onArm(day);
+              }
+            : undefined
+        }
+        onPressOut={() => {
+          // Held, then let go without dragging: put it back down. (Wait a
+          // moment: when a drag starts, the Pressable also gets a press-out.)
+          setTimeout(() => {
+            if (armed.current && !active.current) finish();
+          }, 0);
+        }}
+        delayLongPress={350}
+        accessibilityRole="button"
+        accessibilityLabel={`${b.row.title}, ${DAY_NAMES[day]} ${clock(b.row.start)} to ${clock(b.row.end)}`}
+        style={({ pressed }) => [
+          styles.block,
+          { backgroundColor: k.bg, borderLeftColor: k.bar },
+          pressed && !offset && styles.pressed,
+        ]}
+      >
+        <Text
+          style={styles.blockTitle}
+          // Narrow side-by-side blocks: one line with "…" instead of breaking words.
+          numberOfLines={b.lanes > 1 ? 1 : Math.max(1, Math.floor(height / 13))}
+        >
+          {b.row.title}
+        </Text>
+      </Pressable>
+      {target && (
+        <View style={styles.dropLabel} pointerEvents="none">
+          <Text style={styles.dropLabelText} numberOfLines={1}>
+            {DAY_NAMES[target.day]?.slice(0, 3)} {clock(target.minute)}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -225,11 +342,26 @@ const styles = StyleSheet.create({
   hourLabel: { position: "absolute", right: 4, fontSize: 10, color: "#9CA3AF", fontVariant: ["tabular-nums"] },
   column: { flex: 1, borderLeftWidth: 1, borderLeftColor: "#F1F5F9" },
   todayColumn: { backgroundColor: "#F8FAFF" },
+  dragColumn: { zIndex: 10 },
   slot: { position: "absolute", left: 0, right: 0, height: HOUR_PX / 2 },
   hourLine: { borderTopWidth: 1, borderTopColor: "#F1F5F9" },
   slotHeld: { backgroundColor: "#EEF2FF" },
-  block: {
+  blockSlot: { position: "absolute" },
+  lifted: { zIndex: 10, opacity: 0.9, boxShadow: "0 6px 14px rgba(17,24,39,0.25)" },
+  dropLabel: {
     position: "absolute",
+    top: -22,
+    left: 0,
+    width: 72,
+    alignItems: "center",
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: "#111827",
+  },
+  dropLabelText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  block: {
+    flex: 1,
     borderRadius: 5,
     borderLeftWidth: 3,
     paddingHorizontal: 2,

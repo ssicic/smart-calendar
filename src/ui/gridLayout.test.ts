@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DAY } from "../engine";
-import { layoutDay, visibleHours } from "./gridLayout";
+import { canDrag, dropTarget, layoutDay, visibleHours } from "./gridLayout";
 import type { WeekRow } from "./weekRows";
 
 const h = (x: number) => x * 60;
@@ -51,5 +51,24 @@ describe("visibleHours", () => {
       from: 6,
       to: 24,
     });
+  });
+
+  it("drops a dragged block on the nearest day and quarter hour", () => {
+    const block = { day: 1, startMin: 9 * 60, endMin: 10 * 60 }; // Tue 09:00-10:00
+    // 50px columns, 0.8px per minute: one column right, 40px (50 min) down.
+    expect(dropTarget(block, 52, 40, 50, 0.8)).toEqual({ day: 2, minute: 9 * 60 + 45 });
+    expect(dropTarget(block, -20, -5, 50, 0.8)).toEqual({ day: 1, minute: 9 * 60 });
+  });
+
+  it("keeps a dropped block inside the week and the day", () => {
+    const block = { day: 5, startMin: 22 * 60, endMin: 23 * 60 };
+    expect(dropTarget(block, 500, 5000, 50, 0.8)).toEqual({ day: 6, minute: 23 * 60 });
+    expect(dropTarget({ day: 0, startMin: 60, endMin: 120 }, -500, -500, 50, 0.8)).toEqual({ day: 0, minute: 0 });
+  });
+
+  it("lets everything but done and queued sessions be dragged", () => {
+    const row = { id: "x", title: "X", start: 0, end: 60 };
+    const kinds = ["fixed", "rest", "suggested", "locked", "done", "skipped"] as const;
+    expect(kinds.map((kind) => canDrag({ ...row, kind }))).toEqual([true, true, true, true, false, false]);
   });
 });

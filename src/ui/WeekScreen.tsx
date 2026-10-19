@@ -202,6 +202,8 @@ export function WeekScreen() {
           onPressSleep={(day, field) => setSleepTarget({ day, field })}
           onPressRow={setTapped}
           onHoldSlot={(day, minute) => setAdding({ form: formForSlot(day, minute) })}
+          // Dragging is a clear "put it here", so flexible sessions move even onto a busy time.
+          onDropRow={async (row, day, minute) => setSaveError(await move(row, day, minute, true))}
           today={today}
           footer={queueFooter}
         />

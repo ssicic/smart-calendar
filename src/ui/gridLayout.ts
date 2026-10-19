@@ -65,3 +65,25 @@ export function visibleHours(days: WeekRow[][], fromMin: number, toMin: number):
   }
   return { from, to: Math.min(to, 24) };
 }
+
+/** Blocks you can drag to another day or time. Done sessions keep their time. */
+export const canDrag = (row: WeekRow) => row.kind !== "done" && row.kind !== "skipped";
+
+/**
+ * Where a dragged block lands: `dx`/`dy` is how far the finger moved in
+ * pixels. The day snaps to the nearest column (Monday to Sunday) and the
+ * start to the nearest 15 minutes, kept inside the day so the block fits.
+ */
+export function dropTarget(
+  block: { day: number; startMin: number; endMin: number },
+  dx: number,
+  dy: number,
+  columnWidth: number,
+  pxPerMin: number,
+): { day: number; minute: number } {
+  const day = Math.min(6, Math.max(0, block.day + Math.round(dx / columnWidth)));
+  const length = block.endMin - block.startMin;
+  const snapped = Math.round((block.startMin + dy / pxPerMin) / 15) * 15;
+  const latest = Math.max(0, Math.floor((DAY - Math.min(length, DAY)) / 15) * 15);
+  return { day, minute: Math.min(latest, Math.max(0, snapped)) };
+}
