@@ -2,7 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { DAY, type DaySleep } from "../engine";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
-import { canDrag, dropTarget, layoutDay, visibleHours, type PlacedBlock } from "./gridLayout";
+import {
+  adjustDraft,
+  canDrag,
+  dropTarget,
+  layoutDay,
+  visibleHours,
+  type Draft,
+  type DraftHandle,
+  type PlacedBlock,
+} from "./gridLayout";
 import { shortDate } from "./weekDate";
 import { KIND_STYLE } from "./WeekView";
 
@@ -22,6 +31,12 @@ interface Props {
   onHoldSlot: (day: number, minuteOfDay: number) => void;
   /** A block was dragged to another day and/or time. */
   onDropRow: (row: WeekRow, day: number, minuteOfDay: number) => void;
+  /** The event being added (shown dashed, with handles), while the add form is open. */
+  draft?: { days: number[]; start: number; end: number; title: string };
+  /** The draft was resized or moved on the calendar. */
+  onDraftChange: (change: { days: number[]; start: number; end: number }) => void;
+  /** Extra space under the grid, so the bottom hours can scroll above a half-screen sheet. */
+  bottomInset?: number;
   /** Today's column (0 = Monday) and minutes since midnight, if this is the current week. */
   today?: { day: number; minute: number };
   footer?: React.ReactNode;
@@ -30,6 +45,7 @@ interface Props {
 /** Calendar view: one column per day, blocks as tall as they are long. */
 export function WeekGrid(props: Props) {
   const { days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, onHoldSlot, onDropRow, today, footer } = props;
+  const { draft, onDraftChange, bottomInset = 0 } = props;
   // Show an hour of sleep on each side, so there's always something to tap.
   const earliestWake = Math.min(...sleep.map((s) => s.wake));
   const latestBed = Math.max(...sleep.map((s) => Math.min(s.bed, DAY)));
@@ -47,6 +63,14 @@ export function WeekGrid(props: Props) {
   }, []);
 
   const y = (minuteOfDay: number) => (minuteOfDay - from * 60) * PX_PER_MIN;
+
+  // When a new draft appears (a time was held), scroll it near the top, so the
+  // half-screen form below doesn't cover it.
+  const hasDraft = draft !== undefined;
+  useEffect(() => {
+    if (draft) scrollRef.current?.scrollTo({ y: Math.max(0, y(draft.start) - HOUR_PX), animated: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasDraft]);
 
   // Width of one day column, measured once the grid is drawn (needed to turn
   // a sideways finger movement into "how many days").
@@ -69,7 +93,11 @@ export function WeekGrid(props: Props) {
         ))}
       </View>
 
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} scrollEnabled={dragDay === undefined}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 110 + bottomInset }]}
+        scrollEnabled={dragDay === undefined}
+      >
         <View
           style={[styles.grid, { height: hours.length * HOUR_PX }]}
           onLayout={(e) => setColumnWidth((e.nativeEvent.layout.width - GUTTER) / 7)}
@@ -134,6 +162,29 @@ export function WeekGrid(props: Props) {
               )}
             </View>
           ))}
+
+          {/* The new event: drawn above the columns (not inside one), so it keeps
+              its finger while being moved to another day. */}
+          {draft &&
+            [...draft.days]
+              .sort((x, z) => x - z)
+              .map((day, i) => (
+                <DraftBlock
+                  key={i}
+                  draft={{ day, start: draft.start, end: draft.end }}
+                  title={draft.title}
+                  left={GUTTER + day * columnWidth + 1}
+                  width={columnWidth - 2}
+                  top={y(draft.start)}
+                  columnWidth={columnWidth}
+                  // With several days picked, dragging only changes the time.
+                  multiDay={draft.days.length > 1}
+                  onChange={(d) =>
+                    onDraftChange({ days: draft.days.length > 1 ? draft.days : [d.day], start: d.start, end: d.end })
+                  }
+                  onArm={setDragDay}
+                />
+              ))}
         </View>
         {footer && <View style={styles.footer}>{footer}</View>}
       </ScrollView>
@@ -263,6 +314,79 @@ function DraggableBlock(props: {
 }
 
 /**
+ * The event being added. Drag the top or bottom bar to change when it starts
+ * or ends, or the middle to move it (to another day too). It grabs the finger
+ * straight away (no hold), since it is clearly something to drag.
+ */
+function DraftBlock(props: {
+  draft: Draft;
+  title: string;
+  left: number;
+  width: number;
+  top: number;
+  columnWidth: number;
+  multiDay: boolean;
+  onChange: (draft: Draft) => void;
+  onArm: (day: number | undefined) => void;
+}) {
+  const latest = useRef(props);
+  latest.current = props;
+  const origin = useRef(props.draft); // the draft when the finger touched down
+
+  const handlers = useRef(
+    (["start", "end", "move"] as DraftHandle[]).map((handle) =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          origin.current = latest.current.draft;
+          latest.current.onArm(latest.current.draft.day);
+        },
+        onPanResponderMove: (_, g) => {
+          const p = latest.current;
+          const next = adjustDraft(origin.current, handle, p.multiDay ? 0 : g.dx, g.dy, p.columnWidth, PX_PER_MIN);
+          const now = p.draft;
+          if (next.day !== now.day || next.start !== now.start || next.end !== now.end) p.onChange(next);
+        },
+        onPanResponderRelease: () => latest.current.onArm(undefined),
+        onPanResponderTerminate: () => latest.current.onArm(undefined),
+      }),
+    ),
+  ).current;
+  const [startHandle, endHandle, moveHandle] = handlers as [typeof handlers[0], typeof handlers[0], typeof handlers[0]];
+
+  const { draft: d } = props;
+  const height = Math.max(30, (d.end - d.start) * PX_PER_MIN);
+  return (
+    <View style={[styles.draft, { left: props.left, width: props.width, top: props.top, height }]}>
+      <View {...moveHandle.panHandlers} style={styles.draftBody} accessibilityLabel="New event. Drag to move it.">
+        <Text style={styles.draftTime} numberOfLines={1}>
+          {clock(d.start)}
+        </Text>
+        <Text style={styles.blockTitle} numberOfLines={1}>
+          {props.title || "New"}
+        </Text>
+      </View>
+      <View
+        {...startHandle.panHandlers}
+        style={[styles.draftHandle, { top: -8 }]}
+        accessibilityLabel="Drag to change the start"
+      >
+        <View style={styles.draftKnob} />
+      </View>
+      <View
+        {...endHandle.panHandlers}
+        style={[styles.draftHandle, { bottom: -8 }]}
+        accessibilityLabel="Drag to change the end"
+      >
+        <View style={styles.draftKnob} />
+        <Text style={styles.draftEnd}>{clock(d.end)}</Text>
+      </View>
+    </View>
+  );
+}
+
+/**
  * Grey areas for the night: before wake-up and after bedtime, plus a lighter
  * wind-down band before bed. Tapping them changes that day's times.
  */
@@ -347,6 +471,42 @@ const styles = StyleSheet.create({
   hourLine: { borderTopWidth: 1, borderTopColor: "#F1F5F9" },
   slotHeld: { backgroundColor: "#EEF2FF" },
   blockSlot: { position: "absolute" },
+  draft: {
+    position: "absolute",
+    zIndex: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#5B6CF0",
+    backgroundColor: "rgba(91,108,240,0.18)",
+  },
+  draftBody: { flex: 1, paddingHorizontal: 2, paddingTop: 6, overflow: "hidden" },
+  draftTime: { fontSize: 9, fontWeight: "700", color: "#3A47C9", fontVariant: ["tabular-nums"] },
+  // Big invisible touch areas around the small visible knobs, easy to grab with a finger.
+  draftHandle: {
+    position: "absolute",
+    left: -6,
+    right: -6,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  draftKnob: {
+    width: 18,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#5B6CF0",
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+  },
+  draftEnd: {
+    position: "absolute",
+    top: 13,
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#3A47C9",
+    fontVariant: ["tabular-nums"],
+  },
   lifted: { zIndex: 10, opacity: 0.9, boxShadow: "0 6px 14px rgba(17,24,39,0.25)" },
   dropLabel: {
     position: "absolute",

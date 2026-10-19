@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  BackHandler,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { DAY, checkNewItem, type WeekInput } from "../engine";
 import {
   EMPTY_FORM,
@@ -21,15 +31,23 @@ import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
 /** What the sheet hands back to App when the user saves. */
 export type QuickAddResult = Extract<ParseResult, { ok: true }>;
 
+/** "half": the calendar stays visible and usable above it. "full": almost the whole screen. */
+export type SheetSize = "half" | "full";
+
 interface Props {
-  visible: boolean;
+  /**
+   * The form while the sheet is open; undefined = closed. Kept by the screen,
+   * so the calendar can show and change the day and times too.
+   */
+  form?: QuickAddForm;
+  onChange: (form: QuickAddForm) => void;
+  size: SheetSize;
+  onSizeChange: (size: SheetSize) => void;
   week: WeekInput;
   /** Everything currently on the calendar, for the overlap warning. */
   rows: WeekRow[];
   onSave: (result: QuickAddResult) => void;
   onClose: () => void;
-  /** Prefilled values, e.g. from holding a time on the calendar. */
-  initial?: QuickAddForm;
   /** The week on screen (its Monday): where a non-repeating event goes. */
   weekStart: string;
 }
@@ -65,29 +83,24 @@ const IMPORTANCE_OPTIONS: { value: Importance; label: string }[] = [
 ];
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
 
-export function QuickAddSheet({ visible, week, rows, onSave, onClose, initial, weekStart }: Props) {
-  // The form's state lives here. Every keystroke calls setForm, and React
-  // redraws the sheet with the new values.
-  const [form, setForm] = useState<QuickAddForm>(EMPTY_FORM);
+export function QuickAddSheet(props: Props) {
+  const { form: openForm, onChange, size, onSizeChange, week, rows, onSave, onClose, weekStart } = props;
+  // The form's values live in the screen (passed in as `form`); every change
+  // goes back up through onChange, and React redraws both sheet and calendar.
+  const form = openForm ?? EMPTY_FORM;
   const [error, setError] = useState<string>();
   // Set when a flexible item doesn't fit; the next Save tap adds it anyway.
   const [warning, setWarning] = useState<string>();
   // After one OK on the overlap note, stop showing it until the sheet reopens.
   const [overlapOff, setOverlapOff] = useState(false);
 
-  // Each time the sheet opens, start from the prefilled values (if any).
-  useEffect(() => {
-    if (visible) setForm(initial ?? EMPTY_FORM);
-  }, [visible, initial]);
-
   const update = (patch: Partial<QuickAddForm>) => {
-    setForm((f) => ({ ...f, ...patch }));
+    onChange({ ...form, ...patch });
     setError(undefined);
     setWarning(undefined);
   };
 
   const close = () => {
-    setForm(EMPTY_FORM);
     setError(undefined);
     setWarning(undefined);
     setOverlapOff(false);
@@ -118,6 +131,34 @@ export function QuickAddSheet({ visible, week, rows, onSave, onClose, initial, w
 
   const isFlexible = form.kind === "flexible";
 
+  // Swipe the top of the sheet: up = full screen, down = smaller, then closed.
+  // The ref lets the gesture (made once) see the current size.
+  const latest = useRef({ size, close, onSizeChange });
+  latest.current = { size, close, onSizeChange };
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderRelease: (_, g) => {
+        const { size: now, close: shut, onSizeChange: resize } = latest.current;
+        if (g.dy < -30) resize("full");
+        else if (g.dy > 30) {
+          if (now === "full") resize("half");
+          else shut();
+        }
+      },
+    }),
+  ).current;
+
+  // Android's back button closes the sheet instead of leaving the app.
+  useEffect(() => {
+    if (!openForm) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      latest.current.close();
+      return true;
+    });
+    return () => sub.remove();
+  }, [openForm]);
+
   // Changing the start keeps the length, so "09:00–10:00" moved to 14:00
   // becomes "14:00–15:00" without touching the end picker.
   const setStart = (startTime: string) => {
@@ -139,122 +180,143 @@ export function QuickAddSheet({ visible, week, rows, onSave, onClose, initial, w
         )
       : [];
 
+  if (!openForm) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+    <>
+      {size === "full" && (
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => onSizeChange("half")}
+          accessibilityLabel="Make the form smaller"
+        />
+      )}
+      <View style={[styles.sheet, size === "half" ? styles.halfSheet : styles.fullSheet]}>
+        <View {...swipe.panHandlers}>
+          <Pressable
+            onPress={() => onSizeChange(size === "half" ? "full" : "half")}
+            style={styles.grabber}
+            accessibilityRole="button"
+            accessibilityLabel={size === "half" ? "Make the form full screen" : "Make the form smaller"}
+          >
+            <View style={styles.grabBar} />
+          </Pressable>
           <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Add to your week</Text>
             <Pressable onPress={close} hitSlop={12} accessibilityRole="button">
               <Text style={styles.cancel}>Cancel</Text>
             </Pressable>
-          </View>
-
-          <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-            <Chips options={KIND_OPTIONS} isSelected={(v) => v === form.kind} onPress={(kind) => update({ kind })} />
-
-            <Field label="Name">
-              <TextInput
-                style={styles.input}
-                value={form.title}
-                onChangeText={(title) => update({ title })}
-                placeholder={isFlexible ? "Gym, Spanish, Guitar…" : form.kind === "fixed" ? "Work, Class…" : "Chill, Nap…"}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={save}
-              />
-            </Field>
-
-            {isFlexible ? (
-              <>
-                <View style={styles.row}>
-                  <Field label="Minutes" half>
-                    <TextInput
-                      style={styles.input}
-                      value={form.durationMin}
-                      onChangeText={(durationMin) => update({ durationMin })}
-                      keyboardType="number-pad"
-                    />
-                  </Field>
-                  <Field label="Times per week" half>
-                    <TextInput
-                      style={styles.input}
-                      value={form.timesPerWeek}
-                      onChangeText={(timesPerWeek) => update({ timesPerWeek })}
-                      keyboardType="number-pad"
-                    />
-                  </Field>
-                </View>
-                <Field label="When">
-                  <Chips
-                    options={TIME_OPTIONS}
-                    isSelected={(v) => v === form.timeOfDay}
-                    onPress={(timeOfDay) => update({ timeOfDay })}
-                  />
-                </Field>
-                <Field label="How important">
-                  <Chips
-                    options={IMPORTANCE_OPTIONS}
-                    isSelected={(v) => v === form.importance}
-                    onPress={(importance) => update({ importance })}
-                  />
-                </Field>
-              </>
-            ) : (
-              <>
-                <View style={styles.repeatRow}>
-                  <View style={styles.repeatText}>
-                    <Text style={styles.repeatLabel}>Repeat every week</Text>
-                    <Text style={styles.repeatHint}>
-                      {form.repeat
-                        ? "Shows up in every week"
-                        : `Only ${shortDate(weekStart, 0)} – ${shortDate(weekStart, 6)}`}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={form.repeat}
-                    onValueChange={(repeat) => update({ repeat })}
-                    trackColor={{ true: "#5B6CF0", false: "#D1D5DB" }}
-                    thumbColor="#FFFFFF"
-                    accessibilityLabel="Repeat every week"
-                  />
-                </View>
-                <Field label="Days">
-                  <Chips
-                    // Just this week: show the dates too ("Thu 22"), since it's one specific day.
-                    options={
-                      form.repeat
-                        ? DAY_OPTIONS
-                        : DAY_OPTIONS.map((o) => ({ ...o, label: `${o.label} ${shortDate(weekStart, o.value).split(" ")[0]}` }))
-                    }
-                    isSelected={(d) => form.days.includes(d)}
-                    onPress={(d) =>
-                      update({ days: form.days.includes(d) ? form.days.filter((x) => x !== d) : [...form.days, d] })
-                    }
-                  />
-                </Field>
-                <Field label={`Start  ${form.startTime}`}>
-                  <TimePicker value={form.startTime} onChange={setStart} />
-                </Field>
-                <Field label={`End  ${form.endTime}`}>
-                  <TimePicker value={form.endTime} onChange={(endTime) => update({ endTime })} />
-                </Field>
-                {!overlapOff && clashes.length > 0 && (
-                  <Notice text={`Already there: ${summarize(clashes)}.`} onDismiss={() => setOverlapOff(true)} />
-                )}
-              </>
-            )}
-
-            {error && <Text style={styles.error}>{error}</Text>}
-            {warning && <Text style={styles.warning}>{warning}</Text>}
-
-            <Pressable onPress={save} style={styles.saveButton} accessibilityRole="button">
+            <Text style={styles.sheetTitle}>Add to your week</Text>
+            <Pressable onPress={save} hitSlop={12} style={styles.saveButton} accessibilityRole="button">
               <Text style={styles.saveText}>{warning ? "Add anyway" : "Save"}</Text>
             </Pressable>
-          </ScrollView>
+          </View>
+          {(error || warning) && (
+            <View style={styles.messages}>
+              {error && <Text style={styles.error}>{error}</Text>}
+              {warning && <Text style={styles.warning}>{warning}</Text>}
+            </View>
+          )}
         </View>
+
+        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+          <Chips options={KIND_OPTIONS} isSelected={(v) => v === form.kind} onPress={(kind) => update({ kind })} />
+
+          <Field label="Name">
+            <TextInput
+              style={styles.input}
+              value={form.title}
+              onChangeText={(title) => update({ title })}
+              placeholder={isFlexible ? "Gym, Spanish, Guitar…" : form.kind === "fixed" ? "Work, Class…" : "Chill, Nap…"}
+              // Full screen (opened with +): start typing right away. Half (from the
+              // calendar): no keyboard yet, so the calendar stays in view.
+              autoFocus={size === "full"}
+              returnKeyType="done"
+              onSubmitEditing={save}
+            />
+          </Field>
+
+          {isFlexible ? (
+            <>
+              <View style={styles.row}>
+                <Field label="Minutes" half>
+                  <TextInput
+                    style={styles.input}
+                    value={form.durationMin}
+                    onChangeText={(durationMin) => update({ durationMin })}
+                    keyboardType="number-pad"
+                  />
+                </Field>
+                <Field label="Times per week" half>
+                  <TextInput
+                    style={styles.input}
+                    value={form.timesPerWeek}
+                    onChangeText={(timesPerWeek) => update({ timesPerWeek })}
+                    keyboardType="number-pad"
+                  />
+                </Field>
+              </View>
+              <Field label="When">
+                <Chips
+                  options={TIME_OPTIONS}
+                  isSelected={(v) => v === form.timeOfDay}
+                  onPress={(timeOfDay) => update({ timeOfDay })}
+                />
+              </Field>
+              <Field label="How important">
+                <Chips
+                  options={IMPORTANCE_OPTIONS}
+                  isSelected={(v) => v === form.importance}
+                  onPress={(importance) => update({ importance })}
+                />
+              </Field>
+            </>
+          ) : (
+            <>
+              <View style={styles.repeatRow}>
+                <View style={styles.repeatText}>
+                  <Text style={styles.repeatLabel}>Repeat every week</Text>
+                  <Text style={styles.repeatHint}>
+                    {form.repeat
+                      ? "Shows up in every week"
+                      : `Only ${shortDate(weekStart, 0)} – ${shortDate(weekStart, 6)}`}
+                  </Text>
+                </View>
+                <Switch
+                  value={form.repeat}
+                  onValueChange={(repeat) => update({ repeat })}
+                  trackColor={{ true: "#5B6CF0", false: "#D1D5DB" }}
+                  thumbColor="#FFFFFF"
+                  accessibilityLabel="Repeat every week"
+                />
+              </View>
+              <Field label="Days">
+                <Chips
+                  // Just this week: show the dates too ("Thu 22"), since it's one specific day.
+                  options={
+                    form.repeat
+                      ? DAY_OPTIONS
+                      : DAY_OPTIONS.map((o) => ({ ...o, label: `${o.label} ${shortDate(weekStart, o.value).split(" ")[0]}` }))
+                  }
+                  isSelected={(d) => form.days.includes(d)}
+                  onPress={(d) =>
+                    update({ days: form.days.includes(d) ? form.days.filter((x) => x !== d) : [...form.days, d] })
+                  }
+                />
+              </Field>
+              <Field label={`Start  ${form.startTime}`}>
+                <TimePicker value={form.startTime} onChange={setStart} />
+              </Field>
+              <Field label={`End  ${form.endTime}`}>
+                <TimePicker value={form.endTime} onChange={(endTime) => update({ endTime })} />
+              </Field>
+              {!overlapOff && clashes.length > 0 && (
+                <Notice text={`Already there: ${summarize(clashes)}.`} onDismiss={() => setOverlapOff(true)} />
+              )}
+            </>
+          )}
+        </ScrollView>
       </View>
-    </Modal>
+    </>
   );
 }
 
@@ -263,25 +325,30 @@ const styles = StyleSheet.create({
   repeatText: { flexShrink: 1, gap: 2 },
   repeatLabel: { fontSize: 15, fontWeight: "600", color: "#111827" },
   repeatHint: { fontSize: 13, color: "#6B7280" },
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
+  backdrop: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: "rgba(17,24,39,0.35)" },
   sheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: "#FFFFFF",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: "88%", // fixed, so buttons don't jump when warnings appear
-    width: "100%",
-    maxWidth: 560,
-    alignSelf: "center",
+    boxShadow: "0 -4px 16px rgba(17,24,39,0.15)",
   },
+  halfSheet: { height: "50%" },
+  fullSheet: { height: "92%" },
+  grabber: { alignItems: "center", paddingTop: 8, paddingBottom: 4 },
+  grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#D1D5DB" },
   sheetHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingTop: 16,
     paddingBottom: 8,
   },
-  sheetTitle: { fontSize: 20, fontWeight: "800", color: "#111827" },
+  sheetTitle: { fontSize: 17, fontWeight: "800", color: "#111827" },
+  messages: { paddingHorizontal: 16, gap: 8 },
   cancel: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
   body: { padding: 16, paddingBottom: 32, gap: 16 },
   row: { flexDirection: "row", gap: 12 },
@@ -299,6 +366,6 @@ const styles = StyleSheet.create({
   },
   error: { color: "#B91C1C", fontWeight: "600" },
   warning: { color: "#92400E", backgroundColor: "#FEF3C7", padding: 12, borderRadius: 10, lineHeight: 20 },
-  saveButton: { backgroundColor: "#5B6CF0", borderRadius: 12, paddingVertical: 14, alignItems: "center" },
-  saveText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  saveButton: { backgroundColor: "#5B6CF0", borderRadius: 10, paddingVertical: 8, paddingHorizontal: 16 },
+  saveText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
 });

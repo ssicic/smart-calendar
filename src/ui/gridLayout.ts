@@ -87,3 +87,40 @@ export function dropTarget(
   const latest = Math.max(0, Math.floor((DAY - Math.min(length, DAY)) / 15) * 15);
   return { day, minute: Math.min(latest, Math.max(0, snapped)) };
 }
+
+/** The new event being added, drawn on the calendar while the add form is open. */
+export interface Draft {
+  day: number;
+  /** Minutes since midnight. */
+  start: number;
+  end: number;
+}
+
+/** Which part of the draft the finger grabbed: its top edge, bottom edge, or the middle. */
+export type DraftHandle = "start" | "end" | "move";
+
+const LAST_END = DAY - 15; // the time pickers go up to 23:45
+
+/**
+ * The draft after dragging one of its parts by `dx`/`dy` pixels. Edges change
+ * the start or end (at least 15 minutes long); the middle moves the whole
+ * thing, to another day too. Everything snaps to 15 minutes.
+ */
+export function adjustDraft(
+  draft: Draft,
+  handle: DraftHandle,
+  dx: number,
+  dy: number,
+  columnWidth: number,
+  pxPerMin: number,
+): Draft {
+  const snap = (minute: number) => Math.round(minute / 15) * 15;
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  const shift = dy / pxPerMin;
+  if (handle === "start") return { ...draft, start: clamp(snap(draft.start + shift), 0, draft.end - 15) };
+  if (handle === "end") return { ...draft, end: clamp(snap(draft.end + shift), draft.start + 15, LAST_END) };
+  const length = draft.end - draft.start;
+  const start = clamp(snap(draft.start + shift), 0, LAST_END - length);
+  const day = clamp(draft.day + Math.round(dx / columnWidth), 0, 6);
+  return { day, start, end: start + length };
+}

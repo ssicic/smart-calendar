@@ -1,18 +1,18 @@
 import { useSQLiteContext } from "expo-sqlite";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ItemActionsSheet } from "./ItemActionsSheet";
 import { moveProblem } from "./itemActions";
-import { formForSlot, type QuickAddForm } from "./quickAdd";
-import { QuickAddSheet } from "./QuickAddSheet";
+import { EMPTY_FORM, formForSlot, parseTime, type QuickAddForm } from "./quickAdd";
+import { QuickAddSheet, type SheetSize } from "./QuickAddSheet";
 import { SleepSheet } from "./SleepSheet";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { MonthView } from "./MonthView";
 import { addMonths, addWeeks, dateKey, monthOfWeek, monthTitle, shortDate, weekStartOf, weeksBetween, type Month } from "./weekDate";
 import { WeekView } from "./WeekView";
-import { rowsByDay, type WeekRow } from "./weekRows";
+import { clock, rowsByDay, type WeekRow } from "./weekRows";
 import { YearView } from "./YearView";
 
 type ViewMode = "calendar" | "list" | "month" | "year";
@@ -29,8 +29,11 @@ export function WeekScreen() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = useWeek(db, weekStart);
 
-  // Open quick-add; `form` holds prefilled values when opened from a held slot.
-  const [adding, setAdding] = useState<{ form?: QuickAddForm }>();
+  // The add form while it's open (undefined = closed). It lives here, not in
+  // the sheet, because the calendar shows and edits its day and times too.
+  const [adding, setAdding] = useState<QuickAddForm>();
+  const [sheetSize, setSheetSize] = useState<SheetSize>("full");
+  const { height: screenHeight } = useWindowDimensions();
   const [tapped, setTapped] = useState<WeekRow>();
   const [saveError, setSaveError] = useState<string>();
   const [view, setView] = useState<ViewMode>("calendar");
@@ -72,6 +75,19 @@ export function WeekScreen() {
   const isEmpty = week.fixed.length + week.rest.length + week.items.length === 0;
 
   const isWeekView = view === "calendar" || view === "list";
+
+  // The event being added, drawn on the calendar so its time can be dragged there.
+  const draftStart = adding && parseTime(adding.startTime);
+  const draftEnd = adding && parseTime(adding.endTime);
+  const draft =
+    adding &&
+    adding.kind !== "flexible" &&
+    adding.days.length > 0 &&
+    draftStart !== undefined &&
+    draftEnd !== undefined &&
+    draftEnd > draftStart
+      ? { days: adding.days, start: draftStart, end: draftEnd, title: adding.title }
+      : undefined;
   const currentMonth = monthOfWeek(thisWeek);
   const isCurrent =
     view === "month"
@@ -201,7 +217,19 @@ export function WeekScreen() {
           windDownMin={windDownMin}
           onPressSleep={(day, field) => setSleepTarget({ day, field })}
           onPressRow={setTapped}
-          onHoldSlot={(day, minute) => setAdding({ form: formForSlot(day, minute) })}
+          onHoldSlot={(day, minute) => {
+            // Already adding something? Move it here and keep what was typed.
+            const slot = formForSlot(day, minute);
+            setAdding((f) =>
+              f ? { ...slot, title: f.title, repeat: f.repeat, kind: f.kind === "rest" ? "rest" : "fixed" } : slot,
+            );
+            setSheetSize("half");
+          }}
+          draft={draft}
+          onDraftChange={({ days, start, end }) =>
+            setAdding((f) => f && { ...f, days, startTime: clock(start), endTime: clock(end) })
+          }
+          bottomInset={adding && sheetSize === "half" ? screenHeight / 2 : 0}
           // Dragging is a clear "put it here", so flexible sessions move even onto a busy time.
           onDropRow={async (row, day, minute) => setSaveError(await move(row, day, minute, true))}
           today={today}
@@ -210,10 +238,13 @@ export function WeekScreen() {
       ) : (
         <WeekView days={days} weekStart={weekStart} onPressRow={setTapped} footer={queueFooter} />
       )}
-      {isWeekView && (
+      {isWeekView && !adding && (
         <Pressable
           style={styles.fab}
-          onPress={() => setAdding({})}
+          onPress={() => {
+          setAdding(EMPTY_FORM);
+          setSheetSize("full");
+        }}
           accessibilityRole="button"
           accessibilityLabel="Add to your week"
         >
@@ -221,8 +252,10 @@ export function WeekScreen() {
         </Pressable>
       )}
       <QuickAddSheet
-        visible={!!adding}
-        initial={adding?.form}
+        form={adding}
+        onChange={setAdding}
+        size={sheetSize}
+        onSizeChange={setSheetSize}
         weekStart={weekStart}
         week={week}
         rows={allRows}

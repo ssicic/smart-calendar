@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DAY } from "../engine";
-import { canDrag, dropTarget, layoutDay, visibleHours } from "./gridLayout";
+import { adjustDraft, canDrag, dropTarget, layoutDay, visibleHours } from "./gridLayout";
 import type { WeekRow } from "./weekRows";
 
 const h = (x: number) => x * 60;
@@ -70,5 +70,20 @@ describe("visibleHours", () => {
     const row = { id: "x", title: "X", start: 0, end: 60 };
     const kinds = ["fixed", "rest", "suggested", "locked", "done", "skipped"] as const;
     expect(kinds.map((kind) => canDrag({ ...row, kind }))).toEqual([true, true, true, true, false, false]);
+  });
+
+  it("resizes and moves the new-event draft in quarter hours", () => {
+    const d = { day: 2, start: 14 * 60, end: 15 * 60 }; // Wed 14:00-15:00
+    // 50px columns, 0.8px per minute: 24px = 30 minutes.
+    expect(adjustDraft(d, "end", 0, 24, 50, 0.8)).toEqual({ day: 2, start: 840, end: 930 });
+    expect(adjustDraft(d, "start", 0, -24, 50, 0.8)).toEqual({ day: 2, start: 810, end: 900 });
+    expect(adjustDraft(d, "move", -60, 24, 50, 0.8)).toEqual({ day: 1, start: 870, end: 930 });
+  });
+
+  it("keeps the draft at least 15 minutes long and inside the day", () => {
+    const d = { day: 6, start: 22 * 60, end: 23 * 60 };
+    expect(adjustDraft(d, "start", 0, 500, 50, 0.8)).toEqual({ day: 6, start: 22 * 60 + 45, end: 23 * 60 });
+    expect(adjustDraft(d, "end", 0, 500, 50, 0.8)).toEqual({ day: 6, start: 22 * 60, end: 23 * 60 + 45 });
+    expect(adjustDraft(d, "move", 500, 500, 50, 0.8)).toEqual({ day: 6, start: 22 * 60 + 45, end: 23 * 60 + 45 });
   });
 });
