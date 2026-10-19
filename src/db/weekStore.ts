@@ -129,6 +129,26 @@ const MIGRATIONS: string[] = [
   ALTER TABLE placements_v5 RENAME TO placements;
   CREATE INDEX placements_by_week ON placements (week_start);
   `,
+  // Version 6: optional activity groups with a colour. Starts with a few;
+  // the user can add more. NULL category = no group (the default colours).
+  `
+  CREATE TABLE categories (
+    id       TEXT PRIMARY KEY,
+    name     TEXT NOT NULL,
+    color    TEXT NOT NULL, -- "#RRGGBB"
+    position INTEGER NOT NULL
+  );
+  INSERT INTO categories (id, name, color, position) VALUES
+    ('work', 'Work', '#3B82F6', 0),
+    ('health', 'Health', '#22A06B', 1),
+    ('creativity', 'Creativity', '#8B5CF6', 2),
+    ('learning', 'Learning', '#F59E0B', 3),
+    ('social', 'Social', '#EC4899', 4),
+    ('home', 'Home', '#F97316', 5),
+    ('fun', 'Fun', '#14B8A6', 6);
+  ALTER TABLE events ADD COLUMN category_id TEXT;
+  ALTER TABLE flexible_items ADD COLUMN category_id TEXT;
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -150,6 +170,7 @@ export interface EventRow {
   start_min: number;
   end_min: number;
   week_start: string | null;
+  category_id: string | null;
 }
 
 export interface ItemRow {
@@ -160,6 +181,14 @@ export interface ItemRow {
   priority: number;
   preferred_windows: string | null;
   goal_id: string | null;
+  category_id: string | null;
+}
+
+/** An activity group (Work, Health…) and its colour. */
+export interface Category {
+  id: string;
+  name: string;
+  color: string; // "#RRGGBB"
 }
 
 export interface PlacementRow {
@@ -173,7 +202,13 @@ export interface PlacementRow {
 // ---- Pure converters between rows and engine objects ----
 
 export function eventFromRow(r: EventRow): FixedEvent | RestBlock {
-  return { id: r.id, title: r.title, start: r.start_min, end: r.end_min };
+  return {
+    id: r.id,
+    title: r.title,
+    start: r.start_min,
+    end: r.end_min,
+    ...(r.category_id ? { categoryId: r.category_id } : {}),
+  };
 }
 
 export function itemFromRow(r: ItemRow): FlexibleItem {
@@ -186,6 +221,7 @@ export function itemFromRow(r: ItemRow): FlexibleItem {
     // Spread an empty object when absent, so the key isn't there at all.
     ...(r.preferred_windows ? { preferredWindows: JSON.parse(r.preferred_windows) as Interval[] } : {}),
     ...(r.goal_id ? { goalId: r.goal_id } : {}),
+    ...(r.category_id ? { categoryId: r.category_id } : {}),
   };
 }
 
@@ -262,8 +298,8 @@ export async function insertEvents(
   // "Bob's class" can't break the SQL (or inject any).
   for (const e of events) {
     await db.runAsync(
-      "INSERT INTO events (id, kind, title, start_min, end_min, week_start) VALUES (?, ?, ?, ?, ?, ?)",
-      [e.id, kind, e.title, e.start, e.end, weekStart],
+      "INSERT INTO events (id, kind, title, start_min, end_min, week_start, category_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [e.id, kind, e.title, e.start, e.end, weekStart, e.categoryId ?? null],
     );
   }
 }
@@ -278,8 +314,9 @@ export async function deleteEvent(db: Db, id: string): Promise<void> {
 
 export async function insertItem(db: Db, item: FlexibleItem): Promise<void> {
   await db.runAsync(
-    `INSERT INTO flexible_items (id, title, duration_min, times_per_week, priority, preferred_windows, goal_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO flexible_items
+       (id, title, duration_min, times_per_week, priority, preferred_windows, goal_id, category_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       item.id,
       item.title,
@@ -288,8 +325,33 @@ export async function insertItem(db: Db, item: FlexibleItem): Promise<void> {
       item.priority,
       item.preferredWindows ? JSON.stringify(item.preferredWindows) : null,
       item.goalId ?? null,
+      item.categoryId ?? null,
     ],
   );
+}
+
+// ---- Activity groups (categories) ----
+
+export async function loadCategories(db: Db): Promise<Category[]> {
+  return db.getAllAsync<Category>("SELECT id, name, color FROM categories ORDER BY position, rowid", []);
+}
+
+/** Adds a group at the end of the list. */
+export async function insertCategory(db: Db, c: Category): Promise<void> {
+  await db.runAsync(
+    "INSERT INTO categories (id, name, color, position) VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM categories))",
+    [c.id, c.name, c.color],
+  );
+}
+
+/** Puts an event, or a flexible item (every session of it), in a group; null = no group. */
+export async function setCategory(
+  db: Db,
+  target: { kind: "event" | "item"; id: string },
+  categoryId: string | null,
+): Promise<void> {
+  const table = target.kind === "event" ? "events" : "flexible_items";
+  await db.runAsync(`UPDATE ${table} SET category_id = ? WHERE id = ?`, [categoryId, target.id]);
 }
 
 /** Removes the item and everything that points at it, in one transaction. */

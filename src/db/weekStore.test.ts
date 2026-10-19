@@ -12,7 +12,10 @@ import {
   setOverride,
   forgetPlacement,
   keepPlacement,
+  insertCategory,
   insertEvents,
+  loadCategories,
+  setCategory,
   insertItem,
   loadWeek,
   migrate,
@@ -80,7 +83,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 5 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 6 });
   });
 
   it("round-trips and moves fixed events and rest blocks", async () => {
@@ -98,6 +101,28 @@ describe("weekStore", () => {
     expect((await loadWeek(db, W1, W2)).week.fixed.map((e) => e.id)).toEqual(["w1"]);
     expect((await loadWeek(db, W2, W3)).week.fixed.map((e) => e.id)).toEqual(["w1", "d1"]);
     expect((await loadWeek(db, W3, W3)).week.fixed.map((e) => e.id)).toEqual(["w1"]);
+  });
+
+  it("starts with a few activity groups and adds new ones at the end", async () => {
+    const names = (await loadCategories(db)).map((c) => c.name);
+    expect(names).toEqual(["Work", "Health", "Creativity", "Learning", "Social", "Home", "Fun"]);
+    await insertCategory(db, { id: "c1", name: "Music", color: "#EF4444" });
+    expect((await loadCategories(db)).at(-1)).toEqual({ id: "c1", name: "Music", color: "#EF4444" });
+  });
+
+  it("stores an optional group on events and flexible items, and can change it", async () => {
+    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020, categoryId: "work" }], null);
+    await insertItem(db, { ...read, categoryId: "learning" });
+    await insertItem(db, gym); // no group
+    let { week } = await loadWeek(db, W1, W2);
+    expect(week.fixed[0]?.categoryId).toBe("work");
+    expect(week.items.map((i) => i.categoryId)).toEqual(["learning", undefined]);
+
+    await setCategory(db, { kind: "item", id: "g" }, "health");
+    await setCategory(db, { kind: "event", id: "w1" }, null);
+    ({ week } = await loadWeek(db, W1, W2));
+    expect(week.items.find((i) => i.id === "g")?.categoryId).toBe("health");
+    expect(week.fixed[0]).toEqual({ id: "w1", title: "Work", start: 540, end: 1020 });
   });
 
   it("round-trips flexible items, with and without preferred windows", async () => {
@@ -171,12 +196,13 @@ describe("weekStore", () => {
     const old = nodeDb();
     await migrate(old, 4);
     old.raw.exec(`INSERT INTO placements VALUES ('a', '${W1}', 'g', 60, 120, 'locked'), ('b', '${W1}', 'g', 200, 260, 'done')`);
-    await insertEvents(old, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null);
-    await insertItem(old, gym);
+    // Raw SQL in the v4 shape (today's insert functions write newer columns).
+    old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min) VALUES ('w1', 'fixed', 'Work', 540, 1020)`);
+    old.raw.exec(`INSERT INTO flexible_items (id, title, duration_min, times_per_week, priority) VALUES ('r', 'Read', 30, 4, 3)`);
     await migrate(old);
     const after = await loadWeek(old, W1, W2); // everything else survives the rebuild
     expect(after.week.fixed.map((e) => e.id)).toEqual(["w1"]);
-    expect(after.week.items).toEqual([gym]);
+    expect(after.week.items).toEqual([read]);
     expect(old.raw.prepare("SELECT id, state FROM placements ORDER BY id").all()).toEqual([
       { id: "a", state: "kept" },
       { id: "b", state: "done" },

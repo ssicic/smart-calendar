@@ -21,6 +21,8 @@ import {
   type TimeOfDay,
   parseTime,
 } from "./quickAdd";
+import type { Category } from "../db/weekStore";
+import { CategoryPicker } from "./CategoryPicker";
 import { Chips } from "./Chips";
 import { Notice } from "./Notice";
 import { overlapping, summarize } from "./overlaps";
@@ -50,6 +52,8 @@ interface Props {
   onClose: () => void;
   /** The week on screen (its Monday): where a non-repeating event goes. */
   weekStart: string;
+  categories: Category[];
+  onAddCategory: (name: string, color: string) => Promise<{ id: string } | { error: string }>;
 }
 
 let idCounter = 0;
@@ -85,6 +89,7 @@ const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0,
 
 export function QuickAddSheet(props: Props) {
   const { form: openForm, onChange, size, onSizeChange, week, rows, onSave, onClose, weekStart } = props;
+  const { categories, onAddCategory } = props;
   // The form's values live in the screen (passed in as `form`); every change
   // goes back up through onChange, and React redraws both sheet and calendar.
   const form = openForm ?? EMPTY_FORM;
@@ -232,6 +237,15 @@ export function QuickAddSheet(props: Props) {
               autoFocus={size === "full"}
               returnKeyType="done"
               onSubmitEditing={save}
+            />
+          </Field>
+
+          <Field label="Group (optional)">
+            <CategoryPicker
+              categories={categories}
+              selected={form.categoryId}
+              onSelect={(categoryId) => update({ categoryId })}
+              onAdd={onAddCategory}
             />
           </Field>
 

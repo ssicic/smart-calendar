@@ -14,6 +14,8 @@ export interface WeekRow {
   kind: RowKind;
   /** Set for flexible sessions: which item this is a session of. */
   itemId?: string;
+  /** Activity group (Work, Health…), if it has one. */
+  categoryId?: string;
 }
 
 /** "17:15" from week-minutes. */
@@ -25,6 +27,7 @@ export function clock(minute: number): string {
 /** All rows for the week, grouped by day (index 0 = Monday), each day sorted by time. */
 export function rowsByDay(input: WeekInput, plan: PlanResult): WeekRow[][] {
   const titles = new Map(input.items.map((i) => [i.id, i.title]));
+  const groups = new Map(input.items.map((i) => [i.id, i.categoryId]));
   const rows: WeekRow[] = [
     ...input.fixed.map((e) => ({ ...e, kind: "fixed" as const })),
     ...input.rest.map((e) => ({ ...e, kind: "rest" as const })),
@@ -35,6 +38,7 @@ export function rowsByDay(input: WeekInput, plan: PlanResult): WeekRow[][] {
       end: p.end,
       kind: p.state,
       itemId: p.itemId,
+      ...(groups.get(p.itemId) ? { categoryId: groups.get(p.itemId) } : {}),
     })),
   ];
   const days: WeekRow[][] = [[], [], [], [], [], [], []];

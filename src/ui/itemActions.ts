@@ -42,11 +42,18 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
       return [{ id: "move", label: "Move" }, remove];
     case "suggested":
     case "kept":
-    case "locked":
       return [
         { id: "move", label: "Move" },
         { id: "suggest", label: "Suggest new slot" },
-        kind === "locked" ? { id: "unlock", label: "Unlock" } : { id: "lock", label: "Lock here" },
+        { id: "lock", label: "Lock here" },
+        { id: "done", label: "Done" },
+        { ...remove, label: `Delete ${title} (every week)` },
+        { id: "queue", label: "Move to queue (next week)" },
+      ];
+    case "locked":
+      // Locked means "don't move it": no Move or Suggest (and no dragging) until it's unlocked.
+      return [
+        { id: "unlock", label: "Unlock (to move it)" },
         { id: "done", label: "Done" },
         { ...remove, label: `Delete ${title} (every week)` },
         { id: "queue", label: "Move to queue (next week)" },

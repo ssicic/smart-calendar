@@ -8,14 +8,18 @@ import {
   deleteEvent,
   deleteItem,
   keepPlacement,
+  insertCategory,
   insertEvents,
   insertItem,
+  loadCategories,
   loadWeek,
   moveEvent,
   queuePlacement,
   savePlacement,
   saveSleep,
+  setCategory,
   setOverride,
+  type Category,
   type Db,
   type LoadedWeek,
 } from "../db/weekStore";
@@ -49,11 +53,13 @@ async function attempt(work: () => Promise<string | void>): Promise<string | und
 export function useWeek(db: Db, weekStart: string) {
   const nextWeek = addWeeks(weekStart, 1);
   const [loaded, setLoaded] = useState<LoadedWeek>();
+  const [categories, setCategories] = useState<Category[]>([]);
 
   // useCallback keeps the same function between renders (unless db or the
   // week changes), so the useEffect below doesn't re-run on every render.
   const refresh = useCallback(async () => {
     setLoaded(await loadWeek(db, weekStart, nextWeek));
+    setCategories(await loadCategories(db));
   }, [db, weekStart, nextWeek]);
 
   useEffect(() => {
@@ -140,8 +146,29 @@ export function useWeek(db: Db, weekStart: string) {
       await refresh();
     });
 
+  /** Adds an activity group; returns its id, or an error to show. */
+  const addCategory = async (name: string, color: string): Promise<{ id: string } | { error: string }> => {
+    const id = `c${newId()}`;
+    const err = await attempt(async () => {
+      await insertCategory(db, { id, name, color });
+      await refresh();
+    });
+    return err ? { error: err } : { id };
+  };
+
+  /** Puts a row in a group (null = none). For a flexible session that's its item, so every week. */
+  const setRowCategory = (row: WeekRow, categoryId: string | null) =>
+    attempt(async () => {
+      if (row.kind === "fixed" || row.kind === "rest") await setCategory(db, { kind: "event", id: row.id }, categoryId);
+      else if (row.itemId) await setCategory(db, { kind: "item", id: row.itemId }, categoryId);
+      await refresh();
+    });
+
   return {
     week,
+    categories,
+    addCategory,
+    setRowCategory,
     plan,
     queuedForNextWeek: loaded?.queuedForNextWeek ?? [],
     sleep,

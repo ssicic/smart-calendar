@@ -22,6 +22,8 @@ export interface QuickAddForm {
   endTime: string; // "17:00"
   /** Off: only the week on screen. On: every week. */
   repeat: boolean;
+  /** Optional activity group (Work, Health…); null = none. */
+  categoryId: string | null;
 }
 
 export const EMPTY_FORM: QuickAddForm = {
@@ -35,6 +37,7 @@ export const EMPTY_FORM: QuickAddForm = {
   startTime: "09:00",
   endTime: "10:00",
   repeat: false,
+  categoryId: null,
 };
 
 /** Daily windows (minutes-of-day) behind each time-of-day choice. */
@@ -71,6 +74,7 @@ function parseWholeNumber(text: string): number | undefined {
 export function parseQuickAdd(form: QuickAddForm, newId: () => string): ParseResult {
   const title = form.title.trim();
   if (!title) return { ok: false, error: "Give it a name." };
+  const group = form.categoryId ? { categoryId: form.categoryId } : {};
 
   if (form.kind === "flexible") {
     const durationMin = parseWholeNumber(form.durationMin);
@@ -86,6 +90,7 @@ export function parseQuickAdd(form: QuickAddForm, newId: () => string): ParseRes
       timesPerWeek,
       priority: IMPORTANCE_PRIORITY[form.importance],
       ...(window ? { preferredWindows: [window] } : {}),
+      ...group,
     };
     return { ok: true, kind: "flexible", item };
   }
@@ -99,7 +104,7 @@ export function parseQuickAdd(form: QuickAddForm, newId: () => string): ParseRes
   // One event per selected day, e.g. "Work, Mon-Fri, 09:00-17:00" -> 5 events.
   const events = [...form.days]
     .sort((a, b) => a - b)
-    .map((d) => ({ id: newId(), title, start: d * DAY + start, end: d * DAY + end }));
+    .map((d) => ({ id: newId(), title, start: d * DAY + start, end: d * DAY + end, ...group }));
   const repeat = form.repeat;
   return form.kind === "fixed" ? { ok: true, kind: "fixed", events, repeat } : { ok: true, kind: "rest", events, repeat };
 }

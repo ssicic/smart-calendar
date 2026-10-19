@@ -15,12 +15,15 @@ export interface Interval {
 export interface FixedEvent extends Interval {
   id: string;
   title: string;
+  /** Optional activity group (Work, Health…), only used for colour. The scheduler ignores it. */
+  categoryId?: string;
 }
 
 /** Protected time off. Treated like a fixed event by the scheduler. */
 export interface RestBlock extends Interval {
   id: string;
   title: string;
+  categoryId?: string;
 }
 
 /** Something with a duration and frequency that the app places for you. */
@@ -34,6 +37,7 @@ export interface FlexibleItem {
   /** Optional daily windows in minutes-of-day, e.g. { start: 18*60, end: 21*60 }. */
   preferredWindows?: Interval[];
   goalId?: string;
+  categoryId?: string;
 }
 
 export type GoalHorizon = "year" | "quarter" | "month" | "week";

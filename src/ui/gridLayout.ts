@@ -66,8 +66,8 @@ export function visibleHours(days: WeekRow[][], fromMin: number, toMin: number):
   return { from, to: Math.min(to, 24) };
 }
 
-/** Blocks you can drag to another day or time. Done sessions keep their time. */
-export const canDrag = (row: WeekRow) => row.kind !== "done" && row.kind !== "skipped";
+/** Blocks you can drag to another day or time. Done and locked sessions keep their time. */
+export const canDrag = (row: WeekRow) => row.kind !== "done" && row.kind !== "skipped" && row.kind !== "locked";
 
 /**
  * Where a dragged block lands: `dx`/`dy` is how far the finger moved in

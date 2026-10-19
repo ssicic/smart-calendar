@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { DAY, dayOf } from "../engine";
+import type { Category } from "../db/weekStore";
+import { CategoryPicker } from "./CategoryPicker";
 import { Chips } from "./Chips";
 import { actionsFor, type ActionId } from "./itemActions";
 import { overlapping, summarize } from "./overlaps";
@@ -20,11 +22,16 @@ interface Props {
   /** Why the row can't move there (live, no saving), or undefined. */
   checkMove: (row: WeekRow, day: number, minuteOfDay: number) => string | undefined;
   onClose: () => void;
+  categories: Category[];
+  onAddCategory: (name: string, color: string) => Promise<{ id: string } | { error: string }>;
+  /** Changes the row's group (for a flexible session: the whole item, every week). */
+  onSetCategory: (row: WeekRow, categoryId: string | null) => Promise<string | undefined>;
 }
 
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
 
-export function ItemActionsSheet({ row, rows, onAction, onMove, checkMove, onClose }: Props) {
+export function ItemActionsSheet(props: Props) {
+  const { row, rows, onAction, onMove, checkMove, onClose, categories, onAddCategory, onSetCategory } = props;
   const [mode, setMode] = useState<"menu" | "move">("menu");
   const [error, setError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -100,6 +107,22 @@ export function ItemActionsSheet({ row, rows, onAction, onMove, checkMove, onClo
               <Text style={styles.link}>Close</Text>
             </Pressable>
           </View>
+
+          {mode === "menu" && row.kind !== "skipped" && (
+            <View style={styles.group}>
+              <Text style={styles.label}>Group</Text>
+              <CategoryPicker
+                categories={categories}
+                selected={row.categoryId ?? null}
+                onSelect={async (id) => {
+                  const err = await onSetCategory(row, id);
+                  if (err) setError(err);
+                  else onClose();
+                }}
+                onAdd={onAddCategory}
+              />
+            </View>
+          )}
 
           {mode === "menu" ? (
             <View style={styles.list}>
@@ -194,6 +217,7 @@ const styles = StyleSheet.create({
   confirmText: { color: "#B91C1C" },
   pressed: { backgroundColor: "#F1F5F9" },
   move: { gap: 10 },
+  group: { gap: 8, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   label: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
   moveButtons: { flexDirection: "row", gap: 12, marginTop: 6 },
   secondary: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#F1F5F9" },

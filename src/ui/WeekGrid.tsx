@@ -12,8 +12,9 @@ import {
   type DraftHandle,
   type PlacedBlock,
 } from "./gridLayout";
+import { tint } from "./categories";
 import { shortDate } from "./weekDate";
-import { KIND_STYLE } from "./WeekView";
+import { rowColors, type Groups } from "./WeekView";
 
 const HOUR_PX = 48; // height of one hour
 const PX_PER_MIN = HOUR_PX / 60;
@@ -32,11 +33,13 @@ interface Props {
   /** A block was dragged to another day and/or time. */
   onDropRow: (row: WeekRow, day: number, minuteOfDay: number) => void;
   /** The event being added (shown dashed, with handles), while the add form is open. */
-  draft?: { days: number[]; start: number; end: number; title: string };
+  draft?: { days: number[]; start: number; end: number; title: string; color?: string };
   /** The draft was resized or moved on the calendar. */
   onDraftChange: (change: { days: number[]; start: number; end: number }) => void;
   /** Extra space under the grid, so the bottom hours can scroll above a half-screen sheet. */
   bottomInset?: number;
+  /** Activity groups by id, for block colours. */
+  groups: Groups;
   /** Today's column (0 = Monday) and minutes since midnight, if this is the current week. */
   today?: { day: number; minute: number };
   footer?: React.ReactNode;
@@ -45,7 +48,7 @@ interface Props {
 /** Calendar view: one column per day, blocks as tall as they are long. */
 export function WeekGrid(props: Props) {
   const { days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, onHoldSlot, onDropRow, today, footer } = props;
-  const { draft, onDraftChange, bottomInset = 0 } = props;
+  const { draft, onDraftChange, bottomInset = 0, groups } = props;
   // Show an hour of sleep on each side, so there's always something to tap.
   const earliestWake = Math.min(...sleep.map((s) => s.wake));
   const latestBed = Math.max(...sleep.map((s) => Math.min(s.bed, DAY)));
@@ -154,6 +157,7 @@ export function WeekGrid(props: Props) {
                   onPress={onPressRow}
                   onDrop={onDropRow}
                   onArm={setDragDay}
+                  groups={groups}
                 />
               ))}
 
@@ -173,6 +177,7 @@ export function WeekGrid(props: Props) {
                   key={i}
                   draft={{ day, start: draft.start, end: draft.end }}
                   title={draft.title}
+                  color={draft.color}
                   left={GUTTER + day * columnWidth + 1}
                   width={columnWidth - 2}
                   top={y(draft.start)}
@@ -209,6 +214,7 @@ function DraggableBlock(props: {
   onDrop: (row: WeekRow, day: number, minuteOfDay: number) => void;
   /** The block's day while it is picked up, undefined when put down. */
   onArm: (day: number | undefined) => void;
+  groups: Groups;
 }) {
   const { block: b, day, top } = props;
   const [offset, setOffset] = useState<{ dx: number; dy: number }>();
@@ -251,7 +257,7 @@ function DraggableBlock(props: {
     latest.current.onArm(undefined);
   }
 
-  const k = KIND_STYLE[b.row.kind];
+  const k = rowColors(b.row, props.groups);
   const height = Math.max(16, (b.endMin - b.startMin) * PX_PER_MIN - 2);
   // Where it would land right now, shown in a small label while dragging.
   const target =
@@ -276,7 +282,8 @@ function DraggableBlock(props: {
                 setOffset({ dx: 0, dy: 0 });
                 props.onArm(day);
               }
-            : undefined
+            : // Can't be dragged (locked or done): holding opens its menu instead, which says why.
+              () => props.onPress(b.row)
         }
         onPressOut={() => {
           // Held, then let go without dragging: put it back down. (Wait a
@@ -325,6 +332,8 @@ function DraggableBlock(props: {
 function DraftBlock(props: {
   draft: Draft;
   title: string;
+  /** The picked group's colour, if any. */
+  color?: string;
   left: number;
   width: number;
   top: number;
@@ -362,7 +371,13 @@ function DraftBlock(props: {
   const { draft: d } = props;
   const height = Math.max(30, (d.end - d.start) * PX_PER_MIN);
   return (
-    <View style={[styles.draft, { left: props.left, width: props.width, top: props.top, height }]}>
+    <View
+      style={[
+        styles.draft,
+        { left: props.left, width: props.width, top: props.top, height },
+        props.color && { borderColor: props.color, backgroundColor: tint(props.color, 0.2) },
+      ]}
+    >
       <View {...moveHandle.panHandlers} style={styles.draftBody} accessibilityLabel="New event. Drag to move it.">
         <Text style={styles.draftTime} numberOfLines={1}>
           {clock(d.start)}

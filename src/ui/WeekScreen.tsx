@@ -27,7 +27,11 @@ export function WeekScreen() {
   // The month shown in Month, and the year shown in Year.
   const [month, setMonth] = useState<Month>(() => monthOfWeek(weekStartOf(new Date())));
   const [year, setYear] = useState(() => new Date().getFullYear());
-  const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = useWeek(db, weekStart);
+  const data = useWeek(db, weekStart);
+  const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = data;
+  const { categories, addCategory, setRowCategory } = data;
+  // Groups by id, so blocks can look up their colour quickly.
+  const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   // The add form while it's open (undefined = closed). It lives here, not in
   // the sheet, because the calendar shows and edits its day and times too.
@@ -86,7 +90,13 @@ export function WeekScreen() {
     draftStart !== undefined &&
     draftEnd !== undefined &&
     draftEnd > draftStart
-      ? { days: adding.days, start: draftStart, end: draftEnd, title: adding.title }
+      ? {
+          days: adding.days,
+          start: draftStart,
+          end: draftEnd,
+          title: adding.title,
+          color: adding.categoryId ? groups.get(adding.categoryId)?.color : undefined,
+        }
       : undefined;
   const currentMonth = monthOfWeek(thisWeek);
   const isCurrent =
@@ -231,13 +241,14 @@ export function WeekScreen() {
             setAdding((f) => f && { ...f, days, startTime: clock(start), endTime: clock(end) })
           }
           bottomInset={adding && sheetSize === "half" ? screenHeight / 2 : 0}
+          groups={groups}
           // Dragging is a clear "put it here", so flexible sessions move even onto a busy time.
           onDropRow={async (row, day, minute) => setSaveError(await move(row, day, minute, true))}
           today={today}
           footer={queueFooter}
         />
       ) : (
-        <WeekView days={days} weekStart={weekStart} onPressRow={setTapped} footer={queueFooter} />
+        <WeekView days={days} weekStart={weekStart} groups={groups} onPressRow={setTapped} footer={queueFooter} />
       )}
       {isWeekView && !adding && (
         <Pressable
@@ -255,6 +266,8 @@ export function WeekScreen() {
       <QuickAddSheet
         form={adding}
         onChange={setAdding}
+        categories={categories}
+        onAddCategory={addCategory}
         size={sheetSize}
         onSizeChange={setSheetSize}
         weekStart={weekStart}
@@ -273,6 +286,9 @@ export function WeekScreen() {
       <ItemActionsSheet
         row={tapped}
         rows={allRows}
+        categories={categories}
+        onAddCategory={addCategory}
+        onSetCategory={setRowCategory}
         onAction={act}
         onMove={move}
         checkMove={(row, day, minute) => moveProblem(week, plan, allRows, row, day, minute)}

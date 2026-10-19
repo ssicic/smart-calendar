@@ -35,8 +35,8 @@ describe("actionsFor", () => {
     expect(actionsFor("kept", "Gym").map((a) => a.id)).toEqual(actionsFor("suggested", "Gym").map((a) => a.id));
   });
 
-  it("offers unlock instead of lock once locked", () => {
-    expect(actionsFor("locked", "Gym").map((a) => a.id)).toContain("unlock");
+  it("offers unlock instead of lock once locked, and no way to move it", () => {
+    expect(actionsFor("locked", "Gym").map((a) => a.id)).toEqual(["unlock", "done", "delete", "queue"]);
   });
   it("never offers lock for fixed events and rest blocks", () => {
     expect(actionsFor("fixed", "Work").map((a) => a.id)).toEqual(["move", "delete"]);

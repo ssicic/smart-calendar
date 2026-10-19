@@ -66,10 +66,10 @@ describe("visibleHours", () => {
     expect(dropTarget({ day: 0, startMin: 60, endMin: 120 }, -500, -500, 50, 0.8)).toEqual({ day: 0, minute: 0 });
   });
 
-  it("lets everything but done and queued sessions be dragged", () => {
+  it("lets everything but done, queued and locked sessions be dragged", () => {
     const row = { id: "x", title: "X", start: 0, end: 60 };
-    const kinds = ["fixed", "rest", "suggested", "locked", "done", "skipped"] as const;
-    expect(kinds.map((kind) => canDrag({ ...row, kind }))).toEqual([true, true, true, true, false, false]);
+    const kinds = ["fixed", "rest", "suggested", "kept", "locked", "done", "skipped"] as const;
+    expect(kinds.map((kind) => canDrag({ ...row, kind }))).toEqual([true, true, true, true, false, false, false]);
   });
 
   it("resizes and moves the new-event draft in quarter hours", () => {

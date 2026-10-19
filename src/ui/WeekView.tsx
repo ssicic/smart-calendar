@@ -1,4 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import type { Category } from "../db/weekStore";
+import { categoryStyle } from "./categories";
 import { shortDate } from "./weekDate";
 import { DAY_NAMES, clock, type RowKind, type WeekRow } from "./weekRows";
 
@@ -12,8 +14,18 @@ export const KIND_STYLE: Record<RowKind, { bg: string; bar: string; label: strin
   skipped: { bg: "#F8FAFC", bar: "#94A3B8", label: "Queued" },
 };
 
-function Block({ row, onPress }: { row: WeekRow; onPress: (row: WeekRow) => void }) {
-  const k = KIND_STYLE[row.kind];
+/** Activity groups by id, for colouring blocks. */
+export type Groups = Map<string, Category>;
+
+/** A row's colours: its group's colour if it has one, otherwise the colours for its kind. */
+export function rowColors(row: WeekRow, groups: Groups): { bg: string; bar: string } {
+  const group = row.categoryId ? groups.get(row.categoryId) : undefined;
+  return categoryStyle(row.kind, group?.color) ?? KIND_STYLE[row.kind];
+}
+
+function Block({ row, groups, onPress }: { row: WeekRow; groups: Groups; onPress: (row: WeekRow) => void }) {
+  const k = rowColors(row, groups);
+  const group = row.categoryId ? groups.get(row.categoryId) : undefined;
   return (
     <Pressable
       onPress={() => onPress(row)}
@@ -26,7 +38,10 @@ function Block({ row, onPress }: { row: WeekRow; onPress: (row: WeekRow) => void
       <Text style={styles.title} numberOfLines={1}>
         {row.title}
       </Text>
-      <Text style={[styles.kind, { color: k.bar }]}>{k.label}</Text>
+      <Text style={[styles.kind, { color: k.bar }]}>
+        {KIND_STYLE[row.kind].label}
+        {group ? ` · ${group.name}` : ""}
+      </Text>
     </Pressable>
   );
 }
@@ -34,12 +49,13 @@ function Block({ row, onPress }: { row: WeekRow; onPress: (row: WeekRow) => void
 interface Props {
   days: WeekRow[][];
   weekStart: string;
+  groups: Groups;
   onPressRow: (row: WeekRow) => void;
   /** Shown under Sunday, e.g. the queue for next week. */
   footer?: React.ReactNode;
 }
 
-export function WeekView({ days, weekStart, onPressRow, footer }: Props) {
+export function WeekView({ days, weekStart, groups, onPressRow, footer }: Props) {
   return (
     <ScrollView contentContainerStyle={styles.list}>
       {days.map((rows, d) => (
@@ -50,7 +66,7 @@ export function WeekView({ days, weekStart, onPressRow, footer }: Props) {
           {rows.length === 0 ? (
             <Text style={styles.empty}>Nothing planned</Text>
           ) : (
-            rows.map((row) => <Block key={row.id} row={row} onPress={onPressRow} />)
+            rows.map((row) => <Block key={row.id} row={row} groups={groups} onPress={onPressRow} />)
           )}
         </View>
       ))}

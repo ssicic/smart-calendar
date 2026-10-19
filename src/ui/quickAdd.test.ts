@@ -76,6 +76,15 @@ describe("parseQuickAdd", () => {
     expect(parseQuickAdd(form({ ...base, repeat: true }), newId)).toMatchObject({ ok: true, repeat: true });
   });
 
+  it("puts the new item or events in the picked group, if any", () => {
+    const flex = parseQuickAdd(form({ title: "Gym", categoryId: "health" }), newId);
+    expect(flex.ok && flex.kind === "flexible" && flex.item.categoryId).toBe("health");
+    const fixed = parseQuickAdd(form({ kind: "fixed", title: "Work", days: [0, 1], categoryId: "work" }), newId);
+    expect(fixed.ok && fixed.kind === "fixed" && fixed.events.map((e) => e.categoryId)).toEqual(["work", "work"]);
+    const none = parseQuickAdd(form({ title: "Gym" }), newId);
+    expect(none.ok && none.kind === "flexible" && "categoryId" in none.item).toBe(false);
+  });
+
   it("prefills a Fixed event from a held calendar slot", () => {
     const f = formForSlot(2, 14 * 60 + 30);
     expect(f).toMatchObject({ kind: "fixed", days: [2], startTime: "14:30", endTime: "15:30", repeat: false });
