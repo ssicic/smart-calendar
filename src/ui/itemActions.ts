@@ -3,6 +3,8 @@
 import {
   DAY,
   WEEK,
+  dayOf,
+  dayWindow,
   movePlacement,
   suggestAnotherSlot,
   type Placement,
@@ -81,9 +83,12 @@ export function moveSession(
   const placements = plan.placements.filter((p) => p.state !== "suggested" || p.id === placementId);
   const r = movePlacement({ ...week, placements }, placementId, newStart);
   if (!r.ok) {
-    const { dayStart, dayEnd } = week.settings;
-    const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-    return { ok: false, error: `That time is taken or outside ${hhmm(dayStart)}–${hhmm(dayEnd)}.` };
+    const w = dayWindow(dayOf(newStart), week.settings);
+    const hhmm = (m: number) => {
+      const t = m % DAY;
+      return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+    };
+    return { ok: false, error: `That time is taken or outside your day (${hhmm(w.start)}–${hhmm(w.end)}).` };
   }
   const moved = r.placements.find((p) => p.id === placementId)!;
   return { ok: true, placement: { ...moved, id: storedId(moved, newId) } };

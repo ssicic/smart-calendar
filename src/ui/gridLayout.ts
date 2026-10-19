@@ -49,12 +49,12 @@ export function layoutDay(rows: WeekRow[]): PlacedBlock[] {
 }
 
 /**
- * Which hours to show: at least the planner's day (e.g. 08–22), stretched to
- * include anything earlier or later, such as a 06:00 shift.
+ * Which hours to show: at least `fromMin`–`toMin` (minutes of day), stretched
+ * to include anything earlier or later, such as a 06:00 shift.
  */
-export function visibleHours(days: WeekRow[][], dayStart: number, dayEnd: number): { from: number; to: number } {
-  let from = Math.floor(dayStart / 60);
-  let to = Math.ceil(dayEnd / 60);
+export function visibleHours(days: WeekRow[][], fromMin: number, toMin: number): { from: number; to: number } {
+  let from = Math.max(0, Math.floor(fromMin / 60));
+  let to = Math.min(24, Math.ceil(toMin / 60));
   for (const d of days) {
     for (const r of d) {
       if (r.kind === "skipped") continue;

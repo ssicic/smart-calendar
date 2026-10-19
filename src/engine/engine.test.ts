@@ -107,6 +107,15 @@ describe("planWeek", () => {
     expect(unplaced).toEqual([{ itemId: "low", missing: 7, reason: "over-capacity" }]);
   });
 
+  it("follows per-day windows (e.g. sleep in on Saturday)", () => {
+    const windows = Array.from({ length: 7 }, (_, d) => (d === 5 ? { start: h(11), end: h(12) } : { start: h(8), end: h(8) }));
+    const { placements, unplaced } = planWeek(
+      week({ settings: { ...settings, dayWindows: windows }, items: [item("read", 60, 2, 1)] }),
+    );
+    expect(placements.map((p) => p.start)).toEqual([5 * DAY + h(11)]);
+    expect(unplaced).toEqual([{ itemId: "read", missing: 1, reason: "over-capacity" }]);
+  });
+
   it("uses preferred windows when they have room", () => {
     const evening = item("gym", 60, 2, 1, { preferredWindows: [{ start: h(18), end: h(21) }] });
     const { placements } = planWeek(week({ items: [evening] }));

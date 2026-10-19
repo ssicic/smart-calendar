@@ -1,6 +1,12 @@
 // Saves and loads the week in a local SQLite database on the device.
 // The engine never sees SQL: this module translates between table rows and
 // engine objects (FixedEvent, RestBlock, FlexibleItem, Placement).
+import {
+  DEFAULT_SLEEP,
+  planningWindows,
+  type DayOverride,
+  type SleepSettings,
+} from "../engine";
 import type {
   FixedEvent,
   FlexibleItem,
@@ -81,6 +87,21 @@ const MIGRATIONS: string[] = [
     target_week  TEXT NOT NULL
   );
   `,
+  // Version 3: sleep. Usual times live in a small key/value settings table;
+  // one-off changes are per week and day. NULL = follow the usual time.
+  `
+  CREATE TABLE settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL -- JSON
+  );
+  CREATE TABLE day_overrides (
+    week_start TEXT NOT NULL,
+    day        INTEGER NOT NULL CHECK (day BETWEEN 0 AND 6),
+    wake_min   INTEGER,
+    bed_min    INTEGER,
+    PRIMARY KEY (week_start, day)
+  );
+  `,
 ];
 
 export async function migrate(db: Db): Promise<void> {
@@ -147,6 +168,9 @@ export function placementFromRow(r: PlacementRow): Placement {
 
 export interface LoadedWeek {
   week: WeekInput;
+  sleep: SleepSettings;
+  /** One-off sleep changes for this week. */
+  overrides: DayOverride[];
   /** Titles of sessions already queued for the week after this one. */
   queuedForNextWeek: { itemId: string; title: string }[];
 }
@@ -174,14 +198,19 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
     [nextWeekStart],
   );
 
+  const sleep = await loadSleep(db);
+  const overrides = await loadOverrides(db, weekStart);
+
   const extra = new Map(queuedHere.map((q) => [q.item_id, q.n]));
   return {
+    sleep,
+    overrides,
     week: {
       fixed: events.filter((e) => e.kind === "fixed").map(eventFromRow),
       rest: events.filter((e) => e.kind === "rest").map(eventFromRow),
       items: items.map(itemFromRow).map((i) => ({ ...i, timesPerWeek: i.timesPerWeek + (extra.get(i.id) ?? 0) })),
       placements: placements.map(placementFromRow),
-      settings: DEFAULT_SETTINGS,
+      settings: { ...DEFAULT_SETTINGS, dayWindows: planningWindows(sleep, overrides) },
     },
     queuedForNextWeek: queuedNext.map((q) => ({ itemId: q.item_id, title: q.title })),
   };
@@ -272,5 +301,54 @@ export async function queuePlacement(
       p.id,
       targetWeek,
     ]);
+  });
+}
+
+// ---- Sleep ----
+
+export async function loadSleep(db: Db): Promise<SleepSettings> {
+  const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'sleep'", []);
+  // Merge over the defaults, so settings saved by an older version still work.
+  return row ? { ...DEFAULT_SLEEP, ...(JSON.parse(row.value) as Partial<SleepSettings>) } : DEFAULT_SLEEP;
+}
+
+export async function saveSleep(db: Db, sleep: SleepSettings): Promise<void> {
+  // UPSERT: insert the row, or update it if the key already exists.
+  await db.runAsync(
+    "INSERT INTO settings (key, value) VALUES ('sleep', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    [JSON.stringify(sleep)],
+  );
+}
+
+export async function loadOverrides(db: Db, weekStart: string): Promise<DayOverride[]> {
+  const rows = await db.getAllAsync<{ day: number; wake_min: number | null; bed_min: number | null }>(
+    "SELECT day, wake_min, bed_min FROM day_overrides WHERE week_start = ?",
+    [weekStart],
+  );
+  return rows.map((r) => ({
+    day: r.day,
+    ...(r.wake_min !== null ? { wake: r.wake_min } : {}),
+    ...(r.bed_min !== null ? { bed: r.bed_min } : {}),
+  }));
+}
+
+/** Change (or with `null`, reset) one day's wake-up or bedtime for one week. */
+export async function setOverride(
+  db: Db,
+  weekStart: string,
+  day: number,
+  field: "wake" | "bed",
+  minutes: number | null,
+): Promise<void> {
+  // Column names can't be `?` parameters, so pick from a fixed list instead.
+  const column = field === "wake" ? "wake_min" : "bed_min";
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO day_overrides (week_start, day, ${column}) VALUES (?, ?, ?)
+       ON CONFLICT(week_start, day) DO UPDATE SET ${column} = excluded.${column}`,
+      [weekStart, day, minutes],
+    );
+    // Tidy up rows where both times follow the usual again.
+    await db.runAsync("DELETE FROM day_overrides WHERE wake_min IS NULL AND bed_min IS NULL", []);
   });
 }

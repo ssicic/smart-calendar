@@ -3,7 +3,7 @@
 // database, then reload from it. The database is the single source of truth,
 // so the screen can never drift out of sync with what's saved.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { planWeek, type FixedEvent } from "../engine";
+import { isWeekend, planWeek, sleepForDay, type FixedEvent } from "../engine";
 import {
   deleteEvent,
   deleteItem,
@@ -14,6 +14,8 @@ import {
   moveEvent,
   queuePlacement,
   savePlacement,
+  saveSleep,
+  setOverride,
   type Db,
   type LoadedWeek,
 } from "../db/weekStore";
@@ -27,6 +29,7 @@ import {
   type ActionId,
 } from "./itemActions";
 import type { QuickAddResult } from "./QuickAddSheet";
+import type { SleepScope } from "./SleepSheet";
 import { addWeeks } from "./weekDate";
 import type { WeekRow } from "./weekRows";
 
@@ -111,5 +114,41 @@ export function useWeek(db: Db, weekStart: string) {
       await refresh();
     });
 
-  return { week, plan, queuedForNextWeek: loaded?.queuedForNextWeek ?? [], add, act, move };
+  /** Sleep for each day of this week, with one-off changes applied. */
+  const sleep = useMemo(
+    () => (loaded ? Array.from({ length: 7 }, (_, d) => sleepForDay(loaded.sleep, loaded.overrides, d)) : []),
+    [loaded],
+  );
+
+  /**
+   * "day": change just this day this week. "usual": change the weekday or
+   * weekend default (and drop this day's one-off change). "reset": back to usual.
+   */
+  const changeSleep = (day: number, field: "wake" | "bed", minutes: number, scope: SleepScope) =>
+    attempt(async () => {
+      if (!loaded) return;
+      if (scope === "day") {
+        await setOverride(db, weekStart, day, field, minutes);
+      } else {
+        if (scope === "usual") {
+          const group = isWeekend(day) ? "weekend" : "weekday";
+          const s = loaded.sleep;
+          await saveSleep(db, { ...s, [group]: { ...s[group], [field]: minutes } });
+        }
+        await setOverride(db, weekStart, day, field, null);
+      }
+      await refresh();
+    });
+
+  return {
+    week,
+    plan,
+    queuedForNextWeek: loaded?.queuedForNextWeek ?? [],
+    sleep,
+    windDownMin: loaded?.sleep.windDownMin ?? 0,
+    add,
+    act,
+    move,
+    changeSleep,
+  };
 }

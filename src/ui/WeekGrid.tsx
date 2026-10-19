@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { DAY, type DaySleep } from "../engine";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
 import { layoutDay, visibleHours } from "./gridLayout";
 import { shortDate } from "./weekDate";
@@ -12,8 +13,10 @@ const GUTTER = 34; // hour labels on the left
 interface Props {
   days: WeekRow[][];
   weekStart: string;
-  dayStart: number;
-  dayEnd: number;
+  /** Sleep for each day (0 = Monday): drawn as grey areas you can tap. */
+  sleep: DaySleep[];
+  windDownMin: number;
+  onPressSleep: (day: number, field: "wake" | "bed") => void;
   onPressRow: (row: WeekRow) => void;
   /** Today's column (0 = Monday) and minutes since midnight, if this is the current week. */
   today?: { day: number; minute: number };
@@ -21,8 +24,11 @@ interface Props {
 }
 
 /** Calendar view: one column per day, blocks as tall as they are long. */
-export function WeekGrid({ days, weekStart, dayStart, dayEnd, onPressRow, today, footer }: Props) {
-  const { from, to } = visibleHours(days, dayStart, dayEnd);
+export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, today, footer }: Props) {
+  // Show an hour of sleep on each side, so there's always something to tap.
+  const earliestWake = Math.min(...sleep.map((s) => s.wake));
+  const latestBed = Math.max(...sleep.map((s) => Math.min(s.bed, DAY)));
+  const { from, to } = visibleHours(days, earliestWake - 60, latestBed + 60);
   const hours = Array.from({ length: to - from }, (_, i) => from + i);
   // useMemo: only redo the overlap layout when the rows change.
   const laidOut = useMemo(() => days.map(layoutDay), [days]);
@@ -66,6 +72,17 @@ export function WeekGrid({ days, weekStart, dayStart, dayEnd, onPressRow, today,
               {hours.map((hr) => (
                 <View key={hr} style={[styles.hourLine, { top: (hr - from) * HOUR_PX }]} />
               ))}
+
+              {sleep[d] && (
+                <SleepZones
+                  s={sleep[d]}
+                  windDownMin={windDownMin}
+                  top={y(from * 60)}
+                  bottom={y(to * 60)}
+                  y={y}
+                  onPress={(field) => onPressSleep(d, field)}
+                />
+              )}
 
               {blocks.map((b) => {
                 const k = KIND_STYLE[b.row.kind];
@@ -112,7 +129,74 @@ export function WeekGrid({ days, weekStart, dayStart, dayEnd, onPressRow, today,
   );
 }
 
+/**
+ * Grey areas for the night: before wake-up and after bedtime, plus a lighter
+ * wind-down band before bed. Tapping them changes that day's times.
+ */
+function SleepZones(props: {
+  s: DaySleep;
+  windDownMin: number;
+  top: number;
+  bottom: number;
+  y: (minuteOfDay: number) => number;
+  onPress: (field: "wake" | "bed") => void;
+}) {
+  const { s, windDownMin, top, bottom, y, onPress } = props;
+  const wakeY = Math.max(top, y(s.wake));
+  const bedY = Math.min(bottom, y(Math.min(s.bed, DAY)));
+  const windY = Math.min(bottom, y(Math.min(s.bed - windDownMin, DAY)));
+  // Bedtime after midnight: no evening area left on this day, so show a small tab.
+  const bedTab = s.bed >= DAY;
+  return (
+    <>
+      {wakeY > top && (
+        <Pressable
+          onPress={() => onPress("wake")}
+          accessibilityRole="button"
+          accessibilityLabel={`Wake-up ${clock(s.wake)}. Tap to change.`}
+          style={[styles.sleep, { top, height: wakeY - top, justifyContent: "flex-end" }]}
+        >
+          <Text style={[styles.sleepLabel, s.wakeChanged && styles.changed]}>{clock(s.wake)}</Text>
+        </Pressable>
+      )}
+      {windY < bedY && (
+        <Pressable
+          onPress={() => onPress("bed")}
+          accessibilityRole="button"
+          accessibilityLabel="Wind-down before bed. Tap to change bedtime."
+          style={[styles.windDown, { top: windY, height: bedY - windY }]}
+        />
+      )}
+      {bedTab ? (
+        <Pressable
+          onPress={() => onPress("bed")}
+          accessibilityRole="button"
+          accessibilityLabel={`Bedtime ${clock(s.bed % DAY)}. Tap to change.`}
+          style={[styles.sleep, { top: bottom - 18, height: 18 }]}
+        >
+          <Text style={[styles.sleepLabel, s.bedChanged && styles.changed]}>{clock(s.bed % DAY)}</Text>
+        </Pressable>
+      ) : (
+        bedY < bottom && (
+          <Pressable
+            onPress={() => onPress("bed")}
+            accessibilityRole="button"
+            accessibilityLabel={`Bedtime ${clock(s.bed)}. Tap to change.`}
+            style={[styles.sleep, { top: bedY, height: bottom - bedY }]}
+          >
+            <Text style={[styles.sleepLabel, s.bedChanged && styles.changed]}>{clock(s.bed)}</Text>
+          </Pressable>
+        )
+      )}
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
+  sleep: { position: "absolute", left: 0, right: 0, backgroundColor: "#E9ECF3", paddingVertical: 2 },
+  windDown: { position: "absolute", left: 0, right: 0, backgroundColor: "#F3F4F8" },
+  sleepLabel: { fontSize: 9, fontWeight: "700", color: "#8A93A8", textAlign: "center", fontVariant: ["tabular-nums"] },
+  changed: { color: "#5B6CF0" },
   wrap: { flex: 1 },
   headerRow: { flexDirection: "row", paddingHorizontal: 4, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   headerCell: { flex: 1, alignItems: "center", paddingVertical: 2, borderRadius: 8 },

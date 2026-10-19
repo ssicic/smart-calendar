@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ItemActionsSheet } from "./ItemActionsSheet";
 import { moveProblem } from "./itemActions";
 import { QuickAddSheet } from "./QuickAddSheet";
+import { SleepSheet } from "./SleepSheet";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { shortDate, weekStartOf } from "./weekDate";
@@ -17,12 +18,13 @@ export function WeekScreen() {
   // Worked out once when the screen appears. (If the app stays open past
   // Sunday midnight it keeps showing the old week until reopened.)
   const [weekStart] = useState(() => weekStartOf(new Date()));
-  const { week, plan, queuedForNextWeek, add, act, move } = useWeek(db, weekStart);
+  const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = useWeek(db, weekStart);
 
   const [adding, setAdding] = useState(false);
   const [tapped, setTapped] = useState<WeekRow>();
   const [saveError, setSaveError] = useState<string>();
   const [view, setView] = useState<"calendar" | "list">("calendar");
+  const [sleepTarget, setSleepTarget] = useState<{ day: number; field: "wake" | "bed" }>();
 
   // The clock, refreshed every minute, so the red "now" line moves.
   const [now, setNow] = useState(() => new Date());
@@ -109,8 +111,9 @@ export function WeekScreen() {
         <WeekGrid
           days={days}
           weekStart={weekStart}
-          dayStart={week.settings.dayStart}
-          dayEnd={week.settings.dayEnd}
+          sleep={sleep}
+          windDownMin={windDownMin}
+          onPressSleep={(day, field) => setSleepTarget({ day, field })}
           onPressRow={setTapped}
           today={today}
           footer={queueFooter}
@@ -132,6 +135,13 @@ export function WeekScreen() {
         rows={allRows}
         onSave={async (r) => setSaveError(await add(r))}
         onClose={() => setAdding(false)}
+      />
+      <SleepSheet
+        target={sleepTarget}
+        sleep={sleep}
+        weekStart={weekStart}
+        onSave={changeSleep}
+        onClose={() => setSleepTarget(undefined)}
       />
       <ItemActionsSheet
         row={tapped}

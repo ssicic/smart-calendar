@@ -66,7 +66,7 @@ describe("moveSession", () => {
     expect(moveSession(week, plan, gym.id, weekMinute(0, h(10)), newId)).toMatchObject({ ok: false });
     expect(moveSession(week, plan, gym.id, weekMinute(1, h(21.5)), newId)).toMatchObject({
       ok: false,
-      error: "That time is taken or outside 08:00–22:00.",
+      error: "That time is taken or outside your day (08:00–22:00).",
     });
   });
 });
@@ -112,7 +112,7 @@ describe("moveProblem", () => {
     expect(moveProblem(padded, plan, rows, gymRow, 0, h(12))).toBe("Overlaps Mon Work 09:00–17:00 (fixed).");
   });
   it("falls back to the general error outside the day", () => {
-    expect(moveProblem(padded, plan, rows, gymRow, 3, h(21.5))).toBe("That time is taken or outside 08:00–22:00.");
+    expect(moveProblem(padded, plan, rows, gymRow, 3, h(21.5))).toBe("That time is taken or outside your day (08:00–22:00).");
   });
   it("lets fixed events go anywhere inside the week", () => {
     const work = rows.find((r) => r.id === "work")!;

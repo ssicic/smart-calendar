@@ -63,6 +63,12 @@ export interface PlannerSettings {
   dayStart: number;
   /** Latest minute-of-day a placement may end. */
   dayEnd: number;
+  /**
+   * Optional per-day override of [dayStart, dayEnd), index 0 = Monday, in
+   * minutes-of-day. Set from the user's sleep (wake-up to bedtime minus a
+   * wind-down), so the planner never suggests anything while they sleep.
+   */
+  dayWindows?: Interval[];
   /** Gap kept between a placement and anything adjacent. */
   bufferMin: number;
   /** Free minutes per week the scheduler must leave unfilled. */

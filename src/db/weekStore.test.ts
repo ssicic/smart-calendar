@@ -1,10 +1,14 @@
 // Runs the real SQL against Node's built-in SQLite, in memory. Same SQLite
 // engine as on the phone, so schema mistakes show up here first.
 import { createRequire } from "node:module";
+import { DEFAULT_SLEEP, planningWindows } from "../engine";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_SETTINGS,
   deleteItem,
+  loadSleep,
+  saveSleep,
+  setOverride,
   forgetPlacement,
   insertEvents,
   insertItem,
@@ -59,14 +63,22 @@ beforeEach(async () => {
 describe("weekStore", () => {
   it("starts with an empty week and default settings", async () => {
     expect(await loadWeek(db, W1, W2)).toEqual({
-      week: { fixed: [], rest: [], items: [], placements: [], settings: DEFAULT_SETTINGS },
+      week: {
+        fixed: [],
+        rest: [],
+        items: [],
+        placements: [],
+        settings: { ...DEFAULT_SETTINGS, dayWindows: planningWindows(DEFAULT_SLEEP, []) },
+      },
+      sleep: DEFAULT_SLEEP,
+      overrides: [],
       queuedForNextWeek: [],
     });
   });
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 2 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 3 });
   });
 
   it("round-trips and moves fixed events and rest blocks", async () => {
@@ -127,6 +139,27 @@ describe("weekStore", () => {
     expect(loaded.week.items).toEqual([read]);
     expect(loaded.week.placements).toEqual([]);
     expect(loaded.queuedForNextWeek).toEqual([]);
+  });
+
+  it("saves sleep settings", async () => {
+    const mine = { ...DEFAULT_SLEEP, weekend: { wake: 600, bed: 1470 } };
+    await saveSleep(db, mine);
+    await saveSleep(db, mine); // second save updates, doesn't duplicate
+    expect(await loadSleep(db)).toEqual(mine);
+  });
+
+  it("keeps one-off sleep changes per week and day, and feeds them to the planner", async () => {
+    await setOverride(db, W1, 2, "wake", 360);
+    await setOverride(db, W1, 2, "bed", 1380);
+    const w1 = await loadWeek(db, W1, W2);
+    expect(w1.overrides).toEqual([{ day: 2, wake: 360, bed: 1380 }]);
+    expect(w1.week.settings.dayWindows?.[2]).toEqual({ start: 360, end: 1350 });
+    expect((await loadWeek(db, W2, W3)).overrides).toEqual([]);
+
+    await setOverride(db, W1, 2, "wake", null);
+    expect((await loadWeek(db, W1, W2)).overrides).toEqual([{ day: 2, bed: 1380 }]);
+    await setOverride(db, W1, 2, "bed", null);
+    expect(db.raw.prepare("SELECT COUNT(*) AS n FROM day_overrides").get()).toEqual({ n: 0 });
   });
 
   it("rolls back a transaction that fails halfway", async () => {

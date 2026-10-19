@@ -34,9 +34,10 @@ export function subtract(from: Interval, busy: Interval[]): Interval[] {
   return out;
 }
 
-/** The scheduler's working window for day `d`. */
+/** The scheduler's working window for day `d`, in week-minutes. */
 export function dayWindow(d: number, settings: PlannerSettings): Interval {
-  return { start: d * DAY + settings.dayStart, end: d * DAY + settings.dayEnd };
+  const w = settings.dayWindows?.[d] ?? { start: settings.dayStart, end: settings.dayEnd };
+  return { start: d * DAY + w.start, end: d * DAY + Math.max(w.start, w.end) };
 }
 
 /**
