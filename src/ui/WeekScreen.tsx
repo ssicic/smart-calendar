@@ -8,22 +8,30 @@ import { QuickAddSheet } from "./QuickAddSheet";
 import { SleepSheet } from "./SleepSheet";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
-import { shortDate, weekStartOf } from "./weekDate";
+import { MonthView } from "./MonthView";
+import { addMonths, addWeeks, dateKey, monthOfWeek, monthTitle, shortDate, weekStartOf, weeksBetween, type Month } from "./weekDate";
 import { WeekView } from "./WeekView";
 import { rowsByDay, type WeekRow } from "./weekRows";
+import { YearView } from "./YearView";
+
+type ViewMode = "calendar" | "list" | "month" | "year";
+const VIEW_LABELS: Record<ViewMode, string> = { calendar: "Calendar", list: "Week", month: "Month", year: "Year" };
 
 export function WeekScreen() {
   // The database opened by <SQLiteProvider> in App.tsx.
   const db = useSQLiteContext();
-  // Worked out once when the screen appears. (If the app stays open past
-  // Sunday midnight it keeps showing the old week until reopened.)
-  const [weekStart] = useState(() => weekStartOf(new Date()));
+  // The week shown in Calendar/Week (its Monday). Starts on this week; the
+  // arrows, Today, and taps in Month change it.
+  const [weekStart, setWeekStart] = useState(() => weekStartOf(new Date()));
+  // The month shown in Month, and the year shown in Year.
+  const [month, setMonth] = useState<Month>(() => monthOfWeek(weekStartOf(new Date())));
+  const [year, setYear] = useState(() => new Date().getFullYear());
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = useWeek(db, weekStart);
 
   const [adding, setAdding] = useState(false);
   const [tapped, setTapped] = useState<WeekRow>();
   const [saveError, setSaveError] = useState<string>();
-  const [view, setView] = useState<"calendar" | "list">("calendar");
+  const [view, setView] = useState<ViewMode>("calendar");
   const [sleepTarget, setSleepTarget] = useState<{ day: number; field: "wake" | "bed" }>();
 
   // The clock, refreshed every minute, so the red "now" line moves.
@@ -32,8 +40,9 @@ export function WeekScreen() {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer); // cleanup: stop the timer when the screen goes away
   }, []);
+  const thisWeek = weekStartOf(now);
   const today =
-    weekStartOf(now) === weekStart
+    thisWeek === weekStart
       ? { day: (now.getDay() + 6) % 7, minute: now.getHours() * 60 + now.getMinutes() }
       : undefined;
 
@@ -60,6 +69,52 @@ export function WeekScreen() {
   const unplacedSessions = plan.unplaced.reduce((sum, u) => sum + u.missing, 0);
   const isEmpty = week.fixed.length + week.rest.length + week.items.length === 0;
 
+  const isWeekView = view === "calendar" || view === "list";
+  const currentMonth = monthOfWeek(thisWeek);
+  const isCurrent =
+    view === "month"
+      ? month.year === currentMonth.year && month.month === currentMonth.month
+      : view === "year"
+        ? year === now.getFullYear()
+        : weekStart === thisWeek;
+  const weekOffset = weeksBetween(thisWeek, weekStart);
+  const title =
+    view === "month"
+      ? monthTitle(month)
+      : view === "year"
+        ? String(year)
+        : weekOffset === 0
+          ? "This week"
+          : weekOffset === 1
+            ? "Next week"
+            : weekOffset === -1
+              ? "Last week"
+              : `Week of ${shortDate(weekStart, 0)}`;
+  const subtitle =
+    view === "month"
+      ? "Tap a day to open its week"
+      : view === "year"
+        ? "Tap a month to open it"
+        : `${shortDate(weekStart, 0)} – ${shortDate(weekStart, 6)} · ${plannedHours}h planned · ${freeHours}h free`;
+
+  /** The ‹ and › arrows: one week, month or year back or forward. */
+  const step = (n: number) => {
+    if (view === "month") setMonth(addMonths(month, n));
+    else if (view === "year") setYear(year + n);
+    else setWeekStart(addWeeks(weekStart, n));
+  };
+  const goToToday = () => {
+    setWeekStart(thisWeek);
+    setMonth(currentMonth);
+    setYear(now.getFullYear());
+  };
+  /** Month and Year open on the month/year of the week you were looking at. */
+  const switchView = (v: ViewMode) => {
+    if (v === "month") setMonth(monthOfWeek(weekStart));
+    if (v === "year") setYear(monthOfWeek(weekStart).year);
+    setView(v);
+  };
+
   const queueFooter =
     queuedForNextWeek.length > 0 ? (
       <View style={styles.queue}>
@@ -71,35 +126,64 @@ export function WeekScreen() {
   return (
     <SafeAreaView style={styles.screen} edges={["top"]}>
       <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Text style={styles.heading}>This week</Text>
-          <View style={styles.toggle}>
-            {(["calendar", "list"] as const).map((v) => (
-              <Pressable
-                key={v}
-                onPress={() => setView(v)}
-                style={[styles.toggleItem, view === v && styles.toggleOn]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: view === v }}
-              >
-                <Text style={[styles.toggleText, view === v && styles.toggleTextOn]}>
-                  {v === "calendar" ? "Calendar" : "Week"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+        <View style={styles.toggle}>
+          {(Object.keys(VIEW_LABELS) as ViewMode[]).map((v) => (
+            <Pressable
+              key={v}
+              onPress={() => switchView(v)}
+              style={[styles.toggleItem, view === v && styles.toggleOn]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: view === v }}
+            >
+              <Text style={[styles.toggleText, view === v && styles.toggleTextOn]}>{VIEW_LABELS[v]}</Text>
+            </Pressable>
+          ))}
         </View>
-        <Text style={styles.sub}>
-          {shortDate(weekStart, 0)} – {shortDate(weekStart, 6)} · {plannedHours}h planned · {freeHours}h free
-        </Text>
-        {unplacedSessions > 0 && (
+        <View style={styles.titleRow}>
+          <Pressable onPress={() => step(-1)} style={styles.arrow} accessibilityRole="button" accessibilityLabel="Previous">
+            <Text style={styles.arrowText}>‹</Text>
+          </Pressable>
+          <Text style={styles.heading} numberOfLines={1}>
+            {title}
+          </Text>
+          <Pressable onPress={() => step(1)} style={styles.arrow} accessibilityRole="button" accessibilityLabel="Next">
+            <Text style={styles.arrowText}>›</Text>
+          </Pressable>
+          {!isCurrent && (
+            <Pressable onPress={goToToday} style={styles.todayButton} accessibilityRole="button">
+              <Text style={styles.todayButtonText}>Today</Text>
+            </Pressable>
+          )}
+        </View>
+        <Text style={styles.sub}>{subtitle}</Text>
+        {isWeekView && unplacedSessions > 0 && (
           <Text style={styles.warn}>
             {unplacedSessions} {unplacedSessions === 1 ? "session doesn't" : "sessions don't"} fit this week
           </Text>
         )}
         {saveError && <Text style={styles.warn}>{saveError}</Text>}
       </View>
-      {isEmpty ? (
+      {view === "month" ? (
+        <MonthView
+          db={db}
+          month={month}
+          todayKey={dateKey(now)}
+          onPressWeek={(w) => {
+            setWeekStart(w);
+            setView("calendar");
+          }}
+        />
+      ) : view === "year" ? (
+        <YearView
+          db={db}
+          year={year}
+          todayKey={dateKey(now)}
+          onPressMonth={(m) => {
+            setMonth({ year, month: m });
+            setView("month");
+          }}
+        />
+      ) : isEmpty ? (
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>Your week is empty</Text>
           <Text style={styles.emptyText}>
@@ -121,14 +205,16 @@ export function WeekScreen() {
       ) : (
         <WeekView days={days} weekStart={weekStart} onPressRow={setTapped} footer={queueFooter} />
       )}
-      <Pressable
-        style={styles.fab}
-        onPress={() => setAdding(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Add to your week"
-      >
-        <Text style={styles.fabText}>+</Text>
-      </Pressable>
+      {isWeekView && (
+        <Pressable
+          style={styles.fab}
+          onPress={() => setAdding(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Add to your week"
+        >
+          <Text style={styles.fabText}>+</Text>
+        </Pressable>
+      )}
       <QuickAddSheet
         visible={adding}
         week={week}
@@ -159,13 +245,17 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFFFFF" },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
-  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10 },
+  arrow: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" },
+  arrowText: { fontSize: 22, lineHeight: 24, fontWeight: "600", color: "#374151" },
+  todayButton: { marginLeft: "auto", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#EEF2FF" },
+  todayButtonText: { fontSize: 13, fontWeight: "700", color: "#5B6CF0" },
   toggle: { flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 10, padding: 3 },
-  toggleItem: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  toggleItem: { flex: 1, alignItems: "center", paddingVertical: 6, borderRadius: 8 },
   toggleOn: { backgroundColor: "#FFFFFF", boxShadow: "0 1px 2px rgba(17,24,39,0.12)" },
   toggleText: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
   toggleTextOn: { color: "#111827" },
-  heading: { fontSize: 26, fontWeight: "800", color: "#111827" },
+  heading: { flexShrink: 1, fontSize: 22, fontWeight: "800", color: "#111827", paddingHorizontal: 4 },
   sub: { marginTop: 4, color: "#6B7280" },
   warn: { marginTop: 4, color: "#92400E", fontWeight: "600" },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 8 },
