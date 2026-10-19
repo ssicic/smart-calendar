@@ -18,13 +18,15 @@ interface Props {
   windDownMin: number;
   onPressSleep: (day: number, field: "wake" | "bed") => void;
   onPressRow: (row: WeekRow) => void;
+  /** Holding an empty half-hour: add something there. */
+  onHoldSlot: (day: number, minuteOfDay: number) => void;
   /** Today's column (0 = Monday) and minutes since midnight, if this is the current week. */
   today?: { day: number; minute: number };
   footer?: React.ReactNode;
 }
 
 /** Calendar view: one column per day, blocks as tall as they are long. */
-export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, today, footer }: Props) {
+export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, onHoldSlot, today, footer }: Props) {
   // Show an hour of sleep on each side, so there's always something to tap.
   const earliestWake = Math.min(...sleep.map((s) => s.wake));
   const latestBed = Math.max(...sleep.map((s) => Math.min(s.bed, DAY)));
@@ -69,9 +71,23 @@ export function WeekGrid({ days, weekStart, sleep, windDownMin, onPressSleep, on
 
           {laidOut.map((blocks, d) => (
             <View key={d} style={[styles.column, today?.day === d && styles.todayColumn]}>
-              {hours.map((hr) => (
-                <View key={hr} style={[styles.hourLine, { top: (hr - from) * HOUR_PX }]} />
-              ))}
+              {/* Half-hour slots under everything else: hold one to add an event there.
+                  The top border of each full hour draws the hour line. */}
+              {hours.flatMap((hr) =>
+                [0, 30].map((m) => (
+                  <Pressable
+                    key={hr * 60 + m}
+                    onLongPress={() => onHoldSlot(d, hr * 60 + m)}
+                    accessibilityLabel={`${DAY_NAMES[d]} ${clock(hr * 60 + m)}. Hold to add.`}
+                    style={({ pressed }) => [
+                      styles.slot,
+                      m === 0 && styles.hourLine,
+                      { top: y(hr * 60 + m) },
+                      pressed && styles.slotHeld,
+                    ]}
+                  />
+                )),
+              )}
 
               {sleep[d] && (
                 <SleepZones
@@ -209,7 +225,9 @@ const styles = StyleSheet.create({
   hourLabel: { position: "absolute", right: 4, fontSize: 10, color: "#9CA3AF", fontVariant: ["tabular-nums"] },
   column: { flex: 1, borderLeftWidth: 1, borderLeftColor: "#F1F5F9" },
   todayColumn: { backgroundColor: "#F8FAFF" },
-  hourLine: { position: "absolute", left: 0, right: 0, height: 1, backgroundColor: "#F1F5F9" },
+  slot: { position: "absolute", left: 0, right: 0, height: HOUR_PX / 2 },
+  hourLine: { borderTopWidth: 1, borderTopColor: "#F1F5F9" },
+  slotHeld: { backgroundColor: "#EEF2FF" },
   block: {
     position: "absolute",
     borderRadius: 5,

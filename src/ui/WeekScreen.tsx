@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ItemActionsSheet } from "./ItemActionsSheet";
 import { moveProblem } from "./itemActions";
+import { formForSlot, type QuickAddForm } from "./quickAdd";
 import { QuickAddSheet } from "./QuickAddSheet";
 import { SleepSheet } from "./SleepSheet";
 import { useWeek } from "./useWeek";
@@ -28,7 +29,8 @@ export function WeekScreen() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = useWeek(db, weekStart);
 
-  const [adding, setAdding] = useState(false);
+  // Open quick-add; `form` holds prefilled values when opened from a held slot.
+  const [adding, setAdding] = useState<{ form?: QuickAddForm }>();
   const [tapped, setTapped] = useState<WeekRow>();
   const [saveError, setSaveError] = useState<string>();
   const [view, setView] = useState<ViewMode>("calendar");
@@ -199,6 +201,7 @@ export function WeekScreen() {
           windDownMin={windDownMin}
           onPressSleep={(day, field) => setSleepTarget({ day, field })}
           onPressRow={setTapped}
+          onHoldSlot={(day, minute) => setAdding({ form: formForSlot(day, minute) })}
           today={today}
           footer={queueFooter}
         />
@@ -208,7 +211,7 @@ export function WeekScreen() {
       {isWeekView && (
         <Pressable
           style={styles.fab}
-          onPress={() => setAdding(true)}
+          onPress={() => setAdding({})}
           accessibilityRole="button"
           accessibilityLabel="Add to your week"
         >
@@ -216,11 +219,12 @@ export function WeekScreen() {
         </Pressable>
       )}
       <QuickAddSheet
-        visible={adding}
+        visible={!!adding}
+        initial={adding?.form}
         week={week}
         rows={allRows}
         onSave={async (r) => setSaveError(await add(r))}
-        onClose={() => setAdding(false)}
+        onClose={() => setAdding(undefined)}
       />
       <SleepSheet
         target={sleepTarget}

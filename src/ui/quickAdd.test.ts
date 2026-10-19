@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DAY } from "../engine";
-import { EMPTY_FORM, parseQuickAdd, parseTime, type QuickAddForm } from "./quickAdd";
+import { EMPTY_FORM, formForSlot, parseQuickAdd, parseTime, type QuickAddForm } from "./quickAdd";
 
 let n = 0;
 const newId = () => `id${n++}`;
@@ -68,5 +68,11 @@ describe("parseQuickAdd", () => {
     expect(
       parseQuickAdd(form({ kind: "fixed", title: "X", days: [0], startTime: "11:00", endTime: "10:00" }), newId),
     ).toEqual({ ok: false, error: "End time must be after start time." });
+  });
+
+  it("prefills a Fixed event from a held calendar slot", () => {
+    const f = formForSlot(2, 14 * 60 + 30);
+    expect(f).toMatchObject({ kind: "fixed", days: [2], startTime: "14:30", endTime: "15:30" });
+    expect(formForSlot(0, 23 * 60 + 30)).toMatchObject({ startTime: "23:00", endTime: "23:45" });
   });
 });

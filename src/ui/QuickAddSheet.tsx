@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { DAY, checkNewItem, type WeekInput } from "../engine";
 import {
@@ -27,6 +27,8 @@ interface Props {
   rows: WeekRow[];
   onSave: (result: QuickAddResult) => void;
   onClose: () => void;
+  /** Prefilled values, e.g. from holding a time on the calendar. */
+  initial?: QuickAddForm;
 }
 
 let idCounter = 0;
@@ -60,7 +62,7 @@ const IMPORTANCE_OPTIONS: { value: Importance; label: string }[] = [
 ];
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
 
-export function QuickAddSheet({ visible, week, rows, onSave, onClose }: Props) {
+export function QuickAddSheet({ visible, week, rows, onSave, onClose, initial }: Props) {
   // The form's state lives here. Every keystroke calls setForm, and React
   // redraws the sheet with the new values.
   const [form, setForm] = useState<QuickAddForm>(EMPTY_FORM);
@@ -69,6 +71,11 @@ export function QuickAddSheet({ visible, week, rows, onSave, onClose }: Props) {
   const [warning, setWarning] = useState<string>();
   // After one OK on the overlap note, stop showing it until the sheet reopens.
   const [overlapOff, setOverlapOff] = useState(false);
+
+  // Each time the sheet opens, start from the prefilled values (if any).
+  useEffect(() => {
+    if (visible) setForm(initial ?? EMPTY_FORM);
+  }, [visible, initial]);
 
   const update = (patch: Partial<QuickAddForm>) => {
     setForm((f) => ({ ...f, ...patch }));

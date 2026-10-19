@@ -1,6 +1,7 @@
 // Turns what the user typed in the quick-add form into engine objects.
 // Pure (no React), so the parsing and validation rules are easy to test.
 import { DAY, type FixedEvent, type FlexibleItem, type Interval, type RestBlock } from "../engine";
+import { clock } from "./weekRows";
 
 export type AddKind = "flexible" | "fixed" | "rest";
 export type TimeOfDay = "any" | "morning" | "afternoon" | "evening";
@@ -97,4 +98,15 @@ export function parseQuickAdd(form: QuickAddForm, newId: () => string): ParseRes
     .sort((a, b) => a - b)
     .map((d) => ({ id: newId(), title, start: d * DAY + start, end: d * DAY + end }));
   return form.kind === "fixed" ? { ok: true, kind: "fixed", events } : { ok: true, kind: "rest", events };
+}
+
+/**
+ * The form after holding an empty spot on the calendar: a Fixed event on that
+ * day, starting at the held time and lasting an hour. Like the time pickers,
+ * it stays inside the day (ends by 23:45).
+ */
+export function formForSlot(day: number, minuteOfDay: number): QuickAddForm {
+  const start = Math.min(minuteOfDay, DAY - 60);
+  const end = Math.min(start + 60, DAY - 15);
+  return { ...EMPTY_FORM, kind: "fixed", days: [day], startTime: clock(start), endTime: clock(end) };
 }
