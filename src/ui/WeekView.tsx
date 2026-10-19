@@ -6,7 +6,8 @@ export const KIND_STYLE: Record<RowKind, { bg: string; bar: string; label: strin
   fixed: { bg: "#EEF0F3", bar: "#6B7280", label: "Fixed" },
   rest: { bg: "#E8F6EE", bar: "#2F9E5B", label: "Rest" },
   suggested: { bg: "#EEF2FF", bar: "#5B6CF0", label: "Suggested" },
-  locked: { bg: "#E0E7FF", bar: "#3A47C9", label: "Locked" },
+  kept: { bg: "#EEF2FF", bar: "#5B6CF0", label: "Placed" },
+  locked: { bg: "#E0E7FF", bar: "#3A47C9", label: "🔒 Locked" },
   done: { bg: "#F1F5F9", bar: "#94A3B8", label: "Done" },
   skipped: { bg: "#F8FAFC", bar: "#94A3B8", label: "Queued" },
 };

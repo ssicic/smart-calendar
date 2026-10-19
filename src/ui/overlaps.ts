@@ -16,6 +16,7 @@ const KIND_WORD: Record<WeekRow["kind"], string> = {
   fixed: "fixed",
   rest: "rest",
   suggested: "suggested",
+  kept: "placed",
   locked: "locked",
   done: "done",
   skipped: "queued",

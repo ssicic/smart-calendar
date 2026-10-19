@@ -10,6 +10,7 @@ import {
   saveSleep,
   setOverride,
   forgetPlacement,
+  keepPlacement,
   insertEvents,
   insertItem,
   loadWeek,
@@ -78,7 +79,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 4 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 5 });
   });
 
   it("round-trips and moves fixed events and rest blocks", async () => {
@@ -120,6 +121,35 @@ describe("weekStore", () => {
 
     await forgetPlacement(db, "p1");
     expect((await loadWeek(db, W1, W2)).week.placements).toEqual([]);
+  });
+
+  it("keeps a session at its time when it is unlocked, undone or brought back", async () => {
+    await insertItem(db, gym);
+    const p = { id: "p1", itemId: "g", start: 1020, end: 1080, state: "locked" as const };
+    await savePlacement(db, W1, p);
+    await keepPlacement(db, "p1");
+    expect((await loadWeek(db, W1, W2)).week.placements).toEqual([{ ...p, state: "kept" }]);
+
+    await queuePlacement(db, W1, { ...p, state: "kept" }, W2, "q1");
+    await keepPlacement(db, "p1"); // "Bring back to this week"
+    expect((await loadWeek(db, W1, W2)).week.placements).toEqual([{ ...p, state: "kept" }]);
+    expect((await loadWeek(db, W2, W3)).week.items[0]?.timesPerWeek).toBe(3); // nothing left queued
+  });
+
+  it("turns sessions locked by older versions (every move locked) into kept ones", async () => {
+    const old = nodeDb();
+    await migrate(old, 4);
+    old.raw.exec(`INSERT INTO placements VALUES ('a', '${W1}', 'g', 60, 120, 'locked'), ('b', '${W1}', 'g', 200, 260, 'done')`);
+    await insertEvents(old, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null);
+    await insertItem(old, gym);
+    await migrate(old);
+    const after = await loadWeek(old, W1, W2); // everything else survives the rebuild
+    expect(after.week.fixed.map((e) => e.id)).toEqual(["w1"]);
+    expect(after.week.items).toEqual([gym]);
+    expect(old.raw.prepare("SELECT id, state FROM placements ORDER BY id").all()).toEqual([
+      { id: "a", state: "kept" },
+      { id: "b", state: "done" },
+    ]);
   });
 
   it("queues a session into next week only, and undo removes it", async () => {

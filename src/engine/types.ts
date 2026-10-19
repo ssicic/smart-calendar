@@ -47,10 +47,11 @@ export interface Goal {
 
 /**
  * suggested: placed by the scheduler, may be moved on replan.
- * locked:    the user touched it; the scheduler never moves it.
+ * kept:      the user put it here (moved it, or undid done/lock/queue); it stays at this time.
+ * locked:    the user tapped "Lock here"; the scheduler never moves it. Only ever set on purpose.
  * done / skipped: logged outcome; occupies (done) or frees (skipped) time.
  */
-export type PlacementState = "suggested" | "locked" | "done" | "skipped";
+export type PlacementState = "suggested" | "kept" | "locked" | "done" | "skipped";
 
 export interface Placement extends Interval {
   id: string;

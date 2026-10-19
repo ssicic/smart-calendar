@@ -287,7 +287,10 @@ function DraggableBlock(props: {
         }}
         delayLongPress={350}
         accessibilityRole="button"
-        accessibilityLabel={`${b.row.title}, ${DAY_NAMES[day]} ${clock(b.row.start)} to ${clock(b.row.end)}`}
+        accessibilityLabel={
+          `${b.row.title}, ${DAY_NAMES[day]} ${clock(b.row.start)} to ${clock(b.row.end)}` +
+          (b.row.kind === "locked" ? ", locked" : "")
+        }
         style={({ pressed }) => [
           styles.block,
           { backgroundColor: k.bg, borderLeftColor: k.bar },
@@ -299,6 +302,7 @@ function DraggableBlock(props: {
           // Narrow side-by-side blocks: one line with "…" instead of breaking words.
           numberOfLines={b.lanes > 1 ? 1 : Math.max(1, Math.floor(height / 13))}
         >
+          {b.row.kind === "locked" ? "🔒 " : ""}
           {b.row.title}
         </Text>
       </Pressable>

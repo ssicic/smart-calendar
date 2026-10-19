@@ -7,7 +7,7 @@ import { isWeekend, planWeek, sleepForDay, type FixedEvent } from "../engine";
 import {
   deleteEvent,
   deleteItem,
-  forgetPlacement,
+  keepPlacement,
   insertEvents,
   insertItem,
   loadWeek,
@@ -79,7 +79,7 @@ export function useWeek(db: Db, weekStart: string) {
         if (row.kind === "fixed" || row.kind === "rest") await deleteEvent(db, row.id);
         else if (row.itemId) await deleteItem(db, row.itemId);
       } else if (action === "unlock" || action === "undone" || action === "unqueue") {
-        await forgetPlacement(db, row.id); // back to being a suggestion
+        await keepPlacement(db, row.id); // stays at this time, just not locked/done/queued
       } else if (p && (action === "lock" || action === "done")) {
         await savePlacement(db, weekStart, { ...p, id: storedId(p, newId), state: action === "lock" ? "locked" : "done" });
       } else if (p && action === "suggest") {

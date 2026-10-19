@@ -48,7 +48,7 @@ export function ItemActionsSheet({ row, rows, onAction, onMove, checkMove, onClo
   if (!row) return null;
 
   // Live check of the picked slot. Flexible sessions push suggestions aside;
-  // landing on fixed, rest, locked or done time needs a "Move anyway".
+  // landing on fixed, rest, placed, locked or done time needs a "Move anyway".
   const pickedStart = parseTime(moveTime);
   const isEvent = row.kind === "fixed" || row.kind === "rest";
   const clashes =

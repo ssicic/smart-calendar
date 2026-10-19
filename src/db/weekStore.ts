@@ -108,12 +108,34 @@ const MIGRATIONS: string[] = [
   ALTER TABLE events ADD COLUMN week_start TEXT;
   CREATE INDEX events_by_week ON events (week_start);
   `,
+  // Version 5: a "kept" state (the user put it here, but didn't lock it).
+  // SQLite can't change a CHECK rule, so the table is rebuilt and copied.
+  // Until now every move locked a session automatically, so existing
+  // locked sessions become kept (same time, no lock).
+  `
+  CREATE TABLE placements_v5 (
+    id         TEXT PRIMARY KEY,
+    week_start TEXT NOT NULL,
+    item_id    TEXT NOT NULL,
+    start_min  INTEGER NOT NULL,
+    end_min    INTEGER NOT NULL CHECK (end_min > start_min),
+    state      TEXT NOT NULL CHECK (state IN ('kept', 'locked', 'done', 'skipped'))
+  );
+  INSERT INTO placements_v5
+    SELECT id, week_start, item_id, start_min, end_min,
+           CASE state WHEN 'locked' THEN 'kept' ELSE state END
+    FROM placements;
+  DROP TABLE placements;
+  ALTER TABLE placements_v5 RENAME TO placements;
+  CREATE INDEX placements_by_week ON placements (week_start);
+  `,
 ];
 
-export async function migrate(db: Db): Promise<void> {
+/** `upTo` (tests only): stop at that version, to test the next step on old data. */
+export async function migrate(db: Db, upTo = MIGRATIONS.length): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version", []);
   const current = row?.user_version ?? 0;
-  for (let v = current; v < MIGRATIONS.length; v++) {
+  for (let v = current; v < upTo; v++) {
     // One transaction per step: either the whole step applies or none of it.
     await db.execAsync(`BEGIN; ${MIGRATIONS[v]}; PRAGMA user_version = ${v + 1}; COMMIT;`);
   }
@@ -145,7 +167,7 @@ export interface PlacementRow {
   item_id: string;
   start_min: number;
   end_min: number;
-  state: "locked" | "done" | "skipped";
+  state: "kept" | "locked" | "done" | "skipped";
 }
 
 // ---- Pure converters between rows and engine objects ----
@@ -289,6 +311,17 @@ export async function savePlacement(db: Db, weekStart: string, p: Placement): Pr
      VALUES (?, ?, ?, ?, ?, ?)`,
     [p.id, weekStart, p.itemId, p.start, p.end, p.state],
   );
+}
+
+/**
+ * Back to an ordinary session at the same time (unlock, "not done yet",
+ * "bring back"): it stays where it is instead of jumping to a new suggestion.
+ */
+export async function keepPlacement(db: Db, placementId: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM queue WHERE placement_id = ?", [placementId]);
+    await db.runAsync("UPDATE placements SET state = 'kept' WHERE id = ?", [placementId]);
+  });
 }
 
 /** Forget a stored session (unlock, "not done", undo queue): it becomes a suggestion again. */

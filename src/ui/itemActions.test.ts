@@ -31,6 +31,10 @@ describe("actionsFor", () => {
   it("follows the agreed order for a suggested session", () => {
     expect(actionsFor("suggested", "Gym").map((a) => a.id)).toEqual(["move", "suggest", "lock", "done", "delete", "queue"]);
   });
+  it("offers Lock here for kept sessions too", () => {
+    expect(actionsFor("kept", "Gym").map((a) => a.id)).toEqual(actionsFor("suggested", "Gym").map((a) => a.id));
+  });
+
   it("offers unlock instead of lock once locked", () => {
     expect(actionsFor("locked", "Gym").map((a) => a.id)).toContain("unlock");
   });
@@ -52,9 +56,9 @@ describe("moveSession", () => {
   const gym = plan.placements.find((p) => p.itemId === "gym")!;
   const read = plan.placements.find((p) => p.itemId === "read")!;
 
-  it("moves and locks, with a fresh id", () => {
+  it("moves and keeps it there (not locked), with a fresh id", () => {
     const r = moveSession(week, plan, gym.id, weekMinute(2, h(18)), newId);
-    expect(r).toMatchObject({ ok: true, placement: { itemId: "gym", start: 2 * DAY + h(18), end: 2 * DAY + h(19), state: "locked" } });
+    expect(r).toMatchObject({ ok: true, placement: { itemId: "gym", start: 2 * DAY + h(18), end: 2 * DAY + h(19), state: "kept" } });
     expect(r.ok && r.placement.id.includes("@")).toBe(false);
   });
 
@@ -72,12 +76,12 @@ describe("moveSession", () => {
 });
 
 describe("nextSlot", () => {
-  it("moves to a later free slot and locks it", () => {
+  it("moves to a later free slot and keeps it there (not locked)", () => {
     const plan = planWeek(week);
     const gym = plan.placements.find((p) => p.itemId === "gym")!;
     const r = nextSlot(week, plan, gym.id, newId);
     expect(r.ok && r.placement.start).toBeGreaterThan(gym.start);
-    expect(r.ok && r.placement.state).toBe("locked");
+    expect(r.ok && r.placement.state).toBe("kept");
   });
 });
 
@@ -126,7 +130,7 @@ describe("forceMoveSession", () => {
 
   it("puts the session on top of fixed time when the user insists", () => {
     const r = forceMoveSession(plan, gym.id, weekMinute(0, h(10)), newId);
-    expect(r).toMatchObject({ ok: true, placement: { start: h(10), end: h(11), state: "locked" } });
+    expect(r).toMatchObject({ ok: true, placement: { start: h(10), end: h(11), state: "kept" } });
   });
   it("and the planner keeps it there", () => {
     const r = forceMoveSession(plan, gym.id, weekMinute(0, h(10)), newId);

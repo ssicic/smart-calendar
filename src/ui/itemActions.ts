@@ -5,6 +5,7 @@ import {
   WEEK,
   dayOf,
   dayWindow,
+  keptState,
   movePlacement,
   suggestAnotherSlot,
   type Placement,
@@ -40,11 +41,12 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
       // The scheduler never moves these, so there is nothing to lock.
       return [{ id: "move", label: "Move" }, remove];
     case "suggested":
+    case "kept":
     case "locked":
       return [
         { id: "move", label: "Move" },
         { id: "suggest", label: "Suggest new slot" },
-        kind === "suggested" ? { id: "lock", label: "Lock here" } : { id: "unlock", label: "Unlock" },
+        kind === "locked" ? { id: "unlock", label: "Unlock" } : { id: "lock", label: "Lock here" },
         { id: "done", label: "Done" },
         { ...remove, label: `Delete ${title} (every week)` },
         { id: "queue", label: "Move to queue (next week)" },
@@ -103,15 +105,17 @@ export function forceMoveSession(plan: PlanResult, placementId: string, newStart
   if (!p) return { ok: false, error: "That session no longer exists." };
   const end = newStart + (p.end - p.start);
   if (end > WEEK) return { ok: false, error: "It would run past Sunday midnight." };
-  return { ok: true, placement: { ...p, id: storedId(p, newId), start: newStart, end, state: "locked" } };
+  return { ok: true, placement: { ...p, id: storedId(p, newId), start: newStart, end, state: keptState(p.state) } };
 }
 
-/** The next free slot after this session, kept there (locked) so it sticks. */
+/** The next free slot after this session, kept there so it sticks (not locked). */
 export function nextSlot(week: WeekInput, plan: PlanResult, placementId: string, newId: () => string): SlotResult {
   const r = suggestAnotherSlot({ ...week, placements: plan.placements }, placementId);
   if (!r.ok) return { ok: false, error: "There's no other free slot this week." };
   const moved = r.placements.find((p) => p.id === placementId)!;
-  return { ok: true, placement: { ...moved, id: storedId(moved, newId), state: "locked" } };
+  const before = plan.placements.find((p) => p.id === placementId);
+  const state = keptState(before?.state ?? "suggested");
+  return { ok: true, placement: { ...moved, id: storedId(moved, newId), state } };
 }
 
 /** New start/end for a fixed event or rest block, keeping its length. */

@@ -26,9 +26,12 @@ function busyExcept(input: WeekInput, id: string) {
   return busyIntervals({ ...input, placements: [] }, others);
 }
 
+/** The state after the user moves a session: kept, unless they locked it on purpose. */
+export const keptState = (state: PlacementState): PlacementState => (state === "locked" ? "locked" : "kept");
+
 export type MoveResult = { ok: true; placements: Placement[] } | { ok: false; reason: "not-found" | "conflict" };
 
-/** Drag to a new start. A moved placement becomes locked. */
+/** Drag to a new start. A suggestion becomes kept (stays here); a locked one stays locked. */
 export function movePlacement(input: WeekInput, id: string, newStart: number): MoveResult {
   const p = input.placements.find((x) => x.id === id);
   if (!p) return { ok: false, reason: "not-found" };
@@ -37,7 +40,7 @@ export function movePlacement(input: WeekInput, id: string, newStart: number): M
   const fits = slots.some((s) => s.start <= newStart && newStart + duration <= s.end);
   if (!fits) return { ok: false, reason: "conflict" };
   const placements = input.placements.map((x) =>
-    x.id === id ? { ...x, start: newStart, end: newStart + duration, state: "locked" as const } : x,
+    x.id === id ? { ...x, start: newStart, end: newStart + duration, state: keptState(x.state) } : x,
   );
   return { ok: true, placements };
 }

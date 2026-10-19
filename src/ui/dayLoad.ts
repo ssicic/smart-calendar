@@ -6,7 +6,7 @@ import { dayKey } from "./weekDate";
 export interface DayLoad {
   /** Fixed events (work, classes). Rest blocks are time off, so they don't count. */
   fixed: number;
-  /** Flexible sessions still to do (suggested or locked). */
+  /** Flexible sessions still to do (suggested, kept or locked). */
   flexible: number;
   /** Flexible sessions marked done. */
   done: number;

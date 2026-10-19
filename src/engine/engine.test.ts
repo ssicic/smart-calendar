@@ -195,12 +195,27 @@ describe("edits", () => {
     expect(lockPlacement(input.placements, id).find((p) => p.id === id)?.state).toBe("locked");
   });
 
-  it("moves a placement into free time and locks it", () => {
+  it("moves a placement into free time and keeps it there, without locking it", () => {
     const input = base();
     const id = input.placements[0]!.id;
     const result = movePlacement(input, id, at(3, 19));
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.placements.find((p) => p.id === id)).toMatchObject({ start: at(3, 19), state: "locked" });
+    if (result.ok) expect(result.placements.find((p) => p.id === id)).toMatchObject({ start: at(3, 19), state: "kept" });
+  });
+
+  it("keeps a locked placement locked when it is moved", () => {
+    const input = base();
+    const id = input.placements[0]!.id;
+    const result = movePlacement({ ...input, placements: lockPlacement(input.placements, id) }, id, at(3, 19));
+    if (result.ok) expect(result.placements.find((p) => p.id === id)?.state).toBe("locked");
+    expect(result.ok).toBe(true);
+  });
+
+  it("plans around kept placements and does not double-place them", () => {
+    const kept = { id: "gym-mine", itemId: "gym", start: at(2, 19), end: at(2, 20), state: "kept" as const };
+    const { placements } = planWeek(week({ items: [item("gym", 60, 3)], placements: [kept] }));
+    expect(placements).toContainEqual(kept);
+    expect(placements.filter((p) => p.itemId === "gym")).toHaveLength(3);
   });
 
   it("rejects a move onto a fixed event", () => {

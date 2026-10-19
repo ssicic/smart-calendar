@@ -12,7 +12,7 @@ import {
 
 /** Placements the scheduler must keep exactly where they are. */
 export function keptPlacements(placements: Placement[]): Placement[] {
-  return placements.filter((p) => p.state === "locked" || p.state === "done");
+  return placements.filter((p) => p.state === "kept" || p.state === "locked" || p.state === "done");
 }
 
 /** Placements that already satisfy an occurrence (skipped means "not this week"). */
