@@ -59,3 +59,12 @@ export function hoursLabel(minutes: number): string {
   if (minutes <= 0) return "";
   return `${Math.round(minutes / 6) / 10}h`;
 }
+
+/** The week's totals for the header: everything planned (fixed + flexible, done included) and what's done. */
+export function weekTotals(week: WeekInput, plan: PlanResult): { plannedMin: number; doneMin: number } {
+  const loads = dayLoads(week, plan);
+  return {
+    plannedMin: loads.reduce((sum, l) => sum + totalMinutes(l), 0),
+    doneMin: loads.reduce((sum, l) => sum + l.done, 0),
+  };
+}

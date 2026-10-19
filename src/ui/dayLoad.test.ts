@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DAY, type PlanResult, type WeekInput } from "../engine";
-import { dayLoads, hoursLabel, intensity, loadsByDate, totalMinutes } from "./dayLoad";
+import { dayLoads, hoursLabel, intensity, loadsByDate, totalMinutes, weekTotals } from "./dayLoad";
 
 const settings = { dayStart: 0, dayEnd: DAY, bufferMin: 0, minFreeMinutes: 0 };
 const capacity = { freeMinutes: 0, requiredMinutes: 0, budgetMinutes: 0, overflowMinutes: 0, fits: true };
@@ -29,6 +29,8 @@ describe("dayLoad", () => {
     expect(loads[1]).toEqual({ fixed: 0, flexible: 60, done: 30 });
     expect(loads[2]).toEqual({ fixed: 0, flexible: 0, done: 0 });
     expect(totalMinutes(loads[0]!)).toBe(540);
+    // Header totals: fixed + flexible + done (rest and queued don't count), and done on its own.
+    expect(weekTotals(week, plan)).toEqual({ plannedMin: 480 + 60 + 60 + 30, doneMin: 30 });
   });
 
   it("splits something that runs past midnight between the two days", () => {

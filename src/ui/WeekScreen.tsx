@@ -1,12 +1,13 @@
 import { useSQLiteContext } from "expo-sqlite";
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ItemActionsSheet } from "./ItemActionsSheet";
 import { moveProblem } from "./itemActions";
 import { EMPTY_FORM, formForSlot, parseTime, type QuickAddForm } from "./quickAdd";
 import { QuickAddSheet, type SheetSize } from "./QuickAddSheet";
 import { SleepSheet } from "./SleepSheet";
+import { weekTotals } from "./dayLoad";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { MonthView } from "./MonthView";
@@ -29,7 +30,7 @@ export function WeekScreen() {
   const [year, setYear] = useState(() => new Date().getFullYear());
   const data = useWeek(db, weekStart);
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = data;
-  const { categories, addCategory, setRowCategory } = data;
+  const { categories, groupActions, setRowCategory } = data;
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
@@ -37,6 +38,10 @@ export function WeekScreen() {
   // the sheet, because the calendar shows and edits its day and times too.
   const [adding, setAdding] = useState<QuickAddForm>();
   const [sheetSize, setSheetSize] = useState<SheetSize>("full");
+  // If the open form's group was just deleted (in Manage groups), drop it.
+  useEffect(() => {
+    if (adding?.categoryId && !groups.has(adding.categoryId)) setAdding({ ...adding, categoryId: null });
+  }, [adding, groups]);
   const { height: screenHeight } = useWindowDimensions();
   const [tapped, setTapped] = useState<WeekRow>();
   const [saveError, setSaveError] = useState<string>();
@@ -45,6 +50,20 @@ export function WeekScreen() {
 
   // The clock, refreshed every minute, so the red "now" line moves.
   const [now, setNow] = useState(() => new Date());
+
+  // Swiping sideways over the calendar goes to the next/previous week (or
+  // month, year). It only takes over clearly sideways moves, so scrolling up
+  // and down, dragging blocks and the new-event handles keep working.
+  const stepRef = useRef<(n: number) => void>(() => {});
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 24 && Math.abs(g.dx) > 2 * Math.abs(g.dy),
+      onPanResponderRelease: (_, g) => {
+        if (g.dx <= -60) stepRef.current(1); // finger moved left: next
+        else if (g.dx >= 60) stepRef.current(-1);
+      },
+    }),
+  ).current;
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer); // cleanup: stop the timer when the screen goes away
@@ -69,12 +88,9 @@ export function WeekScreen() {
   }
 
   const { capacity } = plan;
-  // Everything on the calendar except queued (skipped) sessions.
-  const plannedMinutes = plan.placements
-    .filter((p) => p.state !== "skipped")
-    .reduce((sum, p) => sum + (p.end - p.start), 0);
-  const plannedHours = Math.round(plannedMinutes / 6) / 10;
-  const freeHours = Math.round(capacity.freeMinutes / 6) / 10;
+  // Planned = fixed events + flexible sessions (done ones too); rest blocks are time off.
+  const { plannedMin, doneMin } = weekTotals(week, plan);
+  const hours = (minutes: number) => Math.round(minutes / 6) / 10;
   const unplacedSessions = plan.unplaced.reduce((sum, u) => sum + u.missing, 0);
   const isEmpty = week.fixed.length + week.rest.length + week.items.length === 0;
 
@@ -120,18 +136,20 @@ export function WeekScreen() {
               : weekRange(weekStart);
   const subtitle =
     view === "month"
-      ? "Tap a day to open its week"
+      ? "Tap a day to open its week · swipe for other months"
       : view === "year"
-        ? "Tap a month to open it"
+        ? "Tap a month to open it · swipe for other years"
         : // The dates go here only when the title is "This/Next/Last week"; otherwise the title is the dates.
-          `${Math.abs(weekOffset) <= 1 ? `${weekRange(weekStart)} · ` : ""}${plannedHours}h planned · ${freeHours}h free`;
+          `${Math.abs(weekOffset) <= 1 ? `${weekRange(weekStart)} · ` : ""}` +
+          `${hours(plannedMin)}h planned · ${hours(doneMin)}h done · ${hours(capacity.freeMinutes)}h free`;
 
-  /** The ‹ and › arrows: one week, month or year back or forward. */
+  /** One week, month or year back or forward (swiping left or right). */
   const step = (n: number) => {
     if (view === "month") setMonth(addMonths(month, n));
     else if (view === "year") setYear(year + n);
     else setWeekStart(addWeeks(weekStart, n));
   };
+  stepRef.current = step;
   const goToToday = () => {
     setWeekStart(thisWeek);
     setMonth(currentMonth);
@@ -169,15 +187,9 @@ export function WeekScreen() {
           ))}
         </View>
         <View style={styles.titleRow}>
-          <Pressable onPress={() => step(-1)} style={styles.arrow} accessibilityRole="button" accessibilityLabel="Previous">
-            <Text style={styles.arrowText}>‹</Text>
-          </Pressable>
           <Text style={styles.heading} numberOfLines={1}>
             {title}
           </Text>
-          <Pressable onPress={() => step(1)} style={styles.arrow} accessibilityRole="button" accessibilityLabel="Next">
-            <Text style={styles.arrowText}>›</Text>
-          </Pressable>
           {!isCurrent && (
             <Pressable onPress={goToToday} style={styles.todayButton} accessibilityRole="button">
               <Text style={styles.todayButtonText}>Today</Text>
@@ -192,64 +204,67 @@ export function WeekScreen() {
         )}
         {saveError && <Text style={styles.warn}>{saveError}</Text>}
       </View>
-      {view === "month" ? (
-        <MonthView
-          db={db}
-          month={month}
-          todayKey={dateKey(now)}
-          onPressWeek={(w) => {
-            setWeekStart(w);
-            setView("calendar");
-          }}
-        />
-      ) : view === "year" ? (
-        <YearView
-          db={db}
-          year={year}
-          todayKey={dateKey(now)}
-          onPressMonth={(m) => {
-            setMonth({ year, month: m });
-            setView("month");
-          }}
-        />
-      ) : isEmpty ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Your week is empty</Text>
-          <Text style={styles.emptyText}>
-            Tap + to add work or classes (Fixed), protected downtime (Rest), and things you want to fit in
-            (Flexible).
-          </Text>
-        </View>
-      ) : view === "calendar" ? (
-        <WeekGrid
-          days={days}
-          weekStart={weekStart}
-          sleep={sleep}
-          windDownMin={windDownMin}
-          onPressSleep={(day, field) => setSleepTarget({ day, field })}
-          onPressRow={setTapped}
-          onHoldSlot={(day, minute) => {
-            // Already adding something? Move it here and keep what was typed.
-            const slot = formForSlot(day, minute);
-            setAdding((f) =>
-              f ? { ...slot, title: f.title, repeat: f.repeat, kind: f.kind === "rest" ? "rest" : "fixed" } : slot,
-            );
-            setSheetSize("half");
-          }}
-          draft={draft}
-          onDraftChange={({ days, start, end }) =>
-            setAdding((f) => f && { ...f, days, startTime: clock(start), endTime: clock(end) })
-          }
-          bottomInset={adding && sheetSize === "half" ? screenHeight / 2 : 0}
-          groups={groups}
-          // Dragging is a clear "put it here", so flexible sessions move even onto a busy time.
-          onDropRow={async (row, day, minute) => setSaveError(await move(row, day, minute, true))}
-          today={today}
-          footer={queueFooter}
-        />
-      ) : (
-        <WeekView days={days} weekStart={weekStart} groups={groups} onPressRow={setTapped} footer={queueFooter} />
-      )}
+      {/* Swipe left or right anywhere here: next or previous week (month, year). */}
+      <View style={styles.content} {...swipe.panHandlers}>
+        {view === "month" ? (
+          <MonthView
+            db={db}
+            month={month}
+            todayKey={dateKey(now)}
+            onPressWeek={(w) => {
+              setWeekStart(w);
+              setView("calendar");
+            }}
+          />
+        ) : view === "year" ? (
+          <YearView
+            db={db}
+            year={year}
+            todayKey={dateKey(now)}
+            onPressMonth={(m) => {
+              setMonth({ year, month: m });
+              setView("month");
+            }}
+          />
+        ) : isEmpty ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>Your week is empty</Text>
+            <Text style={styles.emptyText}>
+              Tap + to add work or classes (Fixed), protected downtime (Rest), and things you want to fit in
+              (Flexible).
+            </Text>
+          </View>
+        ) : view === "calendar" ? (
+          <WeekGrid
+            days={days}
+            weekStart={weekStart}
+            sleep={sleep}
+            windDownMin={windDownMin}
+            onPressSleep={(day, field) => setSleepTarget({ day, field })}
+            onPressRow={setTapped}
+            onHoldSlot={(day, minute) => {
+              // Already adding something? Move it here and keep what was typed.
+              const slot = formForSlot(day, minute);
+              setAdding((f) =>
+                f ? { ...slot, title: f.title, repeat: f.repeat, kind: f.kind === "rest" ? "rest" : "fixed" } : slot,
+              );
+              setSheetSize("half");
+            }}
+            draft={draft}
+            onDraftChange={({ days, start, end }) =>
+              setAdding((f) => f && { ...f, days, startTime: clock(start), endTime: clock(end) })
+            }
+            bottomInset={adding && sheetSize === "half" ? screenHeight / 2 : 0}
+            groups={groups}
+            // Dragging is a clear "put it here", so flexible sessions move even onto a busy time.
+            onDropRow={async (row, day, minute) => setSaveError(await move(row, day, minute, true))}
+            today={today}
+            footer={queueFooter}
+          />
+        ) : (
+          <WeekView days={days} weekStart={weekStart} groups={groups} onPressRow={setTapped} footer={queueFooter} />
+        )}
+      </View>
       {isWeekView && !adding && (
         <Pressable
           style={styles.fab}
@@ -267,7 +282,7 @@ export function WeekScreen() {
         form={adding}
         onChange={setAdding}
         categories={categories}
-        onAddCategory={addCategory}
+        groupActions={groupActions}
         size={sheetSize}
         onSizeChange={setSheetSize}
         weekStart={weekStart}
@@ -285,9 +300,10 @@ export function WeekScreen() {
       />
       <ItemActionsSheet
         row={tapped}
+        repeats={!!tapped && data.repeatingEventIds.has(tapped.id)}
         rows={allRows}
         categories={categories}
-        onAddCategory={addCategory}
+        groupActions={groupActions}
         onSetCategory={setRowCategory}
         onAction={act}
         onMove={move}
@@ -302,9 +318,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#FFFFFF" },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10 },
-  arrow: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" },
-  arrowText: { fontSize: 22, lineHeight: 24, fontWeight: "600", color: "#374151" },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, minHeight: 32 },
+  content: { flex: 1 },
   todayButton: { marginLeft: "auto", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#EEF2FF" },
   todayButtonText: { fontSize: 13, fontWeight: "700", color: "#5B6CF0" },
   toggle: { flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 10, padding: 3 },
