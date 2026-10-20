@@ -14,6 +14,7 @@ import { reviewStats } from "./weekReview";
 import { ReviewSheet } from "./ReviewSheet";
 import { PlanSheet } from "./PlanSheet";
 import { WeekPanelSheet } from "./WeekPanelSheet";
+import { DayTodos } from "./DayTodos";
 import { canAddFromLater, laterHeading } from "./later";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
@@ -67,6 +68,9 @@ export function WeekScreen() {
   const { routines, checks, addRoutine, editRoutine, removeRoutine, toggleStep } = data;
   const { weekItems, addWeekItem, changeWeekItem, removeWeekItem, later, addFromLater, removeLater } = data;
   const { movedOn, refresh } = data;
+  // Whole-week to-dos and goals (the "This week" panel) vs. to-dos for the day in Day view.
+  const weeklyItems = useMemo(() => weekItems.filter((i) => i.day === null), [weekItems]);
+  const dayTodos = useMemo(() => weekItems.filter((i) => i.day === day && i.kind === "todo"), [weekItems, day]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -187,6 +191,7 @@ export function WeekScreen() {
           ? "Yesterday"
           : `${DAY_NAMES[day]} ${dayDate(weekStart, day)}`;
   const dayLoad = dayLoads(week, plan)[day];
+  const dayName = dayOffset === 0 ? "Today" : dayOffset === 1 ? "Tomorrow" : dayOffset === -1 ? "Yesterday" : (DAY_NAMES[day] ?? "");
   const title =
     view === "day"
       ? dayTitle
@@ -293,9 +298,9 @@ export function WeekScreen() {
         {isWeekView && (
           <Pressable onPress={() => setPanelOpen(true)} style={styles.panelButton} accessibilityRole="button">
             <Text style={styles.panelButtonText}>
-              {weekItems.length === 0
+              {weeklyItems.length === 0
                 ? "+ To-dos & goals for this week"
-                : `This week: ${weekSummary(weekItems).done}/${weekItems.length} to-dos & goals done ›`}
+                : `This week: ${weekSummary(weeklyItems).done}/${weeklyItems.length} to-dos & goals done ›`}
               {later.length > 0 ? ` · ${laterHeading(later.length)}` : ""}
             </Text>
           </Pressable>
@@ -333,7 +338,7 @@ export function WeekScreen() {
               setView("month");
             }}
           />
-        ) : isEmpty ? (
+        ) : isEmpty && view !== "day" ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Your week is empty</Text>
             <Text style={styles.emptyText}>
@@ -365,6 +370,16 @@ export function WeekScreen() {
                   );
                 })}
               </View>
+            )}
+            {view === "day" && (
+              <DayTodos
+                key={`${weekStart}-${day}`} // a fresh card (closed list, empty field) per day
+                dayName={dayName}
+                items={dayTodos}
+                onAdd={(title) => addWeekItem("todo", title, 1, day)}
+                onChange={changeWeekItem}
+                onDelete={removeWeekItem}
+              />
             )}
             <WeekGrid
               key={view} // switching Day ↔ Calendar starts fresh, scrolled to now
@@ -458,7 +473,7 @@ export function WeekScreen() {
       <WeekPanelSheet
         visible={panelOpen}
         weekLabel={weekRange(weekStart)}
-        items={weekItems}
+        items={weeklyItems}
         onAdd={addWeekItem}
         onChange={changeWeekItem}
         onDelete={removeWeekItem}

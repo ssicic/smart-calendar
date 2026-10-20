@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { isFinished, stepProgress, weekItemProblem, weekSummary } from "./weekItems";
 
-const todo = { id: "t", kind: "todo" as const, title: "Call dentist", done: false, progress: 0, target: 1 };
-const goal = { id: "g", kind: "goal" as const, title: "Run", done: false, progress: 1, target: 3 };
+const todo = { id: "t", kind: "todo" as const, title: "Call dentist", done: false, progress: 0, target: 1, day: null };
+const goal = { id: "g", kind: "goal" as const, title: "Run", done: false, progress: 1, target: 3, day: null };
 
 describe("weekItems", () => {
   it("needs some text, not too long", () => {

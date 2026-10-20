@@ -268,6 +268,11 @@ const MIGRATIONS: string[] = [
   UPDATE categories SET color = '#7DB5AC' WHERE id = 'fun' AND upper(color) = '#14B8A6';
   UPDATE categories SET color = '#C2B59B' WHERE id = 'rest' AND upper(color) = '#2F9E5B';
   `,
+  // Version 14: to-dos for one day ("Today" in the Day view). day = 0-6
+  // (Monday = 0) within the item's week; NULL = for the whole week.
+  `
+  ALTER TABLE week_items ADD COLUMN day INTEGER CHECK (day BETWEEN 0 AND 6);
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

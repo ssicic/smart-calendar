@@ -14,5 +14,6 @@ export function carryOverCandidates(thisWeek: WeekItem[], nextWeek: WeekItem[]):
   return thisWeek
     .filter((item) => !isFinished(item))
     .filter((item) => !nextWeek.some((n) => sameItem(n, item)))
-    .map((item) => ({ ...item, done: false, progress: 0 }));
+    // A to-do left over from one day becomes a to-do for the whole next week.
+    .map((item) => ({ ...item, done: false, progress: 0, day: null }));
 }

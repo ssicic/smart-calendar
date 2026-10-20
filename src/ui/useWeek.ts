@@ -272,9 +272,10 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     });
 
   /** Adds a to-do, or a goal with a target ("Run" × 3), to this week. */
-  const addWeekItem = (kind: WeekItemKind, title: string, target = 1) =>
+  /** `day` (0 = Monday): a to-do for that day only; null = for the whole week. */
+  const addWeekItem = (kind: WeekItemKind, title: string, target = 1, day: number | null = null) =>
     attempt(async () => {
-      await insertWeekItem(db, weekStart, { id: `w${newId()}`, kind, title, done: false, progress: 0, target });
+      await insertWeekItem(db, weekStart, { id: `w${newId()}`, kind, title, done: false, progress: 0, target, day });
       await refresh();
     });
 
