@@ -9,6 +9,8 @@ import { QuickAddSheet, type SheetSize } from "./QuickAddSheet";
 import { SleepSheet } from "./SleepSheet";
 import { dayLoads, totalMinutes, weekTotals } from "./dayLoad";
 import { progress, progressLabel } from "./routines";
+import { weekSummary } from "./weekItems";
+import { WeekPanelSheet } from "./WeekPanelSheet";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { MonthView } from "./MonthView";
@@ -57,6 +59,8 @@ export function WeekScreen() {
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = data;
   const { categories, groupActions, setRowCategory, rename } = data;
   const { routines, checks, addRoutine, editRoutine, removeRoutine, toggleStep } = data;
+  const { weekItems, addWeekItem, changeWeekItem, removeWeekItem } = data;
+  const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
@@ -267,6 +271,15 @@ export function WeekScreen() {
           </View>
         </View>
         <Text style={styles.sub}>{subtitle}</Text>
+        {isWeekView && (
+          <Pressable onPress={() => setPanelOpen(true)} style={styles.panelButton} accessibilityRole="button">
+            <Text style={styles.panelButtonText}>
+              {weekItems.length === 0
+                ? "+ To-dos & goals for this week"
+                : `This week: ${weekSummary(weekItems).done}/${weekItems.length} to-dos & goals done ›`}
+            </Text>
+          </Pressable>
+        )}
         {/* A past week can't get new sessions, so "doesn't fit" would only nag. */}
         {isWeekView && weekOffset >= 0 && unplacedSessions > 0 && (
           <Text style={styles.warn}>
@@ -384,6 +397,15 @@ export function WeekScreen() {
           <Text style={styles.fabText}>+</Text>
         </Pressable>
       )}
+      <WeekPanelSheet
+        visible={panelOpen}
+        weekLabel={weekRange(weekStart)}
+        items={weekItems}
+        onAdd={addWeekItem}
+        onChange={changeWeekItem}
+        onDelete={removeWeekItem}
+        onClose={() => setPanelOpen(false)}
+      />
       <QuickAddSheet
         form={adding}
         routines={routines}
@@ -436,6 +458,17 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, minHeight: 32 },
   content: { flex: 1 },
+  panelButton: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  panelButtonText: { fontSize: 13, fontWeight: "700", color: "#15803D" },
   titleButtons: { marginLeft: "auto", flexDirection: "row", gap: 6 },
   strip: {
     flexDirection: "row",

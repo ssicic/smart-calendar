@@ -224,6 +224,22 @@ const MIGRATIONS: string[] = [
   ALTER TABLE events ADD COLUMN from_week TEXT;
   UPDATE events SET from_week = date('now', 'localtime', 'weekday 0', '-6 days') WHERE week_start IS NULL;
   `,
+  // Version 11: the week's to-do list and goals ("This week" panel). Stored
+  // per week, so past weeks keep theirs for the review. A to-do is done or
+  // not; a goal counts progress up to a target (e.g. 1 of 3).
+  `
+  CREATE TABLE week_items (
+    id         TEXT PRIMARY KEY,
+    week_start TEXT NOT NULL,
+    kind       TEXT NOT NULL CHECK (kind IN ('todo', 'goal')),
+    title      TEXT NOT NULL,
+    done       INTEGER NOT NULL DEFAULT 0,
+    progress   INTEGER NOT NULL DEFAULT 0 CHECK (progress >= 0),
+    target     INTEGER NOT NULL DEFAULT 1 CHECK (target >= 1),
+    position   INTEGER NOT NULL
+  );
+  CREATE INDEX week_items_by_week ON week_items (week_start);
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

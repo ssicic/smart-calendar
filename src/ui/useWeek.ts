@@ -48,6 +48,14 @@ import {
   type ActionId,
   type EventScope,
 } from "./itemActions";
+import {
+  deleteWeekItem,
+  insertWeekItem,
+  loadWeekItems,
+  updateWeekItem,
+  type WeekItem,
+  type WeekItemKind,
+} from "../db/weekItemsStore";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { checkKey } from "./routines";
 import type { QuickAddResult } from "./QuickAddSheet";
@@ -74,6 +82,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const [loaded, setLoaded] = useState<LoadedWeek>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  // This week's to-do list and goals.
+  const [weekItems, setWeekItems] = useState<WeekItem[]>([]);
   // Ticked routine steps this week, as checkKey(eventId, stepId).
   const [checks, setChecks] = useState<Set<string>>(new Set());
 
@@ -83,6 +93,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setLoaded(await loadWeek(db, weekStart, nextWeek));
     setCategories(await loadCategories(db));
     setRoutines(await loadRoutines(db));
+    setWeekItems(await loadWeekItems(db, weekStart));
     setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
   }, [db, weekStart, nextWeek]);
 
@@ -251,6 +262,26 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       await refresh();
     });
 
+  /** Adds a to-do, or a goal with a target ("Run" × 3), to this week. */
+  const addWeekItem = (kind: WeekItemKind, title: string, target = 1) =>
+    attempt(async () => {
+      await insertWeekItem(db, weekStart, { id: `w${newId()}`, kind, title, done: false, progress: 0, target });
+      await refresh();
+    });
+
+  /** Saves a changed to-do or goal (ticked, progress, name). */
+  const changeWeekItem = (item: WeekItem) =>
+    attempt(async () => {
+      await updateWeekItem(db, item);
+      await refresh();
+    });
+
+  const removeWeekItem = (id: string) =>
+    attempt(async () => {
+      await deleteWeekItem(db, id);
+      await refresh();
+    });
+
   /** Deletes a saved routine; its blocks stay on the calendar as fixed events. */
   const removeRoutine = (id: string) =>
     attempt(async () => {
@@ -272,6 +303,10 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     editRoutine,
     removeRoutine,
     toggleStep,
+    weekItems,
+    addWeekItem,
+    changeWeekItem,
+    removeWeekItem,
     rename,
     week,
     categories,
