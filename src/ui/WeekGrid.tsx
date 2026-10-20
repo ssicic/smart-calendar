@@ -40,6 +40,8 @@ interface Props {
   bottomInset?: number;
   /** Activity groups by id, for block colours. */
   groups: Groups;
+  /** Routine progress per row id ("2/5", "✓"), shown on the block. */
+  badges: Map<string, string>;
   /** Today's column (0 = Monday) and minutes since midnight, if this is the current week. */
   today?: { day: number; minute: number };
   footer?: React.ReactNode;
@@ -48,7 +50,7 @@ interface Props {
 /** Calendar view: one column per day, blocks as tall as they are long. */
 export function WeekGrid(props: Props) {
   const { days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, onHoldSlot, onDropRow, today, footer } = props;
-  const { draft, onDraftChange, bottomInset = 0, groups } = props;
+  const { draft, onDraftChange, bottomInset = 0, groups, badges } = props;
   // Show an hour of sleep on each side, so there's always something to tap.
   const earliestWake = Math.min(...sleep.map((s) => s.wake));
   const latestBed = Math.max(...sleep.map((s) => Math.min(s.bed, DAY)));
@@ -158,6 +160,7 @@ export function WeekGrid(props: Props) {
                   onDrop={onDropRow}
                   onArm={setDragDay}
                   groups={groups}
+                  badge={badges.get(b.row.id)}
                 />
               ))}
 
@@ -215,6 +218,7 @@ function DraggableBlock(props: {
   /** The block's day while it is picked up, undefined when put down. */
   onArm: (day: number | undefined) => void;
   groups: Groups;
+  badge?: string;
 }) {
   const { block: b, day, top } = props;
   const [offset, setOffset] = useState<{ dx: number; dy: number }>();
@@ -310,6 +314,8 @@ function DraggableBlock(props: {
           numberOfLines={b.lanes > 1 ? 1 : Math.max(1, Math.floor(height / 13))}
         >
           {b.row.kind === "locked" ? "🔒 " : ""}
+          {/* Routine progress first, so narrow columns still show it. */}
+          {props.badge ? <Text style={styles.badge}>{props.badge} </Text> : null}
           {b.row.title}
         </Text>
       </Pressable>
@@ -547,6 +553,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     overflow: "hidden",
   },
+  badge: { fontWeight: "800", color: "#B45309" },
   blockTitle: { fontSize: 10, lineHeight: 13, fontWeight: "600", color: "#111827" },
   pressed: { opacity: 0.6 },
   nowLine: { position: "absolute", left: -1, right: 0, height: 2, backgroundColor: "#EF4444" },

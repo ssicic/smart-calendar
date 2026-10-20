@@ -17,7 +17,14 @@ import {
   renameEventsNamed,
   renameItem,
   loadCategories,
+  loadChecks,
+  loadRoutines,
   loadWeek,
+  insertRoutine,
+  setCheck,
+  updateRoutine,
+  type Routine,
+  type RoutineStep,
   moveEvent,
   queuePlacement,
   savePlacement,
@@ -41,10 +48,11 @@ import {
   type EventScope,
 } from "./itemActions";
 import type { GroupActions } from "./ManageGroupsSheet";
+import { checkKey } from "./routines";
 import type { QuickAddResult } from "./QuickAddSheet";
 import type { SleepScope } from "./SleepSheet";
 import { addWeeks } from "./weekDate";
-import type { WeekRow } from "./weekRows";
+import { isEventKind, type WeekRow } from "./weekRows";
 
 let counter = 0;
 const newId = () => `p${Date.now().toString(36)}${counter++}`;
@@ -63,12 +71,17 @@ export function useWeek(db: Db, weekStart: string) {
   const nextWeek = addWeeks(weekStart, 1);
   const [loaded, setLoaded] = useState<LoadedWeek>();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  // Ticked routine steps this week, as checkKey(eventId, stepId).
+  const [checks, setChecks] = useState<Set<string>>(new Set());
 
   // useCallback keeps the same function between renders (unless db or the
   // week changes), so the useEffect below doesn't re-run on every render.
   const refresh = useCallback(async () => {
     setLoaded(await loadWeek(db, weekStart, nextWeek));
     setCategories(await loadCategories(db));
+    setRoutines(await loadRoutines(db));
+    setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
   }, [db, weekStart, nextWeek]);
 
   useEffect(() => {
@@ -97,7 +110,7 @@ export function useWeek(db: Db, weekStart: string) {
       const p = plan.placements.find((x) => x.id === row.id);
 
       if (action === "delete") {
-        if (row.kind === "fixed" || row.kind === "rest") {
+        if (isEventKind(row.kind)) {
           if (scopeFor(row, scope) === "week") await changeEventForWeek(db, row.id, weekStart, null);
           else await deleteEvent(db, row.id);
         } else if (row.itemId) await deleteItem(db, row.itemId);
@@ -123,8 +136,8 @@ export function useWeek(db: Db, weekStart: string) {
     attempt(async () => {
       if (!week || !plan) return;
       const newStart = weekMinute(day, minuteOfDay);
-      if (row.kind === "fixed" || row.kind === "rest") {
-        const events: FixedEvent[] = row.kind === "fixed" ? week.fixed : week.rest;
+      if (isEventKind(row.kind)) {
+        const events: FixedEvent[] = row.kind === "fixed" ? week.fixed : (week.routines ?? []);
         const event = events.find((e) => e.id === row.id);
         if (!event) return;
         const r = moveEventTo(event, newStart);
@@ -200,7 +213,7 @@ export function useWeek(db: Db, weekStart: string) {
   /** Puts a row in a group (null = none). For a flexible session that's its item, so every week. */
   const setRowCategory = (row: WeekRow, categoryId: string | null) =>
     attempt(async () => {
-      if (row.kind === "fixed" || row.kind === "rest") await setCategory(db, { kind: "event", id: row.id }, categoryId);
+      if (isEventKind(row.kind)) await setCategory(db, { kind: "event", id: row.id }, categoryId);
       else if (row.itemId) await setCategory(db, { kind: "item", id: row.itemId }, categoryId);
       await refresh();
     });
@@ -208,14 +221,43 @@ export function useWeek(db: Db, weekStart: string) {
   /** New name for a row: an event (or, with `all`, every event with its name) or a flexible item. */
   const rename = (row: WeekRow, title: string, all = false) =>
     attempt(async () => {
-      if (row.kind === "fixed" || row.kind === "rest") {
+      if (isEventKind(row.kind)) {
         if (all) await renameEventsNamed(db, row.kind, row.title, title);
         else await renameEvent(db, row.id, title);
       } else if (row.itemId) await renameItem(db, row.itemId, title);
       await refresh();
     });
 
+  /** Saves a new routine; returns its id, or an error to show. */
+  const addRoutine = async (name: string, steps: RoutineStep[]): Promise<{ id: string } | { error: string }> => {
+    const id = `r${newId()}`;
+    const err = await attempt(async () => {
+      await insertRoutine(db, { id, name, steps });
+      await refresh();
+    });
+    return err ? { error: err } : { id };
+  };
+
+  /** Changes a saved routine (name and steps) everywhere it's used. */
+  const editRoutine = (routine: Routine) =>
+    attempt(async () => {
+      await updateRoutine(db, routine);
+      await refresh();
+    });
+
+  /** Ticks or unticks one step of a routine on the calendar (this week only). */
+  const toggleStep = (eventId: string, stepId: string) =>
+    attempt(async () => {
+      await setCheck(db, eventId, weekStart, stepId, !checks.has(checkKey(eventId, stepId)));
+      await refresh();
+    });
+
   return {
+    routines,
+    checks,
+    addRoutine,
+    editRoutine,
+    toggleStep,
     rename,
     week,
     categories,

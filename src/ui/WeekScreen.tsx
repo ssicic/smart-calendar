@@ -8,6 +8,7 @@ import { EMPTY_FORM, formForSlot, parseTime, type QuickAddForm } from "./quickAd
 import { QuickAddSheet, type SheetSize } from "./QuickAddSheet";
 import { SleepSheet } from "./SleepSheet";
 import { weekTotals } from "./dayLoad";
+import { progress, progressLabel } from "./routines";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { MonthView } from "./MonthView";
@@ -31,6 +32,7 @@ export function WeekScreen() {
   const data = useWeek(db, weekStart);
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = data;
   const { categories, groupActions, setRowCategory, rename } = data;
+  const { routines, checks, addRoutine, editRoutine, toggleStep } = data;
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
@@ -78,6 +80,16 @@ export function WeekScreen() {
   // the early return below. It copes with `week` being undefined.
   const days = useMemo(() => (week && plan ? rowsByDay(week, plan) : []), [week, plan]);
   const allRows = useMemo(() => days.flat(), [days]);
+  // Progress on each routine block ("2/5", or ✓ when every step is ticked).
+  const badges = useMemo(() => {
+    const byId = new Map(routines.map((r) => [r.id, r]));
+    const out = new Map<string, string>();
+    for (const row of allRows) {
+      const r = row.routineId ? byId.get(row.routineId) : undefined;
+      if (r) out.set(row.id, progressLabel(progress(r.steps, checks, row.id)));
+    }
+    return out;
+  }, [allRows, routines, checks]);
 
   if (!week || !plan) {
     return (
@@ -92,7 +104,7 @@ export function WeekScreen() {
   const { plannedMin, doneMin } = weekTotals(week, plan);
   const hours = (minutes: number) => Math.round(minutes / 6) / 10;
   const unplacedSessions = plan.unplaced.reduce((sum, u) => sum + u.missing, 0);
-  const isEmpty = week.fixed.length + week.rest.length + week.items.length === 0;
+  const isEmpty = week.fixed.length + (week.routines ?? []).length + week.items.length === 0;
 
   const isWeekView = view === "calendar" || view === "list";
 
@@ -230,8 +242,8 @@ export function WeekScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Your week is empty</Text>
             <Text style={styles.emptyText}>
-              Tap + to add work or classes (Fixed), protected downtime (Rest), and things you want to fit in
-              (Flexible).
+              Tap + to add work or classes (Fixed), routines with a checklist like your morning (Routine), and
+              things you want to fit in (Flexible).
             </Text>
           </View>
         ) : view === "calendar" ? (
@@ -246,7 +258,16 @@ export function WeekScreen() {
               // Already adding something? Move it here and keep what was typed.
               const slot = formForSlot(day, minute);
               setAdding((f) =>
-                f ? { ...slot, title: f.title, repeat: f.repeat, kind: f.kind === "rest" ? "rest" : "fixed" } : slot,
+                f
+                ? {
+                    ...slot,
+                    title: f.title,
+                    repeat: f.repeat,
+                    kind: f.kind === "routine" ? "routine" : "fixed",
+                    routineId: f.routineId,
+                    categoryId: f.categoryId,
+                  }
+                : slot,
               );
               setSheetSize("half");
             }}
@@ -256,13 +277,14 @@ export function WeekScreen() {
             }
             bottomInset={adding && sheetSize === "half" ? screenHeight / 2 : 0}
             groups={groups}
+          badges={badges}
             // Dragging is a clear "put it here", so flexible sessions move even onto a busy time.
             onDropRow={async (row, day, minute) => setSaveError(await move(row, day, minute, true))}
             today={today}
             footer={queueFooter}
           />
         ) : (
-          <WeekView days={days} weekStart={weekStart} groups={groups} onPressRow={setTapped} footer={queueFooter} />
+          <WeekView days={days} weekStart={weekStart} groups={groups} badges={badges} onPressRow={setTapped} footer={queueFooter} />
         )}
       </View>
       {isWeekView && !adding && (
@@ -280,6 +302,8 @@ export function WeekScreen() {
       )}
       <QuickAddSheet
         form={adding}
+        routines={routines}
+        onAddRoutine={addRoutine}
         onChange={setAdding}
         categories={categories}
         groupActions={groupActions}
@@ -305,6 +329,10 @@ export function WeekScreen() {
         categories={categories}
         groupActions={groupActions}
         onSetCategory={setRowCategory}
+        routines={routines}
+        checks={checks}
+        onToggleStep={toggleStep}
+        onEditRoutine={editRoutine}
         onRename={rename}
         onAction={act}
         onMove={move}

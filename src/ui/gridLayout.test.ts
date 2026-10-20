@@ -68,7 +68,7 @@ describe("visibleHours", () => {
 
   it("lets everything but done, queued and locked sessions be dragged", () => {
     const row = { id: "x", title: "X", start: 0, end: 60 };
-    const kinds = ["fixed", "rest", "suggested", "kept", "locked", "done", "skipped"] as const;
+    const kinds = ["fixed", "routine", "suggested", "kept", "locked", "done", "skipped"] as const;
     expect(kinds.map((kind) => canDrag({ ...row, kind }))).toEqual([true, true, true, true, false, false, false]);
   });
 

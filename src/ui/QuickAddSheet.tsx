@@ -23,6 +23,8 @@ import {
 } from "./quickAdd";
 import type { Category } from "../db/weekStore";
 import { CategoryPicker } from "./CategoryPicker";
+import type { Routine, RoutineStep } from "../db/weekStore";
+import { RoutineEditor } from "./RoutineEditor";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { Chips } from "./Chips";
 import { Notice } from "./Notice";
@@ -55,6 +57,9 @@ interface Props {
   weekStart: string;
   categories: Category[];
   groupActions: GroupActions;
+  /** Saved routines to pick from (Morning routine…). */
+  routines: Routine[];
+  onAddRoutine: (name: string, steps: RoutineStep[]) => Promise<{ id: string } | { error: string }>;
 }
 
 let idCounter = 0;
@@ -73,7 +78,7 @@ function Field(props: { label: string; half?: boolean; children: React.ReactNode
 const KIND_OPTIONS: { value: AddKind; label: string }[] = [
   { value: "flexible", label: "Flexible" },
   { value: "fixed", label: "Fixed" },
-  { value: "rest", label: "Rest" },
+  { value: "routine", label: "Routine" },
 ];
 const TIME_OPTIONS: { value: TimeOfDay; label: string }[] = [
   { value: "any", label: "Any time" },
@@ -90,10 +95,13 @@ const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0,
 
 export function QuickAddSheet(props: Props) {
   const { form: openForm, onChange, size, onSizeChange, week, rows, onSave, onClose, weekStart } = props;
-  const { categories, groupActions } = props;
+  const { categories, groupActions, routines, onAddRoutine } = props;
+  const [newRoutine, setNewRoutine] = useState(false);
   // The form's values live in the screen (passed in as `form`); every change
   // goes back up through onChange, and React redraws both sheet and calendar.
   const form = openForm ?? EMPTY_FORM;
+  // The saved routine picked in the form, if any (its steps show as a preview).
+  const picked = routines.find((r) => r.id === form.routineId);
   const [error, setError] = useState<string>();
   // Set when a flexible item doesn't fit; the next Save tap adds it anyway.
   const [warning, setWarning] = useState<string>();
@@ -110,6 +118,7 @@ export function QuickAddSheet(props: Props) {
     setError(undefined);
     setWarning(undefined);
     setOverlapOff(false);
+    setNewRoutine(false);
     onClose();
   };
 
@@ -225,14 +234,64 @@ export function QuickAddSheet(props: Props) {
         </View>
 
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Chips options={KIND_OPTIONS} isSelected={(v) => v === form.kind} onPress={(kind) => update({ kind })} />
+          <Chips
+            options={KIND_OPTIONS}
+            isSelected={(v) => v === form.kind}
+            onPress={(kind) =>
+              // Routines usually happen every week, so Repeat starts on for them.
+              update(kind === "routine" && form.kind !== "routine" ? { kind, repeat: true } : { kind })
+            }
+          />
+
+          {form.kind === "routine" && (
+            <Field label="Which routine">
+              <View style={styles.routineChips}>
+                {routines.map((r) => {
+                  const on = r.id === form.routineId;
+                  return (
+                    <Pressable
+                      key={r.id}
+                      onPress={() => update({ routineId: r.id, title: r.name })}
+                      style={[styles.routineChip, on && styles.routineChipOn]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[styles.routineChipText, on && styles.routineChipTextOn]}>
+                        {r.name} · {r.steps.length}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {!newRoutine && (
+                  <Pressable onPress={() => setNewRoutine(true)} style={styles.newRoutine} accessibilityRole="button">
+                    <Text style={styles.newRoutineText}>+ New routine</Text>
+                  </Pressable>
+                )}
+              </View>
+              {newRoutine ? (
+                <RoutineEditor
+                  existing={routines}
+                  onCancel={() => setNewRoutine(false)}
+                  onSave={async (name, steps) => {
+                    const r = await onAddRoutine(name, steps);
+                    if ("error" in r) return r.error;
+                    setNewRoutine(false);
+                    update({ routineId: r.id, title: name });
+                    return undefined;
+                  }}
+                />
+              ) : (
+                picked && <Text style={styles.stepsPreview}>{picked.steps.map((s) => s.text).join(" · ")}</Text>
+              )}
+            </Field>
+          )}
 
           <Field label="Name">
             <TextInput
               style={styles.input}
               value={form.title}
               onChangeText={(title) => update({ title })}
-              placeholder={isFlexible ? "Gym, Spanish, Guitar…" : form.kind === "fixed" ? "Work, Class…" : "Chill, Nap…"}
+              placeholder={isFlexible ? "Gym, Spanish, Guitar…" : form.kind === "fixed" ? "Work, Class…" : "Morning routine"}
               // Full screen (opened with +): start typing right away. Half (from the
               // calendar): no keyboard yet, so the calendar stays in view.
               autoFocus={size === "full"}
@@ -364,6 +423,14 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { fontSize: 17, fontWeight: "800", color: "#111827" },
   messages: { paddingHorizontal: 16, gap: 8 },
+  routineChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  routineChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: "#FEF3E2" },
+  routineChipOn: { backgroundColor: "#D97706" },
+  routineChipText: { fontSize: 14, fontWeight: "600", color: "#92400E" },
+  routineChipTextOn: { color: "#FFFFFF" },
+  newRoutine: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: "#CBD5E1", borderStyle: "dashed" },
+  newRoutineText: { fontSize: 14, fontWeight: "600", color: "#D97706" },
+  stepsPreview: { fontSize: 13, color: "#6B7280", lineHeight: 19 },
   cancel: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
   body: { padding: 16, paddingBottom: 32, gap: 16 },
   row: { flexDirection: "row", gap: 12 },

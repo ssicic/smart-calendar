@@ -17,13 +17,13 @@ export function tint(hex: string, alpha: number): string {
 
 /**
  * Block colours for a row in a group: the group's colour as the side bar,
- * a light tint behind (stronger for fixed and rest, which can't move).
+ * a light tint behind (stronger for fixed events and routines, which can't move).
  * Done and queued sessions keep their grey look, so "finished" stays obvious.
  * Undefined = use the default colours for that kind.
  */
 export function categoryStyle(kind: RowKind, color: string | undefined): { bg: string; bar: string } | undefined {
   if (!color || kind === "done" || kind === "skipped") return undefined;
-  return { bar: color, bg: tint(color, kind === "fixed" || kind === "rest" ? 0.24 : 0.12) };
+  return { bar: color, bg: tint(color, kind === "fixed" || kind === "routine" ? 0.24 : 0.12) };
 }
 
 /**

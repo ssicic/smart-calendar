@@ -13,10 +13,11 @@ import {
   type WeekInput,
 } from "../engine";
 import { overlapping, summarize } from "./overlaps";
-import type { RowKind, WeekRow } from "./weekRows";
+import { isEventKind, type RowKind, type WeekRow } from "./weekRows";
 
 export type ActionId =
   | "move"
+  | "steps"
   | "rename"
   | "suggest"
   | "lock"
@@ -42,9 +43,10 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
   const rename: Action = { id: "rename", label: "Rename" };
   switch (kind) {
     case "fixed":
-    case "rest":
       // The scheduler never moves these, so there is nothing to lock.
       return [{ id: "move", label: "Move" }, rename, remove];
+    case "routine":
+      return [{ id: "move", label: "Move" }, { id: "steps", label: "Edit steps" }, rename, remove];
     case "suggested":
     case "kept":
       return [
@@ -169,7 +171,7 @@ export function moveProblem(
   minuteOfDay: number,
 ): string | undefined {
   const start = weekMinute(day, minuteOfDay);
-  if (row.kind === "fixed" || row.kind === "rest") {
+  if (isEventKind(row.kind)) {
     const r = moveEventTo(row, start);
     return r.ok ? undefined : r.error;
   }

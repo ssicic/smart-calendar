@@ -134,6 +134,12 @@ describe("planWeek", () => {
     expect(unplaced).toEqual([{ itemId: "marathon", missing: 1, reason: "no-slot" }]);
   });
 
+  it("treats routines as busy time", () => {
+    const routine = { id: "m", title: "Morning routine", start: at(0, 8), end: at(0, 22), routineId: "morning" };
+    const { placements } = planWeek({ ...week({ items: [item("gym", 60, 7)] }), routines: [routine] });
+    for (const p of placements) expect(p.end <= routine.start || p.start >= routine.end).toBe(true);
+  });
+
   it("keeps locked placements and does not double-place them", () => {
     const locked = { id: "gym-mine", itemId: "gym", start: at(2, 19), end: at(2, 20), state: "locked" as const };
     const { placements } = planWeek(week({ items: [item("gym", 60, 3)], placements: [locked] }));

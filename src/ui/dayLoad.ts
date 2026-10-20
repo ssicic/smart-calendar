@@ -28,7 +28,7 @@ function addSpan(loads: DayLoad[], field: keyof DayLoad, start: number, end: num
 /** Planned minutes per day of the week (index 0 = Monday). Queued (skipped) sessions don't count. */
 export function dayLoads(week: WeekInput, plan: PlanResult): DayLoad[] {
   const loads = Array.from({ length: 7 }, () => ({ ...EMPTY_LOAD }));
-  for (const e of week.fixed) addSpan(loads, "fixed", e.start, e.end);
+  for (const e of [...week.fixed, ...(week.routines ?? [])]) addSpan(loads, "fixed", e.start, e.end);
   for (const p of plan.placements) {
     if (p.state === "done") addSpan(loads, "done", p.start, p.end);
     else if (p.state !== "skipped") addSpan(loads, "flexible", p.start, p.end);

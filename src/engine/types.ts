@@ -17,6 +17,8 @@ export interface FixedEvent extends Interval {
   title: string;
   /** Optional activity group (Work, Health…), only used for colour. The scheduler ignores it. */
   categoryId?: string;
+  /** Set for a routine (Morning routine…): which saved checklist it follows. */
+  routineId?: string;
 }
 
 /** Protected time off. Treated like a fixed event by the scheduler. */
@@ -83,6 +85,8 @@ export interface PlannerSettings {
 export interface WeekInput {
   fixed: FixedEvent[];
   rest: RestBlock[];
+  /** Routines at a set time (with a checklist). Busy time, like fixed events. */
+  routines?: FixedEvent[];
   items: FlexibleItem[];
   placements: Placement[];
   settings: PlannerSettings;

@@ -14,7 +14,7 @@ export function overlapping(rows: WeekRow[], targets: Interval[], ignoreId?: str
 
 const KIND_WORD: Record<WeekRow["kind"], string> = {
   fixed: "fixed",
-  rest: "rest",
+  routine: "routine",
   suggested: "suggested",
   kept: "placed",
   locked: "locked",

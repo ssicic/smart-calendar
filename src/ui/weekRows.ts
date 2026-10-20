@@ -4,7 +4,10 @@ import { DAY, dayOf, type PlacementState, type PlanResult, type WeekInput } from
 
 export const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export type RowKind = "fixed" | "rest" | PlacementState;
+export type RowKind = "fixed" | "routine" | PlacementState;
+
+/** Fixed events and routines: things at a set time that the scheduler never moves. */
+export const isEventKind = (kind: RowKind): kind is "fixed" | "routine" => kind === "fixed" || kind === "routine";
 
 export interface WeekRow {
   id: string;
@@ -16,6 +19,8 @@ export interface WeekRow {
   itemId?: string;
   /** Activity group (Work, Health…), if it has one. */
   categoryId?: string;
+  /** Set for routines: which saved checklist it follows. */
+  routineId?: string;
 }
 
 /** "17:15" from week-minutes. */
@@ -30,7 +35,9 @@ export function rowsByDay(input: WeekInput, plan: PlanResult): WeekRow[][] {
   const groups = new Map(input.items.map((i) => [i.id, i.categoryId]));
   const rows: WeekRow[] = [
     ...input.fixed.map((e) => ({ ...e, kind: "fixed" as const })),
-    ...input.rest.map((e) => ({ ...e, kind: "rest" as const })),
+    // Rest blocks only come from old sample data now (rest is a group); they show as fixed time.
+    ...input.rest.map((e) => ({ ...e, kind: "fixed" as const })),
+    ...(input.routines ?? []).map((e) => ({ ...e, kind: "routine" as const })),
     ...plan.placements.map((p) => ({
       id: p.id,
       title: titles.get(p.itemId) ?? p.itemId,

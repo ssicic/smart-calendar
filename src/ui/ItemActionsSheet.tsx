@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { DAY, dayOf } from "../engine";
-import type { Category } from "../db/weekStore";
+import type { Category, Routine, RoutineStep } from "../db/weekStore";
+import { RoutineEditor } from "./RoutineEditor";
+import { checkKey, progress, progressLabel } from "./routines";
 import { CategoryPicker } from "./CategoryPicker";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { Chips } from "./Chips";
@@ -10,7 +12,7 @@ import { overlapping, summarize } from "./overlaps";
 import { parseTime } from "./quickAdd";
 import { TimePicker } from "./TimePicker";
 import { Notice } from "./Notice";
-import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
+import { DAY_NAMES, clock, isEventKind, type WeekRow } from "./weekRows";
 
 interface Props {
   /** The tapped row; undefined hides the sheet. */
@@ -37,6 +39,13 @@ interface Props {
   onSetCategory: (row: WeekRow, categoryId: string | null) => Promise<string | undefined>;
   /** New name; `all` = every event of this kind with the same name. */
   onRename: (row: WeekRow, title: string, all: boolean) => Promise<string | undefined>;
+  /** Every saved routine (to find this row's checklist, and for the editor's name check). */
+  routines: Routine[];
+  /** Ticked routine steps this week, as checkKey(eventId, stepId). */
+  checks: Set<string>;
+  onToggleStep: (eventId: string, stepId: string) => Promise<string | undefined>;
+  /** Saves a changed routine (name and steps) everywhere it's used. */
+  onEditRoutine: (routine: Routine) => Promise<string | undefined>;
 }
 
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
@@ -47,7 +56,7 @@ const SCOPES: { value: EventScope; label: string }[] = [
 
 export function ItemActionsSheet(props: Props) {
   const { row, rows, repeats, onAction, onMove, checkMove, onClose, categories, groupActions, onSetCategory } = props;
-  const [mode, setMode] = useState<"menu" | "move" | "rename">("menu");
+  const [mode, setMode] = useState<"menu" | "move" | "rename" | "steps">("menu");
   const [newTitle, setNewTitle] = useState("");
   const [renameAll, setRenameAll] = useState(false);
   const [error, setError] = useState<string>();
@@ -75,10 +84,14 @@ export function ItemActionsSheet(props: Props) {
 
   if (!row) return null;
 
+  const { checks } = props;
+  // A routine's checklist (if this row is one).
+  const routine = row.routineId ? props.routines.find((r) => r.id === row.routineId) : undefined;
+
   // Live check of the picked slot. Flexible sessions push suggestions aside;
   // landing on fixed, rest, placed, locked or done time needs a "Move anyway".
   const pickedStart = parseTime(moveTime);
-  const isEvent = row.kind === "fixed" || row.kind === "rest";
+  const isEvent = isEventKind(row.kind);
   const clashes =
     pickedStart === undefined
       ? []
@@ -95,6 +108,7 @@ export function ItemActionsSheet(props: Props) {
   const run = async (action: ActionId, deleteScope?: EventScope) => {
     if (action === "move") return setMode("move");
     if (action === "rename") return setMode("rename");
+    if (action === "steps") return setMode("steps");
     // Deleting can't be undone, so the first tap only asks for a second one
     // (for a repeating event: which weeks, which is the second tap).
     if (action === "delete" && !confirmDelete) return setConfirmDelete(true);
@@ -104,7 +118,7 @@ export function ItemActionsSheet(props: Props) {
   };
 
   // "Work" Mon–Fri is five events: offer renaming them all at once.
-  const sameName = row.kind === "fixed" || row.kind === "rest" ? sameNameEvents(rows, row) : [];
+  const sameName = isEventKind(row.kind) ? sameNameEvents(rows, row) : [];
   const saveRename = async () => {
     const bad = renameProblem(newTitle);
     if (bad) return setError(bad);
@@ -141,6 +155,34 @@ export function ItemActionsSheet(props: Props) {
               <Text style={styles.link}>Close</Text>
             </Pressable>
           </View>
+
+          {mode === "menu" && routine && (
+            <View style={styles.checklist}>
+              <Text style={styles.label}>
+                Checklist · {progressLabel(progress(routine.steps, checks, row.id))}
+              </Text>
+              {routine.steps.map((step) => {
+                const ticked = checks.has(checkKey(row.id, step.id));
+                return (
+                  <Pressable
+                    key={step.id}
+                    onPress={async () => {
+                      const err = await props.onToggleStep(row.id, step.id);
+                      if (err) setError(err);
+                    }}
+                    style={({ pressed }) => [styles.step, pressed && styles.pressed]}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: ticked }}
+                  >
+                    <View style={[styles.box, ticked && styles.boxOn]}>
+                      {ticked && <Text style={styles.tick}>✓</Text>}
+                    </View>
+                    <Text style={[styles.stepText, ticked && styles.stepDone]}>{step.text}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
 
           {mode === "menu" && row.kind !== "skipped" && (
             <View style={styles.group}>
@@ -191,6 +233,21 @@ export function ItemActionsSheet(props: Props) {
                   </Pressable>
                 );
               })}
+            </View>
+          ) : mode === "steps" && routine ? (
+            <View style={styles.move}>
+              <Text style={styles.hint}>Changes this routine everywhere it's used.</Text>
+              <RoutineEditor
+                routine={routine}
+                existing={props.routines}
+                onCancel={() => setMode("menu")}
+                onSave={async (name: string, steps: RoutineStep[]) => {
+                  const err = await props.onEditRoutine({ id: routine.id, name, steps });
+                  if (err) return err;
+                  setMode("menu");
+                  return undefined;
+                }}
+              />
             </View>
           ) : mode === "rename" ? (
             <View style={styles.move}>
@@ -311,6 +368,21 @@ const styles = StyleSheet.create({
   scopeButton: { flex: 1, alignItems: "center", justifyContent: "center" },
   center: { textAlign: "center" },
   move: { gap: 10 },
+  checklist: { gap: 2, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  step: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9, paddingHorizontal: 4, borderRadius: 8 },
+  box: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: "#D97706",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  boxOn: { backgroundColor: "#D97706" },
+  tick: { color: "#FFFFFF", fontWeight: "800", fontSize: 14, lineHeight: 16 },
+  stepText: { flex: 1, fontSize: 16, color: "#111827" },
+  stepDone: { color: "#9CA3AF", textDecorationLine: "line-through" },
   input: {
     borderWidth: 1,
     borderColor: "#E5E7EB",

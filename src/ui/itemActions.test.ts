@@ -40,9 +40,9 @@ describe("actionsFor", () => {
   it("offers unlock instead of lock once locked, and no way to move it", () => {
     expect(actionsFor("locked", "Gym").map((a) => a.id)).toEqual(["unlock", "done", "rename", "delete", "queue"]);
   });
-  it("never offers lock for fixed events and rest blocks", () => {
+  it("never offers lock for fixed events and routines", () => {
     expect(actionsFor("fixed", "Work").map((a) => a.id)).toEqual(["move", "rename", "delete"]);
-    expect(actionsFor("rest", "Nap").map((a) => a.id)).toEqual(["move", "rename", "delete"]);
+    expect(actionsFor("routine", "Night routine").map((a) => a.id)).toEqual(["move", "steps", "rename", "delete"]);
   });
 });
 
@@ -153,9 +153,9 @@ describe("rename", () => {
   });
 
   it("finds the other events with the same name and kind", () => {
-    const row = (id: string, title: string, kind: "fixed" | "rest") => ({ id, title, kind, start: 0, end: 60 });
+    const row = (id: string, title: string, kind: "fixed" | "routine") => ({ id, title, kind, start: 0, end: 60 });
     const work = row("w1", "Work", "fixed");
-    const rows = [work, row("w2", "Work", "fixed"), row("w3", "Work", "rest"), row("c", "Class", "fixed")];
+    const rows = [work, row("w2", "Work", "fixed"), row("w3", "Work", "routine"), row("c", "Class", "fixed")];
     expect(sameNameEvents(rows, work).map((r) => r.id)).toEqual(["w2"]);
   });
 });

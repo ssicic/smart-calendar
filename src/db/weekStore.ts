@@ -161,6 +161,52 @@ const MIGRATIONS: string[] = [
     CHECK ((start_min IS NULL AND end_min IS NULL) OR end_min > start_min)
   );
   `,
+  // Version 8: routines, and Rest becomes a group instead of its own kind.
+  // Rest blocks turn into fixed events in the "Rest" group (an existing
+  // group called Rest is reused). SQLite can't change a CHECK rule, so the
+  // events table is rebuilt and copied, keeping every id.
+  // A routine is an event at a set time that follows a saved checklist
+  // (routines.steps, JSON [{id, text}]); routine_checks remembers which
+  // steps were ticked, per event and week.
+  `
+  INSERT INTO categories (id, name, color, position)
+    SELECT 'rest', 'Rest', '#2F9E5B', (SELECT COALESCE(MAX(position), -1) + 1 FROM categories)
+    WHERE NOT EXISTS (SELECT 1 FROM categories WHERE lower(name) = 'rest');
+  CREATE TABLE events_v8 (
+    id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL CHECK (kind IN ('fixed', 'routine')),
+    title       TEXT NOT NULL,
+    start_min   INTEGER NOT NULL,
+    end_min     INTEGER NOT NULL CHECK (end_min > start_min),
+    week_start  TEXT,
+    category_id TEXT,
+    routine_id  TEXT
+  );
+  INSERT INTO events_v8 (id, kind, title, start_min, end_min, week_start, category_id)
+    SELECT id, 'fixed', title, start_min, end_min, week_start,
+           CASE WHEN kind = 'rest' AND category_id IS NULL
+                THEN (SELECT id FROM categories WHERE lower(name) = 'rest' ORDER BY position LIMIT 1)
+                ELSE category_id END
+    FROM events;
+  DROP TABLE events;
+  ALTER TABLE events_v8 RENAME TO events;
+  CREATE INDEX events_by_week ON events (week_start);
+  CREATE TABLE routines (
+    id       TEXT PRIMARY KEY,
+    name     TEXT NOT NULL,
+    steps    TEXT NOT NULL,
+    position INTEGER NOT NULL
+  );
+  INSERT INTO routines (id, name, steps, position) VALUES
+    ('morning', 'Morning routine', '[{"id":"m1","text":"Drink a glass of water"},{"id":"m2","text":"Brush teeth"},{"id":"m3","text":"Shower"},{"id":"m4","text":"Get dressed"},{"id":"m5","text":"Breakfast"}]', 0),
+    ('night', 'Night routine', '[{"id":"n1","text":"Tidy up for 5 minutes"},{"id":"n2","text":"Lay out tomorrow''s clothes"},{"id":"n3","text":"Brush teeth"},{"id":"n4","text":"Screens away"},{"id":"n5","text":"Read in bed"}]', 1);
+  CREATE TABLE routine_checks (
+    event_id   TEXT NOT NULL,
+    week_start TEXT NOT NULL,
+    step_id    TEXT NOT NULL,
+    PRIMARY KEY (event_id, week_start, step_id)
+  );
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -177,12 +223,13 @@ export async function migrate(db: Db, upTo = MIGRATIONS.length): Promise<void> {
 
 export interface EventRow {
   id: string;
-  kind: "fixed" | "rest";
+  kind: "fixed" | "routine";
   title: string;
   start_min: number;
   end_min: number;
   week_start: string | null;
   category_id: string | null;
+  routine_id: string | null;
 }
 
 export interface ItemRow {
@@ -194,6 +241,19 @@ export interface ItemRow {
   preferred_windows: string | null;
   goal_id: string | null;
   category_id: string | null;
+}
+
+/** One step of a routine's checklist. */
+export interface RoutineStep {
+  id: string;
+  text: string;
+}
+
+/** A saved routine (Morning routine…): a name and its checklist, reused by every event that follows it. */
+export interface Routine {
+  id: string;
+  name: string;
+  steps: RoutineStep[];
 }
 
 /** An activity group (Work, Health…) and its colour. */
@@ -238,6 +298,7 @@ export function eventFromRow(r: EventRow): FixedEvent | RestBlock {
     start: r.start_min,
     end: r.end_min,
     ...(r.category_id ? { categoryId: r.category_id } : {}),
+    ...(r.routine_id ? { routineId: r.routine_id } : {}),
   };
 }
 
@@ -314,7 +375,8 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
     overrides,
     week: {
       fixed: events.filter((e) => e.kind === "fixed").map(eventFromRow),
-      rest: events.filter((e) => e.kind === "rest").map(eventFromRow),
+      rest: [], // rest is a group now (DB v8), not its own kind
+      routines: events.filter((e) => e.kind === "routine").map(eventFromRow),
       items: items.map(itemFromRow).map((i) => ({ ...i, timesPerWeek: i.timesPerWeek + (extra.get(i.id) ?? 0) })),
       placements: placements.map(placementFromRow),
       settings: { ...DEFAULT_SETTINGS, dayWindows: planningWindows(sleep, overrides) },
@@ -329,16 +391,17 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
 /** `weekStart`: the only week these events are in, or null to repeat them every week. */
 export async function insertEvents(
   db: Db,
-  kind: "fixed" | "rest",
-  events: (FixedEvent | RestBlock)[],
+  kind: "fixed" | "routine",
+  events: FixedEvent[],
   weekStart: string | null,
 ): Promise<void> {
   // `?` placeholders: the driver inserts values safely, so a title like
   // "Bob's class" can't break the SQL (or inject any).
   for (const e of events) {
     await db.runAsync(
-      "INSERT INTO events (id, kind, title, start_min, end_min, week_start, category_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [e.id, kind, e.title, e.start, e.end, weekStart, e.categoryId ?? null],
+      `INSERT INTO events (id, kind, title, start_min, end_min, week_start, category_id, routine_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [e.id, kind, e.title, e.start, e.end, weekStart, e.categoryId ?? null, e.routineId ?? null],
     );
   }
 }
@@ -360,7 +423,7 @@ export async function renameEvent(db: Db, id: string, title: string): Promise<vo
 }
 
 /** Renames every event of this kind that has this name, e.g. all "Work" blocks. */
-export async function renameEventsNamed(db: Db, kind: "fixed" | "rest", oldTitle: string, title: string): Promise<void> {
+export async function renameEventsNamed(db: Db, kind: "fixed" | "routine", oldTitle: string, title: string): Promise<void> {
   await db.runAsync("UPDATE events SET title = ? WHERE kind = ? AND title = ?", [title, kind, oldTitle]);
 }
 
@@ -373,6 +436,7 @@ export async function renameItem(db: Db, itemId: string, title: string): Promise
 export async function deleteEvent(db: Db, id: string): Promise<void> {
   await db.withTransactionAsync(async () => {
     await db.runAsync("DELETE FROM event_exceptions WHERE event_id = ?", [id]);
+    await db.runAsync("DELETE FROM routine_checks WHERE event_id = ?", [id]);
     await db.runAsync("DELETE FROM events WHERE id = ?", [id]);
   });
 }
@@ -562,4 +626,53 @@ export async function setOverride(
     // Tidy up rows where both times follow the usual again.
     await db.runAsync("DELETE FROM day_overrides WHERE wake_min IS NULL AND bed_min IS NULL", []);
   });
+}
+
+// ---- Routines (saved checklists) and ticked steps ----
+
+export async function loadRoutines(db: Db): Promise<Routine[]> {
+  const rows = await db.getAllAsync<{ id: string; name: string; steps: string }>(
+    "SELECT id, name, steps FROM routines ORDER BY position, rowid",
+    [],
+  );
+  return rows.map((r) => ({ id: r.id, name: r.name, steps: JSON.parse(r.steps) as RoutineStep[] }));
+}
+
+/** Saves a new routine at the end of the list. */
+export async function insertRoutine(db: Db, r: Routine): Promise<void> {
+  await db.runAsync(
+    "INSERT INTO routines (id, name, steps, position) VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM routines))",
+    [r.id, r.name, JSON.stringify(r.steps)],
+  );
+}
+
+/** Changes a routine's name and steps; every event that follows it shows the new checklist. */
+export async function updateRoutine(db: Db, r: Routine): Promise<void> {
+  await db.runAsync("UPDATE routines SET name = ?, steps = ? WHERE id = ?", [r.name, JSON.stringify(r.steps), r.id]);
+}
+
+/** Ticked steps for every routine in `weekStart`. */
+export async function loadChecks(db: Db, weekStart: string): Promise<{ eventId: string; stepId: string }[]> {
+  const rows = await db.getAllAsync<{ event_id: string; step_id: string }>(
+    "SELECT event_id, step_id FROM routine_checks WHERE week_start = ?",
+    [weekStart],
+  );
+  return rows.map((r) => ({ eventId: r.event_id, stepId: r.step_id }));
+}
+
+/** Ticks (or unticks) one step of one routine event in `weekStart`. */
+export async function setCheck(db: Db, eventId: string, weekStart: string, stepId: string, done: boolean): Promise<void> {
+  if (done) {
+    await db.runAsync("INSERT OR IGNORE INTO routine_checks (event_id, week_start, step_id) VALUES (?, ?, ?)", [
+      eventId,
+      weekStart,
+      stepId,
+    ]);
+  } else {
+    await db.runAsync("DELETE FROM routine_checks WHERE event_id = ? AND week_start = ? AND step_id = ?", [
+      eventId,
+      weekStart,
+      stepId,
+    ]);
+  }
 }

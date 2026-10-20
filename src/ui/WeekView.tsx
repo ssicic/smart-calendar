@@ -6,7 +6,7 @@ import { DAY_NAMES, clock, type RowKind, type WeekRow } from "./weekRows";
 
 export const KIND_STYLE: Record<RowKind, { bg: string; bar: string; label: string }> = {
   fixed: { bg: "#EEF0F3", bar: "#6B7280", label: "Fixed" },
-  rest: { bg: "#E8F6EE", bar: "#2F9E5B", label: "Rest" },
+  routine: { bg: "#FEF3E2", bar: "#D97706", label: "Routine" },
   suggested: { bg: "#EEF2FF", bar: "#5B6CF0", label: "Suggested" },
   kept: { bg: "#EEF2FF", bar: "#5B6CF0", label: "Placed" },
   locked: { bg: "#E0E7FF", bar: "#3A47C9", label: "🔒 Locked" },
@@ -23,7 +23,8 @@ export function rowColors(row: WeekRow, groups: Groups): { bg: string; bar: stri
   return categoryStyle(row.kind, group?.color) ?? KIND_STYLE[row.kind];
 }
 
-function Block({ row, groups, onPress }: { row: WeekRow; groups: Groups; onPress: (row: WeekRow) => void }) {
+function Block(props: { row: WeekRow; groups: Groups; badge?: string; onPress: (row: WeekRow) => void }) {
+  const { row, groups, onPress } = props;
   const k = rowColors(row, groups);
   const group = row.categoryId ? groups.get(row.categoryId) : undefined;
   return (
@@ -41,6 +42,7 @@ function Block({ row, groups, onPress }: { row: WeekRow; groups: Groups; onPress
       <Text style={[styles.kind, { color: k.bar }]}>
         {KIND_STYLE[row.kind].label}
         {group ? ` · ${group.name}` : ""}
+        {props.badge ? ` · ${props.badge}` : ""}
       </Text>
     </Pressable>
   );
@@ -50,12 +52,14 @@ interface Props {
   days: WeekRow[][];
   weekStart: string;
   groups: Groups;
+  /** Routine progress per row id ("2/5", "✓"). */
+  badges: Map<string, string>;
   onPressRow: (row: WeekRow) => void;
   /** Shown under Sunday, e.g. the queue for next week. */
   footer?: React.ReactNode;
 }
 
-export function WeekView({ days, weekStart, groups, onPressRow, footer }: Props) {
+export function WeekView({ days, weekStart, groups, badges, onPressRow, footer }: Props) {
   return (
     <ScrollView contentContainerStyle={styles.list}>
       {days.map((rows, d) => (
@@ -66,7 +70,7 @@ export function WeekView({ days, weekStart, groups, onPressRow, footer }: Props)
           {rows.length === 0 ? (
             <Text style={styles.empty}>Nothing planned</Text>
           ) : (
-            rows.map((row) => <Block key={row.id} row={row} groups={groups} onPress={onPressRow} />)
+            rows.map((row) => <Block key={row.id} row={row} groups={groups} badge={badges.get(row.id)} onPress={onPressRow} />)
           )}
         </View>
       ))}

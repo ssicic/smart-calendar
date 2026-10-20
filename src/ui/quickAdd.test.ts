@@ -58,9 +58,15 @@ describe("parseQuickAdd", () => {
     ]);
   });
 
-  it("makes rest blocks the same way", () => {
-    const r = parseQuickAdd(form({ kind: "rest", title: "Nap", days: [6], startTime: "14:00", endTime: "15:00" }), newId);
-    expect(r.ok && r.kind).toBe("rest");
+  it("makes routines the same way, each event following the picked routine", () => {
+    const base = { kind: "routine" as const, title: "Morning routine", days: [0, 1], startTime: "07:00", endTime: "07:45" };
+    expect(parseQuickAdd(form(base), newId)).toEqual({ ok: false, error: "Pick a routine, or make a new one." });
+    const r = parseQuickAdd(form({ ...base, routineId: "morning" }), newId);
+    expect(r.ok && r.kind).toBe("routine");
+    expect(r.ok && r.kind === "routine" && r.events.map((e) => [e.start, e.routineId])).toEqual([
+      [7 * 60, "morning"],
+      [DAY + 7 * 60, "morning"],
+    ]);
   });
 
   it("validates days and times for fixed events", () => {

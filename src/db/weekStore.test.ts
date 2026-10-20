@@ -20,6 +20,11 @@ import {
   keepPlacement,
   insertCategory,
   insertEvents,
+  insertRoutine,
+  loadChecks,
+  loadRoutines,
+  setCheck,
+  updateRoutine,
   renameEvent,
   renameEventsNamed,
   renameItem,
@@ -80,6 +85,7 @@ describe("weekStore", () => {
       week: {
         fixed: [],
         rest: [],
+        routines: [],
         items: [],
         placements: [],
         settings: { ...DEFAULT_SETTINGS, dayWindows: planningWindows(DEFAULT_SLEEP, []) },
@@ -93,16 +99,17 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 7 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 8 });
   });
 
-  it("round-trips and moves fixed events and rest blocks", async () => {
+  it("round-trips and moves fixed events and routines", async () => {
     await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null);
-    await insertEvents(db, "rest", [{ id: "r1", title: "Bob's nap", start: 840, end: 900 }], null);
+    await insertEvents(db, "routine", [{ id: "m1", title: "Morning routine", start: 420, end: 465, routineId: "morning" }], null);
     await moveEvent(db, "w1", 600, 1080);
     const { week } = await loadWeek(db, W1, W2);
     expect(week.fixed).toEqual([{ id: "w1", title: "Work", start: 600, end: 1080 }]);
-    expect(week.rest).toEqual([{ id: "r1", title: "Bob's nap", start: 840, end: 900 }]);
+    expect(week.routines).toEqual([{ id: "m1", title: "Morning routine", start: 420, end: 465, routineId: "morning" }]);
+    expect(week.rest).toEqual([]);
   });
 
   it("shows a one-off event only in its own week, and a repeating one in every week", async () => {
@@ -115,7 +122,7 @@ describe("weekStore", () => {
 
   it("starts with a few activity groups and adds new ones at the end", async () => {
     const names = (await loadCategories(db)).map((c) => c.name);
-    expect(names).toEqual(["Work", "Health", "Creativity", "Learning", "Social", "Home", "Fun"]);
+    expect(names).toEqual(["Work", "Health", "Creativity", "Learning", "Social", "Home", "Fun", "Rest"]);
     await insertCategory(db, { id: "c1", name: "Music", color: "#EF4444" });
     expect((await loadCategories(db)).at(-1)).toEqual({ id: "c1", name: "Music", color: "#EF4444" });
   });
@@ -163,15 +170,64 @@ describe("weekStore", () => {
 
   it("renames one event, all events with that name, or a flexible item", async () => {
     await insertEvents(db, "fixed", [1, 2, 3].map((d) => ({ id: `w${d}`, title: "Work", start: d * 1440 + 540, end: d * 1440 + 1020 })), null);
-    await insertEvents(db, "rest", [{ id: "r1", title: "Work", start: 600, end: 660 }], null);
+    await insertEvents(db, "routine", [{ id: "r1", title: "Work", start: 600, end: 660, routineId: "morning" }], null);
     await insertItem(db, gym);
     await renameEvent(db, "w1", "Office");
     await renameEventsNamed(db, "fixed", "Work", "Deep work");
     await renameItem(db, "g", "Climbing");
     const { week } = await loadWeek(db, W1, W2);
     expect(week.fixed.map((e) => e.title)).toEqual(["Office", "Deep work", "Deep work"]);
-    expect(week.rest[0]?.title).toBe("Work"); // other kind: untouched
+    expect(week.routines?.[0]?.title).toBe("Work"); // other kind: untouched
     expect(week.items[0]?.title).toBe("Climbing");
+  });
+
+  it("starts with a Morning and a Night routine, saves new ones and edits steps", async () => {
+    const start = await loadRoutines(db);
+    expect(start.map((r) => r.name)).toEqual(["Morning routine", "Night routine"]);
+    expect(start[0]?.steps[0]).toEqual({ id: "m1", text: "Drink a glass of water" });
+    await insertRoutine(db, { id: "r9", name: "Gym bag", steps: [{ id: "a", text: "Towel" }] });
+    await updateRoutine(db, { id: "morning", name: "Mornings", steps: [{ id: "m2", text: "Brush teeth" }] });
+    const after = await loadRoutines(db);
+    expect(after.map((r) => r.name)).toEqual(["Mornings", "Night routine", "Gym bag"]);
+    expect(after[0]?.steps).toEqual([{ id: "m2", text: "Brush teeth" }]);
+  });
+
+  it("remembers ticked routine steps per event and week", async () => {
+    await insertEvents(db, "routine", [{ id: "e1", title: "Morning routine", start: 420, end: 465, routineId: "morning" }], null);
+    await setCheck(db, "e1", W1, "m1", true);
+    await setCheck(db, "e1", W1, "m1", true); // twice is fine
+    await setCheck(db, "e1", W1, "m2", true);
+    await setCheck(db, "e1", W1, "m2", false);
+    expect(await loadChecks(db, W1)).toEqual([{ eventId: "e1", stepId: "m1" }]);
+    expect(await loadChecks(db, W2)).toEqual([]); // a new week starts unticked
+    await deleteEvent(db, "e1");
+    expect(await loadChecks(db, W1)).toEqual([]);
+  });
+
+  it("turns old rest blocks into fixed events in the Rest group", async () => {
+    const old = nodeDb();
+    await migrate(old, 7);
+    old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min) VALUES
+      ('r1', 'rest', 'Nap', 840, 900), ('r2', 'rest', 'Walk', 600, 660), ('w1', 'fixed', 'Work', 540, 1020)`);
+    old.raw.exec(`UPDATE events SET category_id = 'fun' WHERE id = 'r2'`);
+    await migrate(old);
+    const { week } = await loadWeek(old, W1, W2);
+    expect(week.fixed.map((e) => [e.id, e.categoryId])).toEqual([
+      ["w1", undefined],
+      ["r2", "fun"], // already had a group: kept
+      ["r1", "rest"],
+    ]);
+    expect((await loadCategories(old)).at(-1)).toEqual({ id: "rest", name: "Rest", color: "#2F9E5B" });
+  });
+
+  it("reuses a group the user already called Rest", async () => {
+    const old = nodeDb();
+    await migrate(old, 7);
+    old.raw.exec(`INSERT INTO categories (id, name, color, position) VALUES ('mine', 'rest', '#000000', 9)`);
+    old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min) VALUES ('r1', 'rest', 'Nap', 840, 900)`);
+    await migrate(old);
+    expect((await loadWeek(old, W1, W2)).week.fixed[0]?.categoryId).toBe("mine");
+    expect((await loadCategories(old)).filter((c) => c.name.toLowerCase() === "rest")).toHaveLength(1);
   });
 
   it("round-trips flexible items, with and without preferred windows", async () => {
@@ -354,6 +410,7 @@ describe("weekStore", () => {
 describe("applyExceptions", () => {
   const row = (id: string, start: number) => ({
     id, kind: "fixed" as const, title: id, start_min: start, end_min: start + 60, week_start: null, category_id: null,
+    routine_id: null,
   });
 
   it("moves, removes, and leaves other events alone", () => {

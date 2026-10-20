@@ -1,9 +1,9 @@
 // Turns what the user typed in the quick-add form into engine objects.
 // Pure (no React), so the parsing and validation rules are easy to test.
-import { DAY, type FixedEvent, type FlexibleItem, type Interval, type RestBlock } from "../engine";
+import { DAY, type FixedEvent, type FlexibleItem, type Interval } from "../engine";
 import { clock } from "./weekRows";
 
-export type AddKind = "flexible" | "fixed" | "rest";
+export type AddKind = "flexible" | "fixed" | "routine";
 export type TimeOfDay = "any" | "morning" | "afternoon" | "evening";
 export type Importance = "low" | "medium" | "high";
 
@@ -24,6 +24,8 @@ export interface QuickAddForm {
   repeat: boolean;
   /** Optional activity group (Work, Health…); null = none. */
   categoryId: string | null;
+  /** Routine: which saved checklist it follows. */
+  routineId: string | null;
 }
 
 export const EMPTY_FORM: QuickAddForm = {
@@ -38,6 +40,7 @@ export const EMPTY_FORM: QuickAddForm = {
   endTime: "10:00",
   repeat: false,
   categoryId: null,
+  routineId: null,
 };
 
 /** Daily windows (minutes-of-day) behind each time-of-day choice. */
@@ -54,7 +57,7 @@ export const IMPORTANCE_PRIORITY: Record<Importance, number> = { low: 1, medium:
 export type ParseResult =
   | { ok: true; kind: "flexible"; item: FlexibleItem }
   | { ok: true; kind: "fixed"; events: FixedEvent[]; repeat: boolean }
-  | { ok: true; kind: "rest"; events: RestBlock[]; repeat: boolean }
+  | { ok: true; kind: "routine"; events: FixedEvent[]; repeat: boolean }
   | { ok: false; error: string };
 
 /** "9:30" or "09:30" -> 570 minutes. "24:00" is allowed as an end time. */
@@ -95,6 +98,7 @@ export function parseQuickAdd(form: QuickAddForm, newId: () => string): ParseRes
     return { ok: true, kind: "flexible", item };
   }
 
+  if (form.kind === "routine" && !form.routineId) return { ok: false, error: "Pick a routine, or make a new one." };
   if (form.days.length === 0) return { ok: false, error: "Pick at least one day." };
   const start = parseTime(form.startTime);
   const end = parseTime(form.endTime);
@@ -106,7 +110,11 @@ export function parseQuickAdd(form: QuickAddForm, newId: () => string): ParseRes
     .sort((a, b) => a - b)
     .map((d) => ({ id: newId(), title, start: d * DAY + start, end: d * DAY + end, ...group }));
   const repeat = form.repeat;
-  return form.kind === "fixed" ? { ok: true, kind: "fixed", events, repeat } : { ok: true, kind: "rest", events, repeat };
+  if (form.kind === "routine" && form.routineId) {
+    const routineId = form.routineId;
+    return { ok: true, kind: "routine", events: events.map((e) => ({ ...e, routineId })), repeat };
+  }
+  return { ok: true, kind: "fixed", events, repeat };
 }
 
 /**

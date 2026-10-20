@@ -21,7 +21,7 @@ function fulfilled(placements: Placement[], itemId: string): number {
 }
 
 export function busyIntervals(input: WeekInput, extra: Interval[] = []): Interval[] {
-  return [...input.fixed, ...input.rest, ...keptPlacements(input.placements), ...extra];
+  return [...input.fixed, ...input.rest, ...(input.routines ?? []), ...keptPlacements(input.placements), ...extra];
 }
 
 export function missingOccurrences(input: WeekInput, item: FlexibleItem): number {
