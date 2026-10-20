@@ -71,6 +71,6 @@ export function reviewStats(rows: WeekRow[], sleep: DaySleep[], groups: Map<stri
 /** A gentle line for the top of the review: no guilt for a quiet week. */
 export function reviewHeadline(stats: ReviewStats, finishedItems: number): string {
   if (stats.sessions.done === 0 && finishedItems === 0) return "A quiet week counts too. Next week is a fresh start.";
-  if (stats.sessions.total > 0 && stats.sessions.done === stats.sessions.total) return "Everything you planned got done. 🎉";
+  if (stats.sessions.total > 0 && stats.sessions.done === stats.sessions.total) return "Everything you planned got done. Well done.";
   return "Here's what you got done this week.";
 }

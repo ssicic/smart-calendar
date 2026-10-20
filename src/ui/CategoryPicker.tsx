@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Category } from "../db/weekStore";
 import { PALETTE, categoryNameProblem, unusedColor } from "./categories";
 import { ManageGroupsSheet, type GroupActions } from "./ManageGroupsSheet";
+import { colors, font, radius } from "./theme";
 
 interface Props {
   categories: Category[];
@@ -54,7 +55,7 @@ export function CategoryPicker({ categories, selected, onSelect, actions }: Prop
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
             >
-              <View style={[styles.dot, { backgroundColor: on ? "#FFFFFF" : c.color }]} />
+              <View style={[styles.dot, { backgroundColor: on ? colors.white : c.color }]} />
               <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.name}</Text>
             </Pressable>
           );
@@ -132,32 +133,33 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: "#F1F5F9",
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
   },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  chipText: { fontSize: 14, fontWeight: "600", color: "#374151" },
-  chipTextOn: { color: "#FFFFFF" },
-  newChip: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#CBD5E1", borderStyle: "dashed" },
-  newText: { fontSize: 14, fontWeight: "600", color: "#5B6CF0" },
-  form: { gap: 10, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC" },
+  chipText: { fontSize: 14, fontFamily: font.semibold, color: colors.textSoft },
+  chipTextOn: { color: colors.white },
+  newChip: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.borderStrong, borderStyle: "dashed" },
+  newText: { fontSize: 14, fontFamily: font.semibold, color: colors.accent },
+  form: { gap: 10, padding: 12, borderRadius: 12, backgroundColor: colors.panel },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: "#111827",
-    backgroundColor: "#FFFFFF",
+    fontFamily: font.regular,
+    color: colors.text,
+    backgroundColor: colors.white,
   },
   swatches: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   swatch: { width: 30, height: 30, borderRadius: 15 },
-  swatchOn: { borderWidth: 3, borderColor: "#111827" },
-  error: { color: "#B91C1C", fontWeight: "600" },
+  swatchOn: { borderWidth: 3, borderColor: colors.text },
+  error: { color: colors.danger, fontFamily: font.semibold },
   buttons: { flexDirection: "row", gap: 10 },
-  secondary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: "#E5E7EB" },
-  secondaryText: { fontWeight: "700", color: "#374151" },
+  secondary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: colors.border },
+  secondaryText: { fontFamily: font.bold, color: colors.textSoft },
   primary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
-  primaryText: { fontWeight: "700", color: "#FFFFFF" },
+  primaryText: { fontFamily: font.bold, color: colors.white },
 });

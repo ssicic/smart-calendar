@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Category } from "../db/weekStore";
 import { PALETTE, categoryNameProblem, moveInList } from "./categories";
+import { colors, font } from "./theme";
 
 /** What the group picker and this sheet can do with groups. Errors come back as messages. */
 export interface GroupActions {
@@ -166,9 +167,9 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -180,39 +181,40 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 20, fontWeight: "800", color: "#111827" },
-  link: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
-  hint: { color: "#6B7280", fontSize: 13 },
-  error: { color: "#B91C1C", fontWeight: "600" },
+  title: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
+  hint: { fontFamily: font.regular, color: colors.textMuted, fontSize: 13 },
+  error: { color: colors.danger, fontFamily: font.semibold },
   list: { gap: 8 },
-  item: { borderRadius: 12, backgroundColor: "#F8FAFC" },
+  item: { borderRadius: 12, backgroundColor: colors.panel },
   row: { flexDirection: "row", alignItems: "center", gap: 6, paddingRight: 6 },
   nameButton: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12, paddingLeft: 12 },
   dot: { width: 14, height: 14, borderRadius: 7 },
-  name: { flex: 1, fontSize: 16, fontWeight: "600", color: "#111827" },
-  edit: { fontSize: 14, fontWeight: "600", color: "#5B6CF0", marginRight: 6 },
-  arrow: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#E5E7EB" },
+  name: { flex: 1, fontSize: 16, fontFamily: font.semibold, color: colors.text },
+  edit: { fontSize: 14, fontFamily: font.semibold, color: colors.accent, marginRight: 6 },
+  arrow: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.border },
   arrowOff: { opacity: 0.35 },
-  arrowText: { fontSize: 18, fontWeight: "700", color: "#374151" },
+  arrowText: { fontSize: 18, fontFamily: font.bold, color: colors.textSoft },
   form: { gap: 10, paddingHorizontal: 12, paddingBottom: 12 },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: "#111827",
-    backgroundColor: "#FFFFFF",
+    fontFamily: font.regular,
+    color: colors.text,
+    backgroundColor: colors.white,
   },
   swatches: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   swatch: { width: 30, height: 30, borderRadius: 15 },
-  swatchOn: { borderWidth: 3, borderColor: "#111827" },
+  swatchOn: { borderWidth: 3, borderColor: colors.text },
   buttons: { flexDirection: "row", gap: 10 },
-  secondary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: "#E5E7EB" },
-  secondaryText: { fontWeight: "700", color: "#374151" },
-  danger: { backgroundColor: "#FEE2E2" },
-  dangerText: { color: "#B91C1C" },
+  secondary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: colors.border },
+  secondaryText: { fontFamily: font.bold, color: colors.textSoft },
+  danger: { backgroundColor: colors.dangerSoft },
+  dangerText: { color: colors.danger },
   primary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
-  primaryText: { fontWeight: "700", color: "#FFFFFF" },
+  primaryText: { fontFamily: font.bold, color: colors.white },
 });

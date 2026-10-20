@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Routine, RoutineStep } from "../db/weekStore";
 import { cleanSteps, routineProblem } from "./routines";
+import { colors, font } from "./theme";
 
 let counter = 0;
 const stepId = () => `s${Date.now().toString(36)}${counter++}`;
@@ -105,30 +106,31 @@ export function RoutineEditor({ routine, existing, onSave, onCancel, onDelete }:
 }
 
 const styles = StyleSheet.create({
-  box: { gap: 8, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC" },
-  label: { fontSize: 13, fontWeight: "600", color: "#6B7280", marginTop: 4 },
+  box: { gap: 8, padding: 12, borderRadius: 12, backgroundColor: colors.panel },
+  label: { fontSize: 13, fontFamily: font.semibold, color: colors.textMuted, marginTop: 4 },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 15,
-    color: "#111827",
-    backgroundColor: "#FFFFFF",
+    fontFamily: font.regular,
+    color: colors.text,
+    backgroundColor: colors.white,
   },
   stepRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  number: { width: 18, color: "#9CA3AF", fontWeight: "600" },
+  number: { width: 18, color: colors.textFaint, fontFamily: font.semibold },
   stepInput: { flex: 1 },
-  remove: { fontSize: 22, color: "#9CA3AF", paddingHorizontal: 4 },
-  add: { fontSize: 15, fontWeight: "600", color: "#5B6CF0", paddingVertical: 4 },
-  error: { color: "#B91C1C", fontWeight: "600" },
+  remove: { fontFamily: font.regular, fontSize: 22, color: colors.textFaint, paddingHorizontal: 4 },
+  add: { fontSize: 15, fontFamily: font.semibold, color: colors.accent, paddingVertical: 4 },
+  error: { color: colors.danger, fontFamily: font.semibold },
   delete: { paddingVertical: 8, paddingHorizontal: 4, borderRadius: 8 },
-  deleteConfirm: { backgroundColor: "#FEE2E2", paddingHorizontal: 10 },
-  deleteText: { color: "#B91C1C", fontWeight: "600" },
+  deleteConfirm: { backgroundColor: colors.dangerSoft, paddingHorizontal: 10 },
+  deleteText: { color: colors.danger, fontFamily: font.semibold },
   buttons: { flexDirection: "row", gap: 10, marginTop: 4 },
-  secondary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: "#E5E7EB" },
-  secondaryText: { fontWeight: "700", color: "#374151" },
-  primary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: "#D97706" },
-  primaryText: { fontWeight: "700", color: "#FFFFFF" },
+  secondary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: colors.border },
+  secondaryText: { fontFamily: font.bold, color: colors.textSoft },
+  primary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: colors.routine },
+  primaryText: { fontFamily: font.bold, color: colors.white },
 });

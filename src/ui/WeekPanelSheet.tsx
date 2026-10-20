@@ -4,6 +4,8 @@ import type { LaterEntry } from "../db/laterStore";
 import type { WeekItem, WeekItemKind } from "../db/weekItemsStore";
 import { laterHeading } from "./later";
 import { isFinished, stepProgress, weekItemProblem, weekSummary } from "./weekItems";
+import { colors, font } from "./theme";
+import { Ionicons } from "@expo/vector-icons";
 
 interface Props {
   visible: boolean;
@@ -125,7 +127,7 @@ export function WeekPanelSheet(props: Props) {
                   accessibilityState={{ checked: item.done }}
                   accessibilityLabel={item.title}
                 >
-                  {item.done && <Text style={styles.tick}>✓</Text>}
+                  {item.done && <Ionicons name="checkmark" size={16} color={colors.white} />}
                 </Pressable>
                 {title(item)}
                 {deleteButton(item)}
@@ -251,9 +253,9 @@ function AddRow(props: {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -265,11 +267,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  heading: { fontSize: 20, fontWeight: "800", color: "#111827" },
-  sub: { marginTop: 2, color: "#6B7280" },
-  link: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
+  heading: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  sub: { marginTop: 2, color: colors.textMuted },
+  link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   body: { gap: 8, paddingBottom: 16 },
-  section: { fontSize: 13, fontWeight: "700", color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.5 },
+  section: { fontSize: 13, fontFamily: font.bold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
   sectionGap: { marginTop: 12 },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   flex: { flex: 1 },
@@ -278,37 +280,38 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 7,
     borderWidth: 2,
-    borderColor: "#5B6CF0",
+    borderColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },
-  boxOn: { backgroundColor: "#5B6CF0" },
-  tick: { color: "#FFFFFF", fontWeight: "800", fontSize: 14, lineHeight: 16 },
-  itemText: { fontSize: 16, color: "#111827", paddingVertical: 6 },
-  finished: { color: "#9CA3AF", textDecorationLine: "line-through" },
-  step: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#F1F5F9" },
-  stepText: { fontSize: 18, fontWeight: "700", color: "#374151" },
-  count: { minWidth: 36, textAlign: "center", fontWeight: "700", color: "#111827", fontVariant: ["tabular-nums"] },
-  countDone: { color: "#22A06B" },
+  boxOn: { backgroundColor: colors.accent },
+  tick: { color: colors.white, fontFamily: font.heavy, fontSize: 14, lineHeight: 16 },
+  itemText: { fontFamily: font.regular, fontSize: 16, color: colors.text, paddingVertical: 6 },
+  finished: { color: colors.textFaint, textDecorationLine: "line-through" },
+  step: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceAlt },
+  stepText: { fontSize: 18, fontFamily: font.bold, color: colors.textSoft },
+  count: { minWidth: 36, textAlign: "center", fontFamily: font.bold, color: colors.text, fontVariant: ["tabular-nums"] },
+  countDone: { color: colors.success },
   delete: { paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 },
-  deleteConfirm: { backgroundColor: "#FEE2E2" },
-  deleteText: { fontSize: 16, fontWeight: "700", color: "#B91C1C" },
+  deleteConfirm: { backgroundColor: colors.dangerSoft },
+  deleteText: { fontSize: 16, fontFamily: font.bold, color: colors.danger },
   addWrap: { gap: 8, marginTop: 4 },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 15,
-    color: "#111827",
+    fontFamily: font.regular,
+    color: colors.text,
   },
-  addButton: { backgroundColor: "#5B6CF0", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
-  addText: { color: "#FFFFFF", fontWeight: "700" },
+  addButton: { backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
+  addText: { color: colors.white, fontFamily: font.bold },
   targetRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  targetLabel: { flex: 1, fontSize: 13, color: "#6B7280" },
-  error: { color: "#B91C1C", fontWeight: "600" },
-  hint: { fontSize: 13, color: "#6B7280" },
-  laterAdd: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#EEF0FE" },
-  laterAddText: { color: "#5B6CF0", fontWeight: "700", fontSize: 13 },
+  targetLabel: { fontFamily: font.regular, flex: 1, fontSize: 13, color: colors.textMuted },
+  error: { color: colors.danger, fontFamily: font.semibold },
+  hint: { fontFamily: font.regular, fontSize: 13, color: colors.textMuted },
+  laterAdd: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: colors.accentSoft },
+  laterAddText: { color: colors.accent, fontFamily: font.bold, fontSize: 13 },
 });

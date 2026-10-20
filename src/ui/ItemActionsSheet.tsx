@@ -14,6 +14,8 @@ import { parseTime } from "./quickAdd";
 import { TimePicker } from "./TimePicker";
 import { Notice } from "./Notice";
 import { DAY_NAMES, clock, isEventKind, type WeekRow } from "./weekRows";
+import { colors, font } from "./theme";
+import { Ionicons } from "@expo/vector-icons";
 
 interface Props {
   /** The tapped row; undefined hides the sheet. */
@@ -182,7 +184,7 @@ export function ItemActionsSheet(props: Props) {
                     accessibilityState={{ checked: ticked }}
                   >
                     <View style={[styles.box, ticked && styles.boxOn]}>
-                      {ticked && <Text style={styles.tick}>✓</Text>}
+                      {ticked && <Ionicons name="checkmark" size={16} color={colors.white} />}
                     </View>
                     <Text style={[styles.stepText, ticked && styles.stepDone]}>{step.text}</Text>
                   </Pressable>
@@ -370,9 +372,9 @@ export function ItemActionsSheet(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -384,52 +386,53 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   headerText: { flex: 1 },
-  title: { fontSize: 20, fontWeight: "800", color: "#111827" },
-  sub: { marginTop: 2, color: "#6B7280" },
-  link: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
+  title: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  sub: { marginTop: 2, color: colors.textMuted },
+  link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   list: { gap: 2 },
   action: { paddingVertical: 14, paddingHorizontal: 12, borderRadius: 10 },
-  actionText: { fontSize: 16, fontWeight: "600", color: "#111827" },
-  destructive: { color: "#B91C1C" },
-  confirm: { backgroundColor: "#FEE2E2" },
-  confirmText: { color: "#B91C1C" },
-  pressed: { backgroundColor: "#F1F5F9" },
+  actionText: { fontSize: 16, fontFamily: font.semibold, color: colors.text },
+  destructive: { color: colors.danger },
+  confirm: { backgroundColor: colors.dangerSoft },
+  confirmText: { color: colors.danger },
+  pressed: { backgroundColor: colors.surfaceAlt },
   scopeRow: { flexDirection: "row", gap: 8 },
   scopeButton: { flex: 1, alignItems: "center", justifyContent: "center" },
   center: { textAlign: "center" },
   move: { gap: 10 },
-  checklist: { gap: 2, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  checklist: { gap: 2, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.surfaceAlt },
   step: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9, paddingHorizontal: 4, borderRadius: 8 },
   box: {
     width: 24,
     height: 24,
     borderRadius: 7,
     borderWidth: 2,
-    borderColor: "#D97706",
+    borderColor: colors.routine,
     alignItems: "center",
     justifyContent: "center",
   },
-  boxOn: { backgroundColor: "#D97706" },
-  tick: { color: "#FFFFFF", fontWeight: "800", fontSize: 14, lineHeight: 16 },
-  stepText: { flex: 1, fontSize: 16, color: "#111827" },
-  stepDone: { color: "#9CA3AF", textDecorationLine: "line-through" },
+  boxOn: { backgroundColor: colors.routine },
+  tick: { color: colors.white, fontFamily: font.heavy, fontSize: 14, lineHeight: 16 },
+  stepText: { fontFamily: font.regular, flex: 1, fontSize: 16, color: colors.text },
+  stepDone: { color: colors.textFaint, textDecorationLine: "line-through" },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: "#111827",
+    fontFamily: font.regular,
+    color: colors.text,
   },
-  hint: { fontSize: 13, color: "#6B7280" },
-  group: { gap: 8, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
-  label: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+  hint: { fontFamily: font.regular, fontSize: 13, color: colors.textMuted },
+  group: { gap: 8, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.surfaceAlt },
+  label: { fontSize: 13, fontFamily: font.semibold, color: colors.textMuted },
   moveButtons: { flexDirection: "row", gap: 12, marginTop: 6 },
-  secondary: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#F1F5F9" },
-  secondaryText: { fontSize: 16, fontWeight: "700", color: "#374151" },
-  primary: { flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#5B6CF0" },
+  secondary: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: colors.surfaceAlt },
+  secondaryText: { fontSize: 16, fontFamily: font.bold, color: colors.textSoft },
+  primary: { flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: colors.accent },
   disabled: { opacity: 0.4 },
-  primaryText: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
-  error: { color: "#B91C1C", fontWeight: "600" },
+  primaryText: { fontSize: 16, fontFamily: font.bold, color: colors.white },
+  error: { color: colors.danger, fontFamily: font.semibold },
 });

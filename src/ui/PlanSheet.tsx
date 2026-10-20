@@ -10,6 +10,8 @@ import { addWeeks, plannableFrom, weekRange } from "./weekDate";
 import { reviewStats, type ReviewStats } from "./weekReview";
 import { rowsByDay } from "./weekRows";
 import type { Groups } from "./WeekView";
+import { colors, font } from "./theme";
+import { Ionicons } from "@expo/vector-icons";
 
 let counter = 0;
 const newId = () => `w${Date.now().toString(36)}${counter++}`;
@@ -113,7 +115,7 @@ export function PlanSheet(props: Props) {
               <Section title="Carry over from this week">
                 {candidates.length === 0 ? (
                   <Text style={styles.muted}>
-                    {thisItems.length === 0 ? "No to-dos or goals this week." : "Nothing left to carry over. 🎉"}
+                    {thisItems.length === 0 ? "No to-dos or goals this week." : "Nothing left to carry over."}
                   </Text>
                 ) : (
                   <>
@@ -134,7 +136,7 @@ export function PlanSheet(props: Props) {
                           accessibilityRole="checkbox"
                           accessibilityState={{ checked: on }}
                         >
-                          <View style={[styles.box, on && styles.boxOn]}>{on && <Text style={styles.tick}>✓</Text>}</View>
+                          <View style={[styles.box, on && styles.boxOn]}>{on && <Ionicons name="checkmark" size={16} color={colors.white} />}</View>
                           <Text style={styles.line}>
                             {item.title}
                             {item.kind === "goal" ? ` (goal, ${item.target}×)` : ""}
@@ -212,9 +214,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -227,33 +229,33 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   flex: { flex: 1 },
-  heading: { fontSize: 20, fontWeight: "800", color: "#111827" },
-  sub: { marginTop: 2, color: "#6B7280" },
-  link: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
+  heading: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  sub: { marginTop: 2, color: colors.textMuted },
+  link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   loading: { padding: 32 },
   body: { gap: 18, paddingBottom: 16 },
   section: { gap: 8 },
-  sectionTitle: { fontSize: 13, fontWeight: "700", color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.5 },
+  sectionTitle: { fontSize: 13, fontFamily: font.bold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   box: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#5B6CF0",
+    borderColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },
-  boxOn: { backgroundColor: "#5B6CF0" },
-  tick: { color: "#FFFFFF", fontWeight: "800", fontSize: 13, lineHeight: 15 },
-  line: { fontSize: 15, color: "#111827" },
-  muted: { fontSize: 15, color: "#9CA3AF" },
-  note: { fontSize: 12, color: "#6B7280" },
-  warn: { fontSize: 14, color: "#92400E", fontWeight: "600" },
-  error: { color: "#B91C1C", fontWeight: "600" },
-  button: { backgroundColor: "#5B6CF0", borderRadius: 12, paddingVertical: 13, alignItems: "center" },
-  buttonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  boxOn: { backgroundColor: colors.accent },
+  tick: { color: colors.white, fontFamily: font.heavy, fontSize: 13, lineHeight: 15 },
+  line: { fontFamily: font.regular, fontSize: 15, color: colors.text },
+  muted: { fontFamily: font.regular, fontSize: 15, color: colors.textFaint },
+  note: { fontFamily: font.regular, fontSize: 12, color: colors.textMuted },
+  warn: { fontSize: 14, color: colors.warnText, fontFamily: font.semibold },
+  error: { color: colors.danger, fontFamily: font.semibold },
+  button: { backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+  buttonText: { color: colors.white, fontSize: 16, fontFamily: font.bold },
   disabled: { opacity: 0.4 },
-  smallButton: { backgroundColor: "#EEF2FF", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  smallButtonText: { color: "#4338CA", fontWeight: "700", fontSize: 13 },
+  smallButton: { backgroundColor: colors.accentSoft, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  smallButtonText: { color: colors.accentStrong, fontFamily: font.bold, fontSize: 13 },
 });

@@ -7,6 +7,7 @@ import type { ReviewStats } from "./weekReview";
 import { reviewHeadline } from "./weekReview";
 import { weekRange } from "./weekDate";
 import { GroupBars } from "./GroupBars";
+import { colors, font } from "./theme";
 
 interface Props {
   visible: boolean;
@@ -51,9 +52,9 @@ export function ReviewSheet(props: Props) {
             <Text style={styles.headline}>{reviewHeadline(stats, finished.length)}</Text>
 
             <View style={styles.tiles}>
-              <Tile value={hours(sessions.doneMin)} label="done" color="#15803D" />
-              <Tile value={hours(stats.plannedMin)} label="planned" color="#4338CA" />
-              <Tile value={`${stats.freePercent}%`} label="free time" color="#374151" />
+              <Tile value={hours(sessions.doneMin)} label="done" color={colors.successStrong} />
+              <Tile value={hours(stats.plannedMin)} label="planned" color={colors.accentStrong} />
+              <Tile value={`${stats.freePercent}%`} label="free time" color={colors.textSoft} />
             </View>
 
             <Section title="Flexible sessions">
@@ -62,7 +63,7 @@ export function ReviewSheet(props: Props) {
                   ? "None this week."
                   : `${sessions.done} of ${sessions.total} done (${hours(sessions.doneMin)} of ${hours(sessions.totalMin)})`}
               </Text>
-              {sessions.total > 0 && <Bar part={sessions.done} whole={sessions.total} color="#22A06B" />}
+              {sessions.total > 0 && <Bar part={sessions.done} whole={sessions.total} color={colors.success} />}
               {routines.total > 0 && (
                 <Text style={styles.line}>
                   Routines: {routines.done} of {routines.total} fully ticked off
@@ -132,9 +133,9 @@ function Bar({ part, whole, color }: { part: number; whole: number; color: strin
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -147,22 +148,22 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   flex: { flex: 1 },
-  heading: { fontSize: 20, fontWeight: "800", color: "#111827" },
-  sub: { marginTop: 2, color: "#6B7280" },
-  link: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
+  heading: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  sub: { marginTop: 2, color: colors.textMuted },
+  link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   body: { gap: 18, paddingBottom: 16 },
-  headline: { fontSize: 16, color: "#111827", lineHeight: 22 },
+  headline: { fontFamily: font.regular, fontSize: 16, color: colors.text, lineHeight: 22 },
   tiles: { flexDirection: "row", gap: 8 },
-  tile: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC", alignItems: "center" },
-  tileValue: { fontSize: 22, fontWeight: "800", fontVariant: ["tabular-nums"] },
-  tileLabel: { fontSize: 12, color: "#6B7280", marginTop: 2 },
+  tile: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: colors.panel, alignItems: "center" },
+  tileValue: { fontSize: 22, fontFamily: font.heavy, fontVariant: ["tabular-nums"] },
+  tileLabel: { fontFamily: font.regular, fontSize: 12, color: colors.textMuted, marginTop: 2 },
   section: { gap: 6 },
-  sectionTitle: { fontSize: 13, fontWeight: "700", color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.5 },
-  line: { fontSize: 15, color: "#111827" },
-  muted: { fontSize: 15, color: "#9CA3AF" },
-  note: { fontSize: 12, color: "#6B7280" },
-  planButton: { backgroundColor: "#5B6CF0", borderRadius: 12, paddingVertical: 14, alignItems: "center" },
-  planText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
-  groupTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: "#F1F5F9", overflow: "hidden" },
+  sectionTitle: { fontSize: 13, fontFamily: font.bold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
+  line: { fontFamily: font.regular, fontSize: 15, color: colors.text },
+  muted: { fontFamily: font.regular, fontSize: 15, color: colors.textFaint },
+  note: { fontFamily: font.regular, fontSize: 12, color: colors.textMuted },
+  planButton: { backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  planText: { color: colors.white, fontSize: 16, fontFamily: font.bold },
+  groupTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, overflow: "hidden" },
   groupFill: { height: 8, borderRadius: 4 },
 });

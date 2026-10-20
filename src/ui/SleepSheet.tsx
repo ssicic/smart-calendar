@@ -5,6 +5,7 @@ import { parseTime } from "./quickAdd";
 import { TimePicker } from "./TimePicker";
 import { shortDate } from "./weekDate";
 import { DAY_NAMES, clock } from "./weekRows";
+import { colors, font } from "./theme";
 
 export type SleepScope = "day" | "usual" | "reset";
 
@@ -92,9 +93,9 @@ export function SleepSheet({ target, sleep, weekStart, onSave, onClose }: Props)
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 16,
@@ -106,15 +107,15 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   headerText: { flex: 1 },
-  title: { fontSize: 20, fontWeight: "800", color: "#111827" },
-  sub: { marginTop: 2, color: "#6B7280" },
-  link: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
-  label: { fontSize: 28, fontWeight: "800", color: "#111827", fontVariant: ["tabular-nums"] },
-  hint: { color: "#6B7280", fontSize: 13 },
-  error: { color: "#B91C1C", fontWeight: "600" },
-  primary: { borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#5B6CF0" },
-  primaryText: { fontSize: 16, fontWeight: "700", color: "#FFFFFF" },
-  secondary: { borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: "#F1F5F9" },
-  secondaryText: { fontSize: 16, fontWeight: "700", color: "#374151" },
+  title: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  sub: { marginTop: 2, color: colors.textMuted },
+  link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
+  label: { fontSize: 28, fontFamily: font.heavy, color: colors.text, fontVariant: ["tabular-nums"] },
+  hint: { fontFamily: font.regular, color: colors.textMuted, fontSize: 13 },
+  error: { color: colors.danger, fontFamily: font.semibold },
+  primary: { borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: colors.accent },
+  primaryText: { fontSize: 16, fontFamily: font.bold, color: colors.white },
+  secondary: { borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: colors.surfaceAlt },
+  secondaryText: { fontSize: 16, fontFamily: font.bold, color: colors.textSoft },
   plain: { alignItems: "center", paddingVertical: 6 },
 });

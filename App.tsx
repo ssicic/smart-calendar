@@ -1,11 +1,33 @@
+import {
+  Nunito_400Regular,
+  Nunito_500Medium,
+  Nunito_600SemiBold,
+  Nunito_700Bold,
+  Nunito_800ExtraBold,
+  useFonts,
+} from "@expo-google-fonts/nunito";
 import { StatusBar } from "expo-status-bar";
+import { View } from "react-native";
 import { SQLiteProvider } from "expo-sqlite";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { DatabaseGate } from "./src/db/DatabaseGate";
 import { migrate } from "./src/db/weekStore";
+import { colors } from "./src/ui/theme";
 import { WeekScreen } from "./src/ui/WeekScreen";
 
 export default function App() {
+  // The app's font (Nunito). Until it's loaded, show the background only, so
+  // text doesn't flash in another font first. If loading fails, carry on
+  // with the system font.
+  const [fontsLoaded, fontError] = useFonts({
+    Nunito_400Regular,
+    Nunito_500Medium,
+    Nunito_600SemiBold,
+    Nunito_700Bold,
+    Nunito_800ExtraBold,
+  });
+  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+
   return (
     <SafeAreaProvider>
       {/* Opens (or creates) the database file, runs migrations, then renders

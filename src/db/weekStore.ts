@@ -255,6 +255,19 @@ const MIGRATIONS: string[] = [
   DROP TABLE queue;
   ALTER TABLE queue_v12 RENAME TO queue;
   `,
+  // Version 13: softer colours for the starting groups (the app's new calm
+  // look). Only a group still on its original colour changes; one the user
+  // recoloured keeps theirs.
+  `
+  UPDATE categories SET color = '#7C9CB8' WHERE id = 'work' AND upper(color) = '#3B82F6';
+  UPDATE categories SET color = '#86AE8F' WHERE id = 'health' AND upper(color) = '#22A06B';
+  UPDATE categories SET color = '#A393C4' WHERE id = 'creativity' AND upper(color) = '#8B5CF6';
+  UPDATE categories SET color = '#D4AE6A' WHERE id = 'learning' AND upper(color) = '#F59E0B';
+  UPDATE categories SET color = '#D59AAB' WHERE id = 'social' AND upper(color) = '#EC4899';
+  UPDATE categories SET color = '#D9A27A' WHERE id = 'home' AND upper(color) = '#F97316';
+  UPDATE categories SET color = '#7DB5AC' WHERE id = 'fun' AND upper(color) = '#14B8A6';
+  UPDATE categories SET color = '#C2B59B' WHERE id = 'rest' AND upper(color) = '#2F9E5B';
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

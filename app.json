@@ -23,7 +23,8 @@
     },
     "plugins": [
       "expo-status-bar",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-font"
     ]
   }
 }

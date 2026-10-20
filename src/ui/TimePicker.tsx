@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { parseTime } from "./quickAdd";
+import { colors, font } from "./theme";
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 const MINUTES = [0, 15, 30, 45];
@@ -72,9 +73,9 @@ export function TimePicker({ value, onChange }: { value: string; onChange: (valu
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
   row: { flexDirection: "row", gap: GAP },
-  hour: { width: HOUR_WIDTH, paddingVertical: 10, borderRadius: 10, backgroundColor: "#F1F5F9", alignItems: "center" },
-  minute: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: "#F1F5F9", alignItems: "center" },
-  selected: { backgroundColor: "#5B6CF0" },
-  text: { fontSize: 15, fontWeight: "600", color: "#374151", fontVariant: ["tabular-nums"] },
-  selectedText: { color: "#FFFFFF" },
+  hour: { width: HOUR_WIDTH, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.surfaceAlt, alignItems: "center" },
+  minute: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.surfaceAlt, alignItems: "center" },
+  selected: { backgroundColor: colors.accent },
+  text: { fontSize: 15, fontFamily: font.semibold, color: colors.textSoft, fontVariant: ["tabular-nums"] },
+  selectedText: { color: colors.white },
 });

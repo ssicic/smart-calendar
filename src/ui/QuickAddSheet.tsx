@@ -32,6 +32,7 @@ import { overlapping, summarize } from "./overlaps";
 import { TimePicker } from "./TimePicker";
 import { shortDate, weekRange } from "./weekDate";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
+import { colors, font, radius, shadow } from "./theme";
 
 /** What the sheet hands back to App when the user saves. */
 export type QuickAddResult = Extract<ParseResult, { ok: true }>;
@@ -391,8 +392,8 @@ export function QuickAddSheet(props: Props) {
                 <Switch
                   value={form.repeat}
                   onValueChange={(repeat) => update({ repeat })}
-                  trackColor={{ true: "#5B6CF0", false: "#D1D5DB" }}
-                  thumbColor="#FFFFFF"
+                  trackColor={{ true: colors.accent, false: colors.borderStrong }}
+                  thumbColor={colors.white}
                   accessibilityLabel="Repeat every week"
                 />
               </View>
@@ -430,23 +431,23 @@ export function QuickAddSheet(props: Props) {
 const styles = StyleSheet.create({
   repeatRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
   repeatText: { flexShrink: 1, gap: 2 },
-  repeatLabel: { fontSize: 15, fontWeight: "600", color: "#111827" },
-  repeatHint: { fontSize: 13, color: "#6B7280" },
-  backdrop: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: "rgba(17,24,39,0.35)" },
+  repeatLabel: { fontSize: 15, fontFamily: font.semibold, color: colors.text },
+  repeatHint: { fontFamily: font.regular, fontSize: 13, color: colors.textMuted },
+  backdrop: { position: "absolute", top: 0, bottom: 0, left: 0, right: 0, backgroundColor: colors.backdrop },
   sheet: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    boxShadow: "0 -4px 16px rgba(17,24,39,0.15)",
+    boxShadow: shadow.raised,
   },
   halfSheet: { height: "50%" },
   fullSheet: { height: "92%" },
   grabber: { alignItems: "center", paddingTop: 8, paddingBottom: 4 },
-  grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: "#D1D5DB" },
+  grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
   sheetHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -454,35 +455,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 8,
   },
-  sheetTitle: { fontSize: 17, fontWeight: "800", color: "#111827" },
+  sheetTitle: { fontSize: 17, fontFamily: font.heavy, color: colors.text },
   messages: { paddingHorizontal: 16, gap: 8 },
   routineChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  routineChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: "#FEF3E2" },
-  routineChipOn: { backgroundColor: "#D97706" },
-  routineChipText: { fontSize: 14, fontWeight: "600", color: "#92400E" },
-  routineChipTextOn: { color: "#FFFFFF" },
-  newRoutine: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: "#CBD5E1", borderStyle: "dashed" },
-  newRoutineText: { fontSize: 14, fontWeight: "600", color: "#D97706" },
-  stepsPreview: { fontSize: 13, color: "#6B7280", lineHeight: 19 },
+  routineChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.md, backgroundColor: colors.routineSoft },
+  routineChipOn: { backgroundColor: colors.routine },
+  routineChipText: { fontSize: 14, fontFamily: font.semibold, color: colors.warnText },
+  routineChipTextOn: { color: colors.white },
+  newRoutine: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong, borderStyle: "dashed" },
+  newRoutineText: { fontSize: 14, fontFamily: font.semibold, color: colors.routine },
+  stepsPreview: { fontFamily: font.regular, fontSize: 13, color: colors.textMuted, lineHeight: 19 },
   preview: { gap: 6 },
-  editRoutine: { fontSize: 14, fontWeight: "600", color: "#D97706" },
-  cancel: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
+  editRoutine: { fontSize: 14, fontFamily: font.semibold, color: colors.routine },
+  cancel: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   body: { padding: 16, paddingBottom: 32, gap: 16 },
   row: { flexDirection: "row", gap: 12 },
   field: { gap: 6 },
   half: { flex: 1 },
-  label: { fontSize: 13, fontWeight: "600", color: "#6B7280" },
+  label: { fontSize: 13, fontFamily: font.semibold, color: colors.textMuted },
   input: {
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
-    color: "#111827",
+    fontFamily: font.regular,
+    color: colors.text,
   },
-  error: { color: "#B91C1C", fontWeight: "600" },
-  warning: { color: "#92400E", backgroundColor: "#FEF3C7", padding: 12, borderRadius: 10, lineHeight: 20 },
-  saveButton: { backgroundColor: "#5B6CF0", borderRadius: 10, paddingVertical: 8, paddingHorizontal: 16 },
-  saveText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
+  error: { color: colors.danger, fontFamily: font.semibold },
+  warning: { color: colors.warnText, backgroundColor: colors.warnSoft, padding: 12, borderRadius: 10, lineHeight: 20 },
+  saveButton: { backgroundColor: colors.accent, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 16 },
+  saveText: { color: colors.white, fontSize: 15, fontFamily: font.bold },
 });

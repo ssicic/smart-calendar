@@ -5,6 +5,7 @@
 // with a message, and any open error shows a screen instead of nothing.
 import { Component, useEffect, useState, type ReactNode } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, font } from "../ui/theme";
 
 const LOCK_NAME = "smart-calendar-db";
 
@@ -93,10 +94,10 @@ function Message(props: { title: string; body: string; detail?: string; onReload
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12, backgroundColor: "#FFFFFF" },
-  title: { fontSize: 18, fontWeight: "700", color: "#111827", textAlign: "center" },
-  body: { fontSize: 15, color: "#374151", textAlign: "center", maxWidth: 420 },
-  button: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, backgroundColor: "#5B6CF0" },
-  buttonText: { fontSize: 15, fontWeight: "700", color: "#FFFFFF" },
-  detail: { fontSize: 12, color: "#9CA3AF", textAlign: "center", maxWidth: 420 },
+  screen: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 12, backgroundColor: colors.white },
+  title: { fontSize: 18, fontFamily: font.bold, color: colors.text, textAlign: "center" },
+  body: { fontFamily: font.regular, fontSize: 15, color: colors.textSoft, textAlign: "center", maxWidth: 420 },
+  button: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.accent },
+  buttonText: { fontSize: 15, fontFamily: font.bold, color: colors.white },
+  detail: { fontFamily: font.regular, fontSize: 12, color: colors.textFaint, textAlign: "center", maxWidth: 420 },
 });

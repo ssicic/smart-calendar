@@ -7,8 +7,8 @@ describe("categories", () => {
   });
 
   it("colours blocks by group, stronger for fixed time, grey when done", () => {
-    expect(categoryStyle("fixed", "#3B82F6")).toEqual({ bar: "#3B82F6", bg: "rgba(59,130,246,0.24)" });
-    expect(categoryStyle("suggested", "#3B82F6")).toEqual({ bar: "#3B82F6", bg: "rgba(59,130,246,0.12)" });
+    expect(categoryStyle("fixed", "#3B82F6")).toEqual({ bar: "#3B82F6", bg: "rgba(59,130,246,0.3)" });
+    expect(categoryStyle("suggested", "#3B82F6")).toEqual({ bar: "#3B82F6", bg: "rgba(59,130,246,0.2)" });
     expect(categoryStyle("done", "#3B82F6")).toBeUndefined();
     expect(categoryStyle("fixed", undefined)).toBeUndefined();
   });

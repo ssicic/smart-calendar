@@ -101,7 +101,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 12 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 13 });
   });
 
   it("round-trips and moves fixed events and routines", async () => {
@@ -271,7 +271,18 @@ describe("weekStore", () => {
       ["r2", "fun"], // already had a group: kept
       ["r1", "rest"],
     ]);
-    expect((await loadCategories(old)).at(-1)).toEqual({ id: "rest", name: "Rest", color: "#2F9E5B" });
+    expect((await loadCategories(old)).at(-1)).toEqual({ id: "rest", name: "Rest", color: "#C2B59B" }); // softened by v13
+  });
+
+  it("softens the starting groups' colours, but keeps colours the user changed", async () => {
+    const old = nodeDb();
+    await migrate(old, 12);
+    old.raw.exec(`UPDATE categories SET color = '#123456' WHERE id = 'fun'`);
+    await migrate(old);
+    const colors = Object.fromEntries((await loadCategories(old)).map((c) => [c.id, c.color]));
+    expect(colors.work).toBe("#7C9CB8");
+    expect(colors.rest).toBe("#C2B59B");
+    expect(colors.fun).toBe("#123456");
   });
 
   it("reuses a group the user already called Rest", async () => {

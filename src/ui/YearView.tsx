@@ -4,9 +4,10 @@ import type { Db } from "../db/weekStore";
 import { EMPTY_LOAD, intensity, totalMinutes } from "./dayLoad";
 import { usePlannedDays } from "./usePlannedDays";
 import { monthGrid, monthShort, weeksOfYear } from "./weekDate";
+import { colors, font, heatShades } from "./theme";
 
 /** Heatmap shades for intensity 0 (nothing) to 4 (6h or more). */
-const SHADES = ["#F1F5F9", "#DDE2FD", "#B4BEF8", "#8593F3", "#5B6CF0"];
+const SHADES = heatShades;
 
 interface Props {
   db: Db;
@@ -69,12 +70,12 @@ const styles = StyleSheet.create({
   content: { padding: 12, paddingBottom: 32 },
   grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 8 },
   month: { width: "32%", padding: 6, borderRadius: 10, gap: 2 },
-  pressed: { backgroundColor: "#F8FAFF" },
-  monthName: { fontSize: 13, fontWeight: "700", color: "#111827", marginBottom: 2 },
+  pressed: { backgroundColor: colors.todayTint },
+  monthName: { fontSize: 13, fontFamily: font.bold, color: colors.text, marginBottom: 2 },
   week: { flexDirection: "row", gap: 2 },
   day: { flex: 1, aspectRatio: 1, borderRadius: 2 },
-  today: { borderWidth: 1.5, borderColor: "#EF4444" },
+  today: { borderWidth: 1.5, borderColor: colors.now },
   legend: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4, paddingTop: 12 },
   swatch: { width: 12, height: 12, borderRadius: 2 },
-  legendText: { fontSize: 12, color: "#6B7280", marginHorizontal: 2 },
+  legendText: { fontFamily: font.regular, fontSize: 12, color: colors.textMuted, marginHorizontal: 2 },
 });

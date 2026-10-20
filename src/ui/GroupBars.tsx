@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import type { ReviewStats } from "./weekReview";
+import { colors, font } from "./theme";
 
 const hours = (minutes: number) => `${Math.round(minutes / 6) / 10}h`;
 
@@ -7,7 +8,7 @@ const hours = (minutes: number) => `${Math.round(minutes / 6) / 10}h`;
 export function GroupBars({ stats }: { stats: ReviewStats }) {
   const rows = [
     ...stats.groups,
-    { id: "free", name: "Free", color: "#E5E7EB", minutes: stats.freeMin, percent: stats.freePercent },
+    { id: "free", name: "Free", color: colors.border, minutes: stats.freeMin, percent: stats.freePercent },
   ];
   return (
     <View style={styles.wrap}>
@@ -33,10 +34,10 @@ export function GroupBars({ stats }: { stats: ReviewStats }) {
 const styles = StyleSheet.create({
   wrap: { gap: 6 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  name: { width: 80, fontSize: 14, color: "#111827" },
-  track: { flex: 1, height: 8, borderRadius: 4, backgroundColor: "#F1F5F9", overflow: "hidden" },
+  name: { fontFamily: font.regular, width: 80, fontSize: 14, color: colors.text },
+  track: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, overflow: "hidden" },
   fill: { height: 8, borderRadius: 4 },
-  value: { width: 82, textAlign: "right", fontSize: 12, color: "#6B7280", fontVariant: ["tabular-nums"] },
-  muted: { fontSize: 15, color: "#9CA3AF" },
-  note: { fontSize: 12, color: "#6B7280" },
+  value: { fontFamily: font.regular, width: 82, textAlign: "right", fontSize: 12, color: colors.textMuted, fontVariant: ["tabular-nums"] },
+  muted: { fontFamily: font.regular, fontSize: 15, color: colors.textFaint },
+  note: { fontFamily: font.regular, fontSize: 12, color: colors.textMuted },
 });

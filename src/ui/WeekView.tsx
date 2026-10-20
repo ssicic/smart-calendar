@@ -3,15 +3,17 @@ import type { Category } from "../db/weekStore";
 import { categoryStyle } from "./categories";
 import { shortDate } from "./weekDate";
 import { DAY_NAMES, clock, type RowKind, type WeekRow } from "./weekRows";
+import { colors, font } from "./theme";
+import { Ionicons } from "@expo/vector-icons";
 
 export const KIND_STYLE: Record<RowKind, { bg: string; bar: string; label: string }> = {
-  fixed: { bg: "#EEF0F3", bar: "#6B7280", label: "Fixed" },
-  routine: { bg: "#FEF3E2", bar: "#D97706", label: "Routine" },
-  suggested: { bg: "#EEF2FF", bar: "#5B6CF0", label: "Suggested" },
-  kept: { bg: "#EEF2FF", bar: "#5B6CF0", label: "Placed" },
-  locked: { bg: "#E0E7FF", bar: "#3A47C9", label: "🔒 Locked" },
-  done: { bg: "#F1F5F9", bar: "#94A3B8", label: "Done" },
-  skipped: { bg: "#F8FAFC", bar: "#94A3B8", label: "Queued" },
+  fixed: { bg: colors.fixedBg, bar: colors.textMuted, label: "Fixed" },
+  routine: { bg: colors.routineSoft, bar: colors.routine, label: "Routine" },
+  suggested: { bg: colors.accentSoft, bar: colors.accent, label: "Suggested" },
+  kept: { bg: colors.accentSoft, bar: colors.accent, label: "Placed" },
+  locked: { bg: colors.lockedBg, bar: colors.accentStrong, label: "Locked" },
+  done: { bg: colors.surfaceAlt, bar: colors.doneBar, label: "Done" },
+  skipped: { bg: colors.panel, bar: colors.doneBar, label: "Queued" },
 };
 
 /** Activity groups by id, for colouring blocks. */
@@ -40,6 +42,8 @@ function Block(props: { row: WeekRow; groups: Groups; badge?: string; onPress: (
         {row.title}
       </Text>
       <Text style={[styles.kind, { color: k.bar }]}>
+        {row.kind === "locked" ? <Ionicons name="lock-closed" size={11} color={k.bar} /> : null}
+        {row.kind === "locked" ? " " : ""}
         {KIND_STYLE[row.kind].label}
         {group ? ` · ${group.name}` : ""}
         {props.badge ? ` · ${props.badge}` : ""}
@@ -82,10 +86,10 @@ export function WeekView({ days, weekStart, groups, badges, onPressRow, footer }
 const styles = StyleSheet.create({
   list: { padding: 16, paddingBottom: 110, gap: 20 }, // bottom room so the + button never covers Sunday
   day: { gap: 6 },
-  dayName: { fontSize: 15, fontWeight: "700", color: "#111827", marginBottom: 2 },
-  date: { fontWeight: "400", color: "#9CA3AF" },
+  dayName: { fontSize: 15, fontFamily: font.bold, color: colors.text, marginBottom: 2 },
+  date: { fontFamily: font.regular, color: colors.textFaint },
   pressed: { opacity: 0.6 },
-  empty: { color: "#9CA3AF", fontStyle: "italic" },
+  empty: { color: colors.textFaint, fontStyle: "italic" },
   block: {
     flexDirection: "row",
     alignItems: "center",
@@ -95,7 +99,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderLeftWidth: 4,
   },
-  time: { width: 92, fontVariant: ["tabular-nums"], color: "#374151" },
-  title: { flex: 1, fontSize: 15, fontWeight: "600", color: "#111827" },
-  kind: { fontSize: 12, fontWeight: "600" },
+  time: { width: 92, fontVariant: ["tabular-nums"], color: colors.textSoft },
+  title: { flex: 1, fontSize: 15, fontFamily: font.semibold, color: colors.text },
+  kind: { fontSize: 12, fontFamily: font.semibold },
 });

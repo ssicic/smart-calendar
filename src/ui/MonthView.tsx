@@ -5,11 +5,12 @@ import { EMPTY_LOAD, hoursLabel, totalMinutes, type DayLoad } from "./dayLoad";
 import { usePlannedDays } from "./usePlannedDays";
 import { monthGrid, type Month } from "./weekDate";
 import { DAY_NAMES } from "./weekRows";
+import { colors, font } from "./theme";
 
 const FULL_BAR_MIN = 12 * 60; // a 12-hour day fills the bar
 
-const DONE_COLOR = "#22A06B";
-const PLANNED_COLOR = "#5B6CF0";
+const DONE_COLOR = colors.success;
+const PLANNED_COLOR = colors.accent;
 
 /** The bar's two parts: what's done (first, green), then what's still planned. */
 const SEGMENTS: { minutes: (l: DayLoad) => number; color: string; label: string }[] = [
@@ -93,21 +94,21 @@ export function MonthView({ db, month, todayKey, onPressDay }: Props) {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 8, paddingBottom: 32 },
   headerRow: { flexDirection: "row", paddingVertical: 6 },
-  headerDay: { flex: 1, textAlign: "center", fontSize: 12, fontWeight: "700", color: "#6B7280" },
-  week: { flexDirection: "row", borderTopWidth: 1, borderTopColor: "#F1F5F9" },
+  headerDay: { flex: 1, textAlign: "center", fontSize: 12, fontFamily: font.bold, color: colors.textMuted },
+  week: { flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.surfaceAlt },
   cell: { flex: 1, height: 84, paddingVertical: 6, paddingHorizontal: 3, alignItems: "center", gap: 3 },
-  pressed: { backgroundColor: "#F8FAFF" },
+  pressed: { backgroundColor: colors.todayTint },
   dayNum: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  todayNum: { backgroundColor: "#5B6CF0" },
-  dayText: { fontSize: 14, fontWeight: "700", color: "#111827" },
-  todayText: { color: "#FFFFFF" },
-  outside: { color: "#C4C9D4" },
-  hours: { fontSize: 11, color: "#6B7280", fontVariant: ["tabular-nums"], minHeight: 14 },
-  bar: { flexDirection: "row", alignSelf: "stretch", height: 5, borderRadius: 3, backgroundColor: "#F1F5F9", overflow: "hidden" },
+  todayNum: { backgroundColor: colors.accent },
+  dayText: { fontSize: 14, fontFamily: font.bold, color: colors.text },
+  todayText: { color: colors.white },
+  outside: { color: colors.textFainter },
+  hours: { fontFamily: font.regular, fontSize: 11, color: colors.textMuted, fontVariant: ["tabular-nums"], minHeight: 14 },
+  bar: { flexDirection: "row", alignSelf: "stretch", height: 5, borderRadius: 3, backgroundColor: colors.surfaceAlt, overflow: "hidden" },
   faded: { opacity: 0.4 },
-  done: { fontSize: 10, fontWeight: "700", color: DONE_COLOR, minHeight: 12, fontVariant: ["tabular-nums"] },
+  done: { fontSize: 10, fontFamily: font.bold, color: DONE_COLOR, minHeight: 12, fontVariant: ["tabular-nums"] },
   legend: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, paddingTop: 12, paddingHorizontal: 8 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   swatch: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { fontSize: 12, color: "#6B7280" },
+  legendText: { fontFamily: font.regular, fontSize: 12, color: colors.textMuted },
 });

@@ -15,6 +15,8 @@ import {
 import { tint } from "./categories";
 import { shortDate } from "./weekDate";
 import { rowColors, type Groups } from "./WeekView";
+import { colors, font, shadow } from "./theme";
+import { Ionicons } from "@expo/vector-icons";
 
 const HOUR_PX = 48; // height of one hour
 const PX_PER_MIN = HOUR_PX / 60;
@@ -348,7 +350,8 @@ function DraggableBlock(props: {
           // Narrow side-by-side blocks: one line with "…" instead of breaking words.
           numberOfLines={b.lanes > 1 ? 1 : Math.max(1, Math.floor(height / 13))}
         >
-          {b.row.kind === "locked" ? "🔒 " : ""}
+          {b.row.kind === "locked" ? <Ionicons name="lock-closed" size={9} color={colors.accentStrong} /> : null}
+          {b.row.kind === "locked" ? " " : ""}
           {/* Routine progress first, so narrow columns still show it. */}
           {props.badge ? <Text style={styles.badge}>{props.badge} </Text> : null}
           {b.row.title}
@@ -510,26 +513,26 @@ function SleepZones(props: {
 }
 
 const styles = StyleSheet.create({
-  sleep: { position: "absolute", left: 0, right: 0, backgroundColor: "#E9ECF3", paddingVertical: 2 },
-  windDown: { position: "absolute", left: 0, right: 0, backgroundColor: "#F3F4F8" },
-  sleepLabel: { fontSize: 9, fontWeight: "700", color: "#8A93A8", textAlign: "center", fontVariant: ["tabular-nums"] },
-  changed: { color: "#5B6CF0" },
+  sleep: { position: "absolute", left: 0, right: 0, backgroundColor: colors.sleep, paddingVertical: 2 },
+  windDown: { position: "absolute", left: 0, right: 0, backgroundColor: colors.windDown },
+  sleepLabel: { fontSize: 9, fontFamily: font.bold, color: colors.sleepLabel, textAlign: "center", fontVariant: ["tabular-nums"] },
+  changed: { color: colors.accent },
   wrap: { flex: 1 },
-  headerRow: { flexDirection: "row", paddingHorizontal: 4, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
+  headerRow: { flexDirection: "row", paddingHorizontal: 4, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.surfaceAlt },
   headerCell: { flex: 1, alignItems: "center", paddingVertical: 2, borderRadius: 8 },
-  headerDay: { fontSize: 12, fontWeight: "700", color: "#6B7280" },
-  headerDate: { fontSize: 15, fontWeight: "700", color: "#111827" },
-  todayHeader: { backgroundColor: "#5B6CF0" },
-  todayText: { color: "#FFFFFF" },
+  headerDay: { fontSize: 12, fontFamily: font.bold, color: colors.textMuted },
+  headerDate: { fontSize: 15, fontFamily: font.bold, color: colors.text },
+  todayHeader: { backgroundColor: colors.accent },
+  todayText: { color: colors.white },
   scrollContent: { paddingTop: 8, paddingBottom: 110, paddingHorizontal: 4 },
   grid: { flexDirection: "row" },
-  hourLabel: { position: "absolute", right: 4, fontSize: 10, color: "#9CA3AF", fontVariant: ["tabular-nums"] },
-  column: { flex: 1, borderLeftWidth: 1, borderLeftColor: "#F1F5F9" },
-  todayColumn: { backgroundColor: "#F8FAFF" },
+  hourLabel: { fontFamily: font.regular, position: "absolute", right: 4, fontSize: 10, color: colors.textFaint, fontVariant: ["tabular-nums"] },
+  column: { flex: 1, borderLeftWidth: 1, borderLeftColor: colors.surfaceAlt },
+  todayColumn: { backgroundColor: colors.todayTint },
   dragColumn: { zIndex: 10 },
   slot: { position: "absolute", left: 0, right: 0, height: HOUR_PX / 2 },
-  hourLine: { borderTopWidth: 1, borderTopColor: "#F1F5F9" },
-  slotHeld: { backgroundColor: "#EEF2FF" },
+  hourLine: { borderTopWidth: 1, borderTopColor: colors.surfaceAlt },
+  slotHeld: { backgroundColor: colors.accentSoft },
   blockSlot: { position: "absolute" },
   draft: {
     position: "absolute",
@@ -537,11 +540,11 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 2,
     borderStyle: "dashed",
-    borderColor: "#5B6CF0",
-    backgroundColor: "rgba(91,108,240,0.18)",
+    borderColor: colors.accent,
+    backgroundColor: tint(colors.accent, 0.18),
   },
   draftBody: { flex: 1, paddingHorizontal: 2, paddingTop: 6, overflow: "hidden" },
-  draftTime: { fontSize: 9, fontWeight: "700", color: "#3A47C9", fontVariant: ["tabular-nums"] },
+  draftTime: { fontSize: 9, fontFamily: font.bold, color: colors.accentStrong, fontVariant: ["tabular-nums"] },
   // Big invisible touch areas around the small visible knobs, easy to grab with a finger.
   draftHandle: {
     position: "absolute",
@@ -555,19 +558,19 @@ const styles = StyleSheet.create({
     width: 18,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#5B6CF0",
+    backgroundColor: colors.accent,
     borderWidth: 1,
-    borderColor: "#FFFFFF",
+    borderColor: colors.white,
   },
   draftEnd: {
     position: "absolute",
     top: 13,
     fontSize: 9,
-    fontWeight: "700",
-    color: "#3A47C9",
+    fontFamily: font.bold,
+    color: colors.accentStrong,
     fontVariant: ["tabular-nums"],
   },
-  lifted: { zIndex: 10, opacity: 0.9, boxShadow: "0 6px 14px rgba(17,24,39,0.25)" },
+  lifted: { zIndex: 10, opacity: 0.9, boxShadow: shadow.raised },
   dropLabel: {
     position: "absolute",
     top: -22,
@@ -577,9 +580,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 6,
-    backgroundColor: "#111827",
+    backgroundColor: colors.text,
   },
-  dropLabelText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  dropLabelText: { color: colors.white, fontSize: 11, fontFamily: font.bold, fontVariant: ["tabular-nums"] },
   block: {
     flex: 1,
     borderRadius: 5,
@@ -588,9 +591,9 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     overflow: "hidden",
   },
-  badge: { fontWeight: "800", color: "#B45309" },
-  blockTitle: { fontSize: 10, lineHeight: 13, fontWeight: "600", color: "#111827" },
+  badge: { fontFamily: font.heavy, color: colors.routineStrong },
+  blockTitle: { fontSize: 10, lineHeight: 13, fontFamily: font.semibold, color: colors.text },
   pressed: { opacity: 0.6 },
-  nowLine: { position: "absolute", left: -1, right: 0, height: 2, backgroundColor: "#EF4444" },
+  nowLine: { position: "absolute", left: -1, right: 0, height: 2, backgroundColor: colors.now },
   footer: { marginTop: 16, paddingHorizontal: 12 },
 });

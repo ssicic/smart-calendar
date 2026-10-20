@@ -3,10 +3,10 @@
 // Pure, no React.
 import type { RowKind } from "./weekRows";
 
-/** Colours to pick from for a new group. The first seven are the starting groups'. */
+/** Colours to pick from for a new group: soft tones. The first eight are the starting groups' (DB v13). */
 export const PALETTE = [
-  "#3B82F6", "#22A06B", "#8B5CF6", "#F59E0B", "#EC4899", "#F97316",
-  "#14B8A6", "#EF4444", "#6366F1", "#84CC16", "#A16207", "#64748B",
+  "#7C9CB8", "#86AE8F", "#A393C4", "#D4AE6A", "#D59AAB", "#D9A27A",
+  "#7DB5AC", "#C2B59B", "#C98B7E", "#8E9BCB", "#A9B97A", "#9A938C",
 ];
 
 /** "#RRGGBB" at `alpha` (0-1) as "rgba(…)", for light backgrounds. */
@@ -23,7 +23,7 @@ export function tint(hex: string, alpha: number): string {
  */
 export function categoryStyle(kind: RowKind, color: string | undefined): { bg: string; bar: string } | undefined {
   if (!color || kind === "done" || kind === "skipped") return undefined;
-  return { bar: color, bg: tint(color, kind === "fixed" || kind === "routine" ? 0.24 : 0.12) };
+  return { bar: color, bg: tint(color, kind === "fixed" || kind === "routine" ? 0.3 : 0.2) };
 }
 
 /**

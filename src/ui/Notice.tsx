@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, font } from "./theme";
 
 /**
  * A warning you can wave away. "warn" is yellow (just so you know), "block"
@@ -20,7 +21,7 @@ export function Notice({ text, tone = "warn", onDismiss }: { text: string; tone?
 const styles = StyleSheet.create({
   box: { flexDirection: "row", alignItems: "flex-start", gap: 12, padding: 12, borderRadius: 10 },
   text: { flex: 1, lineHeight: 20 },
-  ok: { fontWeight: "800" },
+  ok: { fontFamily: font.heavy },
 });
-const warn = StyleSheet.create({ box: { backgroundColor: "#FEF3C7" }, text: { color: "#92400E" } });
-const block = StyleSheet.create({ box: { backgroundColor: "#FEE2E2" }, text: { color: "#B91C1C" } });
+const warn = StyleSheet.create({ box: { backgroundColor: colors.warnSoft }, text: { color: colors.warnText } });
+const block = StyleSheet.create({ box: { backgroundColor: colors.dangerSoft }, text: { color: colors.danger } });
