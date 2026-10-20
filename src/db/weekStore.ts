@@ -232,7 +232,15 @@ export async function migrate(db: Db, upTo = MIGRATIONS.length): Promise<void> {
   const current = row?.user_version ?? 0;
   for (let v = current; v < upTo; v++) {
     // One transaction per step: either the whole step applies or none of it.
-    await db.execAsync(`BEGIN; ${MIGRATIONS[v]}; PRAGMA user_version = ${v + 1}; COMMIT;`);
+    try {
+      await db.execAsync(`BEGIN; ${MIGRATIONS[v]}; PRAGMA user_version = ${v + 1}; COMMIT;`);
+    } catch (e) {
+      // A failing statement stops the batch before COMMIT, leaving the transaction
+      // open: the app would see the half-done step and nothing saved later would
+      // stick. Undo it (no-op error if nothing is open) and report the failure.
+      await db.execAsync("ROLLBACK").catch(() => {});
+      throw e;
+    }
   }
 }
 

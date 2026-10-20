@@ -121,6 +121,18 @@ describe("weekStore", () => {
     expect((await loadWeek(db, W4, W4)).week.fixed.map((e) => e.id)).toEqual(["w1"]);
   });
 
+  it("undoes a migration step that fails halfway", async () => {
+    const old = nodeDb();
+    await migrate(old, 9);
+    old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min) VALUES ('w1', 'fixed', 'Work', 540, 1020)`);
+    old.raw.exec("ALTER TABLE events ADD COLUMN from_week TEXT"); // makes step v10 fail
+    await expect(migrate(old)).rejects.toThrow(/duplicate column/);
+    // No transaction left open, so later writes are saved for real.
+    expect(() => old.raw.exec("BEGIN; COMMIT;")).not.toThrow();
+    expect(old.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 9 });
+    expect(old.raw.prepare("SELECT id FROM events").all()).toEqual([{ id: "w1" }]);
+  });
+
   it("starts repeating events from before v10 at this week", async () => {
     const old = nodeDb();
     await migrate(old, 9);
