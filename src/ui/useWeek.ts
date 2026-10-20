@@ -57,6 +57,7 @@ import {
   type WeekItemKind,
 } from "../db/weekItemsStore";
 import { addLaterToWeek, deleteLater, loadLater, type LaterEntry } from "../db/laterStore";
+import { loadMovedOn, type MovedOn } from "../db/reviewStore";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { checkKey } from "./routines";
 import type { QuickAddResult } from "./QuickAddSheet";
@@ -87,6 +88,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const [weekItems, setWeekItems] = useState<WeekItem[]>([]);
   // The Later list (sessions moved to the queue with no week yet).
   const [later, setLater] = useState<LaterEntry[]>([]);
+  // For the week review: this week's sessions that were moved to the queue, and where to.
+  const [movedOn, setMovedOn] = useState<MovedOn[]>([]);
   // Ticked routine steps this week, as checkKey(eventId, stepId).
   const [checks, setChecks] = useState<Set<string>>(new Set());
 
@@ -98,6 +101,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setRoutines(await loadRoutines(db));
     setWeekItems(await loadWeekItems(db, weekStart));
     setLater(await loadLater(db));
+    setMovedOn(await loadMovedOn(db, weekStart));
     setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
   }, [db, weekStart, nextWeek]);
 
@@ -326,6 +330,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     changeWeekItem,
     removeWeekItem,
     later,
+    movedOn,
     addFromLater,
     removeLater,
     rename,

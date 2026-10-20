@@ -10,6 +10,8 @@ import { SleepSheet } from "./SleepSheet";
 import { dayLoads, totalMinutes, weekTotals } from "./dayLoad";
 import { progress, progressLabel } from "./routines";
 import { weekSummary } from "./weekItems";
+import { reviewStats } from "./weekReview";
+import { ReviewSheet } from "./ReviewSheet";
 import { WeekPanelSheet } from "./WeekPanelSheet";
 import { canAddFromLater, laterHeading } from "./later";
 import { useWeek } from "./useWeek";
@@ -62,6 +64,8 @@ export function WeekScreen() {
   const { categories, groupActions, setRowCategory, rename } = data;
   const { routines, checks, addRoutine, editRoutine, removeRoutine, toggleStep } = data;
   const { weekItems, addWeekItem, changeWeekItem, removeWeekItem, later, addFromLater, removeLater } = data;
+  const { movedOn } = data;
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -117,6 +121,11 @@ export function WeekScreen() {
     }
     return out;
   }, [allRows, routines, checks]);
+  // The week review's numbers (only worked out while it's open).
+  const review = useMemo(
+    () => (reviewOpen ? reviewStats(allRows, sleep, groups) : undefined),
+    [reviewOpen, allRows, sleep, groups],
+  );
 
   if (!week || !plan) {
     return (
@@ -270,6 +279,11 @@ export function WeekScreen() {
                 <Text style={styles.todayButtonText}>See week ›</Text>
               </Pressable>
             )}
+            {(view === "calendar" || view === "list") && (
+              <Pressable onPress={() => setReviewOpen(true)} style={styles.todayButton} accessibilityRole="button">
+                <Text style={styles.todayButtonText}>Review</Text>
+              </Pressable>
+            )}
           </View>
         </View>
         <Text style={styles.sub}>{subtitle}</Text>
@@ -281,6 +295,12 @@ export function WeekScreen() {
                 : `This week: ${weekSummary(weekItems).done}/${weekItems.length} to-dos & goals done ›`}
               {later.length > 0 ? ` · ${laterHeading(later.length)}` : ""}
             </Text>
+          </Pressable>
+        )}
+        {/* Sunday: a nudge to look back at the week before planning the next. */}
+        {isWeekView && weekOffset === 0 && todayIndex === 6 && (
+          <Pressable onPress={() => setReviewOpen(true)} style={styles.reviewNudge} accessibilityRole="button">
+            <Text style={styles.reviewNudgeText}>It's Sunday: review your week ›</Text>
           </Pressable>
         )}
         {/* A past week can't get new sessions, so "doesn't fit" would only nag. */}
@@ -400,6 +420,19 @@ export function WeekScreen() {
           <Text style={styles.fabText}>+</Text>
         </Pressable>
       )}
+      {review && (
+        <ReviewSheet
+          visible={reviewOpen}
+          weekLabel={weekRange(weekStart)}
+          nextWeekStart={addWeeks(weekStart, 1)}
+          stats={review}
+          routines={{ done: [...badges.values()].filter((b) => b === "✓").length, total: badges.size }}
+          items={weekItems}
+          movedOn={movedOn}
+          later={later}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
       <WeekPanelSheet
         visible={panelOpen}
         weekLabel={weekRange(weekStart)}
@@ -465,6 +498,15 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, minHeight: 32 },
   content: { flex: 1 },
+  reviewNudge: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "#EEF2FF",
+  },
+  reviewNudgeText: { fontSize: 13, fontWeight: "700", color: "#4338CA" },
   panelButton: {
     alignSelf: "flex-start",
     marginTop: 8,

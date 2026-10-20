@@ -1,0 +1,179 @@
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import type { LaterEntry } from "../db/laterStore";
+import type { MovedOn } from "../db/reviewStore";
+import type { WeekItem } from "../db/weekItemsStore";
+import { isFinished } from "./weekItems";
+import type { ReviewStats } from "./weekReview";
+import { reviewHeadline } from "./weekReview";
+import { weekRange } from "./weekDate";
+
+interface Props {
+  visible: boolean;
+  /** e.g. "19. – 25.10." */
+  weekLabel: string;
+  /** The Monday of the week after, to tell "next week" apart from other weeks. */
+  nextWeekStart: string;
+  stats: ReviewStats;
+  /** Routines on the calendar this week, and how many had every step ticked. */
+  routines: { done: number; total: number };
+  items: WeekItem[];
+  movedOn: MovedOn[];
+  later: LaterEntry[];
+  onClose: () => void;
+}
+
+const hours = (minutes: number) => `${Math.round(minutes / 6) / 10}h`;
+
+/** Looking back at a week: what got done, where the time went, what moved on. */
+export function ReviewSheet(props: Props) {
+  const { visible, weekLabel, nextWeekStart, stats, routines, items, movedOn, later, onClose } = props;
+  const finished = items.filter(isFinished);
+  const { sessions } = stats;
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={() => {}}>
+          <View style={styles.header}>
+            <View style={styles.flex}>
+              <Text style={styles.heading}>Week review</Text>
+              <Text style={styles.sub}>{weekLabel}</Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
+              <Text style={styles.link}>Close</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.body}>
+            <Text style={styles.headline}>{reviewHeadline(stats, finished.length)}</Text>
+
+            <View style={styles.tiles}>
+              <Tile value={hours(sessions.doneMin)} label="done" color="#15803D" />
+              <Tile value={hours(stats.plannedMin)} label="planned" color="#4338CA" />
+              <Tile value={`${stats.freePercent}%`} label="free time" color="#374151" />
+            </View>
+
+            <Section title="Flexible sessions">
+              <Text style={styles.line}>
+                {sessions.total === 0
+                  ? "None this week."
+                  : `${sessions.done} of ${sessions.total} done (${hours(sessions.doneMin)} of ${hours(sessions.totalMin)})`}
+              </Text>
+              {sessions.total > 0 && <Bar part={sessions.done} whole={sessions.total} color="#22A06B" />}
+              {routines.total > 0 && (
+                <Text style={styles.line}>
+                  Routines: {routines.done} of {routines.total} fully ticked off
+                </Text>
+              )}
+            </Section>
+
+            <Section title={`To-dos & goals${items.length > 0 ? ` · ${finished.length} of ${items.length}` : ""}`}>
+              {items.length === 0 && <Text style={styles.muted}>No to-dos or goals this week.</Text>}
+              {items.map((item) => (
+                <Text key={item.id} style={[styles.line, !isFinished(item) && styles.muted]}>
+                  {isFinished(item) ? "✓" : "○"} {item.title}
+                  {item.kind === "goal" ? ` (${item.progress}/${item.target})` : ""}
+                </Text>
+              ))}
+            </Section>
+
+            <Section title="Time by group">
+              {stats.groups.length === 0 && <Text style={styles.muted}>Nothing on the calendar this week.</Text>}
+              {[...stats.groups, { id: "free", name: "Free", color: "#E5E7EB", minutes: stats.freeMin, percent: stats.freePercent }].map(
+                (g) => (
+                  <View key={g.id ?? "none"} style={styles.groupRow}>
+                    <Text style={styles.groupName} numberOfLines={1}>
+                      {g.name}
+                    </Text>
+                    <View style={styles.groupTrack}>
+                      <View style={[styles.groupFill, { width: `${Math.min(100, g.percent)}%`, backgroundColor: g.color }]} />
+                    </View>
+                    <Text style={styles.groupValue}>
+                      {hours(g.minutes)} · {g.percent}%
+                    </Text>
+                  </View>
+                ),
+              )}
+              <Text style={styles.note}>Shares of your awake time (wake-up to bedtime).</Text>
+            </Section>
+
+            <Section title="Moved on">
+              {movedOn.length === 0 && <Text style={styles.muted}>Nothing was moved to the queue this week.</Text>}
+              {movedOn.map((m, i) => (
+                <Text key={i} style={styles.line}>
+                  {m.title} → {m.targetWeek === null ? "Later" : m.targetWeek === nextWeekStart ? "next week" : weekRange(m.targetWeek)}
+                </Text>
+              ))}
+              {later.length > 0 && (
+                <Text style={styles.note}>Waiting in Later now: {later.map((l) => l.title).join(", ")}</Text>
+              )}
+            </Section>
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function Tile({ value, label, color }: { value: string; label: string; color: string }) {
+  return (
+    <View style={styles.tile}>
+      <Text style={[styles.tileValue, { color }]}>{value}</Text>
+      <Text style={styles.tileLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function Bar({ part, whole, color }: { part: number; whole: number; color: string }) {
+  return (
+    <View style={styles.groupTrack}>
+      <View style={[styles.groupFill, { width: `${whole > 0 ? (part / whole) * 100 : 0}%`, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(17,24,39,0.35)" },
+  sheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    paddingBottom: 24,
+    maxHeight: "92%",
+    width: "100%",
+    maxWidth: 560,
+    alignSelf: "center",
+    gap: 8,
+  },
+  header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  flex: { flex: 1 },
+  heading: { fontSize: 20, fontWeight: "800", color: "#111827" },
+  sub: { marginTop: 2, color: "#6B7280" },
+  link: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
+  body: { gap: 18, paddingBottom: 16 },
+  headline: { fontSize: 16, color: "#111827", lineHeight: 22 },
+  tiles: { flexDirection: "row", gap: 8 },
+  tile: { flex: 1, padding: 12, borderRadius: 12, backgroundColor: "#F8FAFC", alignItems: "center" },
+  tileValue: { fontSize: 22, fontWeight: "800", fontVariant: ["tabular-nums"] },
+  tileLabel: { fontSize: 12, color: "#6B7280", marginTop: 2 },
+  section: { gap: 6 },
+  sectionTitle: { fontSize: 13, fontWeight: "700", color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.5 },
+  line: { fontSize: 15, color: "#111827" },
+  muted: { fontSize: 15, color: "#9CA3AF" },
+  note: { fontSize: 12, color: "#6B7280" },
+  groupRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  groupName: { width: 80, fontSize: 14, color: "#111827" },
+  groupTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: "#F1F5F9", overflow: "hidden" },
+  groupFill: { height: 8, borderRadius: 4 },
+  groupValue: { width: 82, textAlign: "right", fontSize: 12, color: "#6B7280", fontVariant: ["tabular-nums"] },
+});
