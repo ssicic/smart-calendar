@@ -7,18 +7,37 @@ import { moveProblem } from "./itemActions";
 import { EMPTY_FORM, formForSlot, parseTime, type QuickAddForm } from "./quickAdd";
 import { QuickAddSheet, type SheetSize } from "./QuickAddSheet";
 import { SleepSheet } from "./SleepSheet";
-import { weekTotals } from "./dayLoad";
+import { dayLoads, totalMinutes, weekTotals } from "./dayLoad";
 import { progress, progressLabel } from "./routines";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { MonthView } from "./MonthView";
-import { addMonths, addWeeks, dateKey, monthOfWeek, monthTitle, plannableFrom, weekRange, weekStartOf, weeksBetween, type Month } from "./weekDate";
+import {
+  addMonths,
+  addWeeks,
+  dateKey,
+  dayDate,
+  monthOfWeek,
+  monthTitle,
+  plannableFrom,
+  stepDay,
+  weekRange,
+  weekStartOf,
+  weeksBetween,
+  type Month,
+} from "./weekDate";
 import { WeekView } from "./WeekView";
-import { clock, rowsByDay, type WeekRow } from "./weekRows";
+import { DAY_NAMES, clock, rowsByDay, type WeekRow } from "./weekRows";
 import { YearView } from "./YearView";
 
-type ViewMode = "calendar" | "list" | "month" | "year";
-const VIEW_LABELS: Record<ViewMode, string> = { calendar: "Calendar", list: "Week", month: "Month", year: "Year" };
+type ViewMode = "day" | "calendar" | "list" | "month" | "year";
+const VIEW_LABELS: Record<ViewMode, string> = {
+  day: "Day",
+  calendar: "Calendar",
+  list: "Week",
+  month: "Month",
+  year: "Year",
+};
 
 export function WeekScreen() {
   // The database opened by <SQLiteProvider> in App.tsx.
@@ -29,6 +48,8 @@ export function WeekScreen() {
   // The month shown in Month, and the year shown in Year.
   const [month, setMonth] = useState<Month>(() => monthOfWeek(weekStartOf(new Date())));
   const [year, setYear] = useState(() => new Date().getFullYear());
+  // The day shown in Day view (0 = Monday) of `weekStart`. Starts on today.
+  const [day, setDay] = useState(() => (new Date().getDay() + 6) % 7);
   // The clock, refreshed every minute, so the red "now" line moves.
   const [now, setNow] = useState(() => new Date());
   // Suggestions only from today on (none in past weeks). Changes at midnight, not every minute.
@@ -106,7 +127,7 @@ export function WeekScreen() {
   const unplacedSessions = plan.unplaced.reduce((sum, u) => sum + u.missing, 0);
   const isEmpty = week.fixed.length + (week.routines ?? []).length + week.items.length === 0;
 
-  const isWeekView = view === "calendar" || view === "list";
+  const isWeekView = view === "day" || view === "calendar" || view === "list";
 
   // The event being added, drawn on the calendar so its time can be dragged there.
   const draftStart = adding && parseTime(adding.startTime);
@@ -127,15 +148,31 @@ export function WeekScreen() {
         }
       : undefined;
   const currentMonth = monthOfWeek(thisWeek);
+  const todayIndex = (now.getDay() + 6) % 7;
   const isCurrent =
-    view === "month"
+    view === "day"
+      ? weekStart === thisWeek && day === todayIndex
+      : view === "month"
       ? month.year === currentMonth.year && month.month === currentMonth.month
       : view === "year"
         ? year === now.getFullYear()
         : weekStart === thisWeek;
   const weekOffset = weeksBetween(thisWeek, weekStart);
+  // Day view: "Today", "Tomorrow", "Yesterday", else e.g. "Thursday 22.10.".
+  const dayOffset = weekOffset * 7 + day - todayIndex;
+  const dayTitle =
+    dayOffset === 0
+      ? "Today"
+      : dayOffset === 1
+        ? "Tomorrow"
+        : dayOffset === -1
+          ? "Yesterday"
+          : `${DAY_NAMES[day]} ${dayDate(weekStart, day)}`;
+  const dayLoad = dayLoads(week, plan)[day];
   const title =
-    view === "month"
+    view === "day"
+      ? dayTitle
+      : view === "month"
       ? monthTitle(month)
       : view === "year"
         ? String(year)
@@ -147,8 +184,11 @@ export function WeekScreen() {
               ? "Last week"
               : weekRange(weekStart);
   const subtitle =
-    view === "month"
-      ? "Tap a day to open its week · swipe for other months"
+    view === "day"
+      ? `${Math.abs(dayOffset) <= 1 ? `${DAY_NAMES[day]} ${dayDate(weekStart, day)} · ` : ""}` +
+        `${hours(dayLoad ? totalMinutes(dayLoad) : 0)}h planned · ${hours(dayLoad?.done ?? 0)}h done`
+      : view === "month"
+      ? "Tap a day to open it · swipe for other months"
       : view === "year"
         ? "Tap a month to open it · swipe for other years"
         : // The dates go here only when the title is "This/Next/Last week"; otherwise the title is the dates.
@@ -157,15 +197,26 @@ export function WeekScreen() {
 
   /** One week, month or year back or forward (swiping left or right). */
   const step = (n: number) => {
-    if (view === "month") setMonth(addMonths(month, n));
+    if (view === "day") {
+      const next = stepDay(weekStart, day, n);
+      setWeekStart(next.weekStart);
+      setDay(next.day);
+    } else if (view === "month") setMonth(addMonths(month, n));
     else if (view === "year") setYear(year + n);
     else setWeekStart(addWeeks(weekStart, n));
   };
   stepRef.current = step;
   const goToToday = () => {
     setWeekStart(thisWeek);
+    setDay(todayIndex);
     setMonth(currentMonth);
     setYear(now.getFullYear());
+  };
+  /** Opens one day in Day view. */
+  const openDay = (weekOf: string, d: number) => {
+    setWeekStart(weekOf);
+    setDay(d);
+    setView("day");
   };
   /** Month and Year open on the month/year of the week you were looking at. */
   const switchView = (v: ViewMode) => {
@@ -202,11 +253,18 @@ export function WeekScreen() {
           <Text style={styles.heading} numberOfLines={1}>
             {title}
           </Text>
-          {!isCurrent && (
-            <Pressable onPress={goToToday} style={styles.todayButton} accessibilityRole="button">
-              <Text style={styles.todayButtonText}>Today</Text>
-            </Pressable>
-          )}
+          <View style={styles.titleButtons}>
+            {!isCurrent && (
+              <Pressable onPress={goToToday} style={styles.todayButton} accessibilityRole="button">
+                <Text style={styles.todayButtonText}>Today</Text>
+              </Pressable>
+            )}
+            {view === "day" && (
+              <Pressable onPress={() => setView("calendar")} style={styles.todayButton} accessibilityRole="button">
+                <Text style={styles.todayButtonText}>See week ›</Text>
+              </Pressable>
+            )}
+          </View>
         </View>
         <Text style={styles.sub}>{subtitle}</Text>
         {/* A past week can't get new sessions, so "doesn't fit" would only nag. */}
@@ -224,10 +282,7 @@ export function WeekScreen() {
             db={db}
             month={month}
             todayKey={dateKey(now)}
-            onPressWeek={(w) => {
-              setWeekStart(w);
-              setView("calendar");
-            }}
+            onPressDay={openDay}
           />
         ) : view === "year" ? (
           <YearView
@@ -247,43 +302,71 @@ export function WeekScreen() {
               things you want to fit in (Flexible).
             </Text>
           </View>
-        ) : view === "calendar" ? (
-          <WeekGrid
-            days={days}
-            weekStart={weekStart}
-            sleep={sleep}
-            windDownMin={windDownMin}
-            onPressSleep={(day, field) => setSleepTarget({ day, field })}
-            onPressRow={setTapped}
-            onHoldSlot={(day, minute) => {
-              // Already adding something? Move it here and keep what was typed.
-              const slot = formForSlot(day, minute);
-              setAdding((f) =>
-                f
-                ? {
-                    ...slot,
-                    title: f.title,
-                    repeat: f.repeat,
-                    kind: f.kind === "routine" ? "routine" : "fixed",
-                    routineId: f.routineId,
-                    categoryId: f.categoryId,
-                  }
-                : slot,
-              );
-              setSheetSize("half");
-            }}
-            draft={draft}
-            onDraftChange={({ days, start, end }) =>
-              setAdding((f) => f && { ...f, days, startTime: clock(start), endTime: clock(end) })
-            }
-            bottomInset={adding && sheetSize === "half" ? screenHeight / 2 : 0}
-            groups={groups}
-          badges={badges}
-            // Dragging is a clear "put it here", so flexible sessions move even onto a busy time.
-            onDropRow={async (row, day, minute) => setSaveError(await move(row, day, minute, true))}
-            today={today}
-            footer={queueFooter}
-          />
+        ) : view === "calendar" || view === "day" ? (
+          <>
+            {view === "day" && (
+              // The week at a glance: tap a day to show it.
+              <View style={styles.strip}>
+                {DAY_NAMES.map((name, d) => {
+                  const on = d === day;
+                  const isToday = today?.day === d;
+                  return (
+                    <Pressable
+                      key={d}
+                      onPress={() => setDay(d)}
+                      style={[styles.stripDay, on && styles.stripOn]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text style={[styles.stripName, on && styles.stripTextOn]}>{name.slice(0, 2)}</Text>
+                      <Text style={[styles.stripDate, isToday && styles.stripToday, on && styles.stripTextOn]}>
+                        {dayDate(weekStart, d).split(".")[0]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+            <WeekGrid
+              key={view} // switching Day ↔ Calendar starts fresh, scrolled to now
+              visibleDays={view === "day" ? [day] : undefined}
+              onPressDay={(d) => openDay(weekStart, d)}
+              days={days}
+              weekStart={weekStart}
+              sleep={sleep}
+              windDownMin={windDownMin}
+              onPressSleep={(day, field) => setSleepTarget({ day, field })}
+              onPressRow={setTapped}
+              onHoldSlot={(day, minute) => {
+                // Already adding something? Move it here and keep what was typed.
+                const slot = formForSlot(day, minute);
+                setAdding((f) =>
+                  f
+                  ? {
+                      ...slot,
+                      title: f.title,
+                      repeat: f.repeat,
+                      kind: f.kind === "routine" ? "routine" : "fixed",
+                      routineId: f.routineId,
+                      categoryId: f.categoryId,
+                    }
+                  : slot,
+                );
+                setSheetSize("half");
+              }}
+              draft={draft}
+              onDraftChange={({ days, start, end }) =>
+                setAdding((f) => f && { ...f, days, startTime: clock(start), endTime: clock(end) })
+              }
+              bottomInset={adding && sheetSize === "half" ? screenHeight / 2 : 0}
+              groups={groups}
+            badges={badges}
+              // Dragging is a clear "put it here", so flexible sessions move even onto a busy time.
+              onDropRow={async (row, day, minute) => setSaveError(await move(row, day, minute, true))}
+              today={today}
+              footer={queueFooter}
+            />
+          </>
         ) : (
           <WeekView days={days} weekStart={weekStart} groups={groups} badges={badges} onPressRow={setTapped} footer={queueFooter} />
         )}
@@ -353,7 +436,22 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, minHeight: 32 },
   content: { flex: 1 },
-  todayButton: { marginLeft: "auto", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#EEF2FF" },
+  titleButtons: { marginLeft: "auto", flexDirection: "row", gap: 6 },
+  strip: {
+    flexDirection: "row",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  stripDay: { flex: 1, alignItems: "center", paddingVertical: 4, borderRadius: 10 },
+  stripOn: { backgroundColor: "#5B6CF0" },
+  stripName: { fontSize: 11, fontWeight: "700", color: "#6B7280" },
+  stripDate: { fontSize: 15, fontWeight: "700", color: "#111827" },
+  stripToday: { color: "#EF4444" },
+  stripTextOn: { color: "#FFFFFF" },
+  todayButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "#EEF2FF" },
   todayButtonText: { fontSize: 13, fontWeight: "700", color: "#5B6CF0" },
   toggle: { flexDirection: "row", backgroundColor: "#F1F5F9", borderRadius: 10, padding: 3 },
   toggleItem: { flex: 1, alignItems: "center", paddingVertical: 6, borderRadius: 8 },

@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   addMonths,
   addWeeks,
+  dayDate,
   dayKey,
   monthGrid,
   monthOfWeek,
   monthTitle,
   plannableFrom,
   shortDate,
+  stepDay,
   weekRange,
   weekStartOf,
   weeksBetween,
@@ -86,5 +88,16 @@ describe("weekDate", () => {
     expect(plannableFrom("2026-10-26", thursday)).toBe(0); // next week: all of it
     expect(plannableFrom("2026-10-12", thursday)).toBe(7 * 1440); // last week: none
     expect(plannableFrom("2026-10-19", new Date(2026, 9, 19, 8))).toBe(0); // Monday
+  });
+
+  it("labels a day the short European way", () => {
+    expect(dayDate("2026-10-19", 2)).toBe("21.10.");
+    expect(dayDate("2026-10-26", 6)).toBe("1.11.");
+  });
+
+  it("steps day by day across weeks", () => {
+    expect(stepDay("2026-10-19", 6, 1)).toEqual({ weekStart: "2026-10-26", day: 0 });
+    expect(stepDay("2026-10-19", 0, -1)).toEqual({ weekStart: "2026-10-12", day: 6 });
+    expect(stepDay("2026-10-19", 3, 1)).toEqual({ weekStart: "2026-10-19", day: 4 });
   });
 });

@@ -143,3 +143,17 @@ export function plannableFrom(weekStart: string, now: Date): number {
 
 /** plannableFrom() with today given as "YYYY-MM-DD" (for code that keeps today as a key). */
 export const plannableFromKey = (weekStart: string, todayKey: string) => plannableFrom(weekStart, fromKey(todayKey));
+
+/** "21.10." for day `dayIndex` (0 = Monday) of the week. */
+export function dayDate(weekStart: string, dayIndex: number): string {
+  const d = fromKey(weekStart);
+  d.setDate(d.getDate() + dayIndex);
+  return `${d.getDate()}.${d.getMonth() + 1}.`;
+}
+
+/** The day `n` days after (week, day), moving into the next or previous week when needed. */
+export function stepDay(weekStart: string, day: number, n: number): { weekStart: string; day: number } {
+  const total = day + n;
+  const weeks = Math.floor(total / 7);
+  return { weekStart: addWeeks(weekStart, weeks), day: total - weeks * 7 };
+}

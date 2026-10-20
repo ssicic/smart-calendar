@@ -45,12 +45,20 @@ interface Props {
   /** Today's column (0 = Monday) and minutes since midnight, if this is the current week. */
   today?: { day: number; minute: number };
   footer?: React.ReactNode;
+  /** Which days to draw as columns (0 = Monday). Default: the whole week; the Day view passes one. */
+  visibleDays?: number[];
+  /** Tapping a day's name at the top (opens that day). */
+  onPressDay?: (day: number) => void;
 }
+
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 /** Calendar view: one column per day, blocks as tall as they are long. */
 export function WeekGrid(props: Props) {
   const { days, weekStart, sleep, windDownMin, onPressSleep, onPressRow, onHoldSlot, onDropRow, today, footer } = props;
-  const { draft, onDraftChange, bottomInset = 0, groups, badges } = props;
+  const { draft, onDraftChange, bottomInset = 0, groups, badges, visibleDays = ALL_DAYS, onPressDay } = props;
+  // Column i shows day visibleDays[i]; dragging works in columns, then maps back to days.
+  const dayAt = (column: number) => visibleDays[Math.min(visibleDays.length - 1, Math.max(0, column))] ?? 0;
   // Show an hour of sleep on each side, so there's always something to tap.
   const earliestWake = Math.min(...sleep.map((s) => s.wake));
   const latestBed = Math.max(...sleep.map((s) => Math.min(s.bed, DAY)));
@@ -86,17 +94,25 @@ export function WeekGrid(props: Props) {
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.headerRow}>
-        <View style={{ width: GUTTER }} />
-        {DAY_NAMES.map((name, d) => (
-          <View key={d} style={[styles.headerCell, today?.day === d && styles.todayHeader]}>
-            <Text style={[styles.headerDay, today?.day === d && styles.todayText]}>{name.slice(0, 2)}</Text>
-            <Text style={[styles.headerDate, today?.day === d && styles.todayText]}>
-              {shortDate(weekStart, d).split(" ")[0]}
-            </Text>
-          </View>
-        ))}
-      </View>
+      {visibleDays.length > 1 && (
+        <View style={styles.headerRow}>
+          <View style={{ width: GUTTER }} />
+          {visibleDays.map((d) => (
+            <Pressable
+              key={d}
+              onPress={onPressDay && (() => onPressDay(d))}
+              style={[styles.headerCell, today?.day === d && styles.todayHeader]}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${DAY_NAMES[d]}`}
+            >
+              <Text style={[styles.headerDay, today?.day === d && styles.todayText]}>{DAY_NAMES[d]?.slice(0, 2)}</Text>
+              <Text style={[styles.headerDate, today?.day === d && styles.todayText]}>
+                {shortDate(weekStart, d).split(" ")[0]}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <ScrollView
         ref={scrollRef}
@@ -105,7 +121,7 @@ export function WeekGrid(props: Props) {
       >
         <View
           style={[styles.grid, { height: hours.length * HOUR_PX }]}
-          onLayout={(e) => setColumnWidth((e.nativeEvent.layout.width - GUTTER) / 7)}
+          onLayout={(e) => setColumnWidth((e.nativeEvent.layout.width - GUTTER) / visibleDays.length)}
         >
           <View style={{ width: GUTTER }}>
             {hours.map((hr) => (
@@ -115,7 +131,7 @@ export function WeekGrid(props: Props) {
             ))}
           </View>
 
-          {laidOut.map((blocks, d) => (
+          {visibleDays.map((d, column) => ({ d, column, blocks: laidOut[d] ?? [] })).map(({ d, column, blocks }) => (
             <View
               key={d}
               style={[styles.column, today?.day === d && styles.todayColumn, dragDay === d && styles.dragColumn]}
@@ -154,6 +170,8 @@ export function WeekGrid(props: Props) {
                   key={b.row.id}
                   block={b}
                   day={d}
+                  column={column}
+                  dayAt={dayAt}
                   top={y(b.startMin) + 1}
                   columnWidth={columnWidth}
                   onPress={onPressRow}
@@ -175,20 +193,27 @@ export function WeekGrid(props: Props) {
           {draft &&
             [...draft.days]
               .sort((x, z) => x - z)
-              .map((day, i) => (
+              .map((day, i) => ({ day, i, column: visibleDays.indexOf(day) }))
+              .filter(({ column }) => column >= 0) // only days that are on screen
+              .map(({ day, i, column }) => (
                 <DraftBlock
                   key={i}
-                  draft={{ day, start: draft.start, end: draft.end }}
+                  draft={{ day: column, start: draft.start, end: draft.end }}
                   title={draft.title}
                   color={draft.color}
-                  left={GUTTER + day * columnWidth + 1}
+                  left={GUTTER + column * columnWidth + 1}
                   width={columnWidth - 2}
                   top={y(draft.start)}
                   columnWidth={columnWidth}
                   // With several days picked, dragging only changes the time.
                   multiDay={draft.days.length > 1}
                   onChange={(d) =>
-                    onDraftChange({ days: draft.days.length > 1 ? draft.days : [d.day], start: d.start, end: d.end })
+                    // The draft works in columns; d.day is a column, so map it back to a day.
+                    onDraftChange({
+                      days: draft.days.length > 1 ? draft.days : [dayAt(d.day)],
+                      start: d.start,
+                      end: d.end,
+                    })
                   }
                   onArm={setDragDay}
                 />
@@ -211,6 +236,9 @@ export function WeekGrid(props: Props) {
 function DraggableBlock(props: {
   block: PlacedBlock;
   day: number;
+  /** Which column it's drawn in, and how columns map back to days (Day view: one column). */
+  column: number;
+  dayAt: (column: number) => number;
   top: number;
   columnWidth: number;
   onPress: (row: WeekRow) => void;
@@ -240,14 +268,15 @@ function DraggableBlock(props: {
       onPanResponderRelease: (_, g) => {
         const p = latest.current;
         const target = dropTarget(
-          { day: p.day, startMin: p.block.startMin, endMin: p.block.endMin },
+          { day: p.column, startMin: p.block.startMin, endMin: p.block.endMin },
           g.dx,
           g.dy,
           p.columnWidth,
           PX_PER_MIN,
         );
-        const moved = target.day !== p.day || target.minute !== p.block.startMin;
-        if (moved) p.onDrop(p.block.row, target.day, target.minute);
+        const day = p.dayAt(target.day); // target.day is a column
+        const moved = day !== p.day || target.minute !== p.block.startMin;
+        if (moved) p.onDrop(p.block.row, day, target.minute);
         finish();
       },
       onPanResponderTerminate: () => finish(),
@@ -266,7 +295,13 @@ function DraggableBlock(props: {
   // Where it would land right now, shown in a small label while dragging.
   const target =
     offset &&
-    dropTarget({ day, startMin: b.startMin, endMin: b.endMin }, offset.dx, offset.dy, props.columnWidth, PX_PER_MIN);
+    dropTarget(
+      { day: props.column, startMin: b.startMin, endMin: b.endMin },
+      offset.dx,
+      offset.dy,
+      props.columnWidth,
+      PX_PER_MIN,
+    );
   return (
     <View
       {...pan.panHandlers}
@@ -322,7 +357,7 @@ function DraggableBlock(props: {
       {target && (
         <View style={styles.dropLabel} pointerEvents="none">
           <Text style={styles.dropLabelText} numberOfLines={1}>
-            {DAY_NAMES[target.day]?.slice(0, 3)} {clock(target.minute)}
+            {DAY_NAMES[props.dayAt(target.day)]?.slice(0, 3)} {clock(target.minute)}
           </Text>
         </View>
       )}
