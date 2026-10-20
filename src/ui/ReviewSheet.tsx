@@ -6,6 +6,7 @@ import { isFinished } from "./weekItems";
 import type { ReviewStats } from "./weekReview";
 import { reviewHeadline } from "./weekReview";
 import { weekRange } from "./weekDate";
+import { GroupBars } from "./GroupBars";
 
 interface Props {
   visible: boolean;
@@ -19,6 +20,8 @@ interface Props {
   items: WeekItem[];
   movedOn: MovedOn[];
   later: LaterEntry[];
+  /** Opens "Plan next week". */
+  onPlanNext: () => void;
   onClose: () => void;
 }
 
@@ -26,7 +29,7 @@ const hours = (minutes: number) => `${Math.round(minutes / 6) / 10}h`;
 
 /** Looking back at a week: what got done, where the time went, what moved on. */
 export function ReviewSheet(props: Props) {
-  const { visible, weekLabel, nextWeekStart, stats, routines, items, movedOn, later, onClose } = props;
+  const { visible, weekLabel, nextWeekStart, stats, routines, items, movedOn, later, onPlanNext, onClose } = props;
   const finished = items.filter(isFinished);
   const { sessions } = stats;
 
@@ -78,23 +81,7 @@ export function ReviewSheet(props: Props) {
             </Section>
 
             <Section title="Time by group">
-              {stats.groups.length === 0 && <Text style={styles.muted}>Nothing on the calendar this week.</Text>}
-              {[...stats.groups, { id: "free", name: "Free", color: "#E5E7EB", minutes: stats.freeMin, percent: stats.freePercent }].map(
-                (g) => (
-                  <View key={g.id ?? "none"} style={styles.groupRow}>
-                    <Text style={styles.groupName} numberOfLines={1}>
-                      {g.name}
-                    </Text>
-                    <View style={styles.groupTrack}>
-                      <View style={[styles.groupFill, { width: `${Math.min(100, g.percent)}%`, backgroundColor: g.color }]} />
-                    </View>
-                    <Text style={styles.groupValue}>
-                      {hours(g.minutes)} · {g.percent}%
-                    </Text>
-                  </View>
-                ),
-              )}
-              <Text style={styles.note}>Shares of your awake time (wake-up to bedtime).</Text>
+              <GroupBars stats={stats} />
             </Section>
 
             <Section title="Moved on">
@@ -108,6 +95,9 @@ export function ReviewSheet(props: Props) {
                 <Text style={styles.note}>Waiting in Later now: {later.map((l) => l.title).join(", ")}</Text>
               )}
             </Section>
+            <Pressable onPress={onPlanNext} style={styles.planButton} accessibilityRole="button">
+              <Text style={styles.planText}>Plan next week ›</Text>
+            </Pressable>
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -171,9 +161,8 @@ const styles = StyleSheet.create({
   line: { fontSize: 15, color: "#111827" },
   muted: { fontSize: 15, color: "#9CA3AF" },
   note: { fontSize: 12, color: "#6B7280" },
-  groupRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  groupName: { width: 80, fontSize: 14, color: "#111827" },
+  planButton: { backgroundColor: "#5B6CF0", borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  planText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
   groupTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: "#F1F5F9", overflow: "hidden" },
   groupFill: { height: 8, borderRadius: 4 },
-  groupValue: { width: 82, textAlign: "right", fontSize: 12, color: "#6B7280", fontVariant: ["tabular-nums"] },
 });

@@ -12,6 +12,7 @@ import { progress, progressLabel } from "./routines";
 import { weekSummary } from "./weekItems";
 import { reviewStats } from "./weekReview";
 import { ReviewSheet } from "./ReviewSheet";
+import { PlanSheet } from "./PlanSheet";
 import { WeekPanelSheet } from "./WeekPanelSheet";
 import { canAddFromLater, laterHeading } from "./later";
 import { useWeek } from "./useWeek";
@@ -64,8 +65,9 @@ export function WeekScreen() {
   const { categories, groupActions, setRowCategory, rename } = data;
   const { routines, checks, addRoutine, editRoutine, removeRoutine, toggleStep } = data;
   const { weekItems, addWeekItem, changeWeekItem, removeWeekItem, later, addFromLater, removeLater } = data;
-  const { movedOn } = data;
+  const { movedOn, refresh } = data;
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -300,7 +302,7 @@ export function WeekScreen() {
         {/* Sunday: a nudge to look back at the week before planning the next. */}
         {isWeekView && weekOffset === 0 && todayIndex === 6 && (
           <Pressable onPress={() => setReviewOpen(true)} style={styles.reviewNudge} accessibilityRole="button">
-            <Text style={styles.reviewNudgeText}>It's Sunday: review your week ›</Text>
+            <Text style={styles.reviewNudgeText}>It's Sunday: review and plan your week ›</Text>
           </Pressable>
         )}
         {/* A past week can't get new sessions, so "doesn't fit" would only nag. */}
@@ -430,9 +432,28 @@ export function WeekScreen() {
           items={weekItems}
           movedOn={movedOn}
           later={later}
+          onPlanNext={() => {
+            setReviewOpen(false);
+            setPlanOpen(true);
+          }}
           onClose={() => setReviewOpen(false)}
         />
       )}
+      <PlanSheet
+        db={db}
+        visible={planOpen}
+        nextWeekStart={addWeeks(weekStart, 1)}
+        thisItems={weekItems}
+        later={later}
+        groups={groups}
+        onChanged={refresh}
+        onOpenNextWeek={() => {
+          setPlanOpen(false);
+          setWeekStart(addWeeks(weekStart, 1));
+          setView("calendar");
+        }}
+        onClose={() => setPlanOpen(false)}
+      />
       <WeekPanelSheet
         visible={panelOpen}
         weekLabel={weekRange(weekStart)}

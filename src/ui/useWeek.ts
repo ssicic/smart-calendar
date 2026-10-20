@@ -319,6 +319,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     });
 
   return {
+    /** Reloads everything from the database (after changes made elsewhere, e.g. Plan next week). */
+    refresh,
     routines,
     checks,
     addRoutine,
