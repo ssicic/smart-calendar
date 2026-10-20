@@ -7,14 +7,23 @@ import { checkKey, progress, progressLabel } from "./routines";
 import { CategoryPicker } from "./CategoryPicker";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { Chips } from "./Chips";
-import { actionsFor, renameProblem, sameNameEvents, type ActionId, type EventScope } from "./itemActions";
+import {
+  LENGTH_CHOICES,
+  actionsFor,
+  lengthLabel,
+  lengthProblem,
+  renameProblem,
+  sameNameEvents,
+  type ActionId,
+  type EventScope,
+} from "./itemActions";
 import { QUEUE_CHOICES } from "./later";
 import { overlapping, summarize } from "./overlaps";
 import { parseTime } from "./quickAdd";
 import { TimePicker } from "./TimePicker";
 import { Notice } from "./Notice";
 import { DAY_NAMES, clock, isEventKind, type WeekRow } from "./weekRows";
-import { colors, font } from "./theme";
+import { colors, font, radius } from "./theme";
 import { Ionicons } from "@expo/vector-icons";
 
 interface Props {
@@ -42,6 +51,8 @@ interface Props {
   onSetCategory: (row: WeekRow, categoryId: string | null) => Promise<string | undefined>;
   /** New name; `all` = every event of this kind with the same name. */
   onRename: (row: WeekRow, title: string, all: boolean) => Promise<string | undefined>;
+  /** New length in minutes (`scope` for a repeating event). */
+  onResize: (row: WeekRow, minutes: number, scope: EventScope) => Promise<string | undefined>;
   /** Every saved routine (to find this row's checklist, and for the editor's name check). */
   routines: Routine[];
   /** Ticked routine steps this week, as checkKey(eventId, stepId). */
@@ -61,7 +72,8 @@ const SCOPES: { value: EventScope; label: string }[] = [
 
 export function ItemActionsSheet(props: Props) {
   const { row, rows, repeats, onAction, onMove, checkMove, onClose, categories, groupActions, onSetCategory } = props;
-  const [mode, setMode] = useState<"menu" | "move" | "rename" | "steps">("menu");
+  const [mode, setMode] = useState<"menu" | "move" | "rename" | "steps" | "length">("menu");
+  const [newLength, setNewLength] = useState(60);
   const [newTitle, setNewTitle] = useState("");
   const [renameAll, setRenameAll] = useState(false);
   const [error, setError] = useState<string>();
@@ -85,6 +97,7 @@ export function ItemActionsSheet(props: Props) {
     setRenameAll(false);
     if (row) {
       setNewTitle(row.title);
+      setNewLength(row.end - row.start);
       setMoveDay(dayOf(row.start));
       setMoveTime(clock(row.start));
     }
@@ -116,6 +129,7 @@ export function ItemActionsSheet(props: Props) {
   const run = async (action: ActionId, deleteScope?: EventScope) => {
     if (action === "move") return setMode("move");
     if (action === "rename") return setMode("rename");
+    if (action === "length") return setMode("length");
     if (action === "steps") return setMode("steps");
     // Deleting can't be undone, so the first tap only asks for a second one
     // (for a repeating event: which weeks, which is the second tap).
@@ -211,7 +225,7 @@ export function ItemActionsSheet(props: Props) {
 
           {mode === "menu" ? (
             <View style={styles.list}>
-              {actionsFor(row.kind, row.title).map((a) => {
+              {actionsFor(row.kind, row.title, row.done).map((a) => {
                 const confirming = a.id === "delete" && confirmDelete;
                 if (a.id === "queue" && pickQueue) {
                   return (
@@ -280,6 +294,64 @@ export function ItemActionsSheet(props: Props) {
                   return undefined;
                 }}
               />
+            </View>
+          ) : mode === "length" ? (
+            <View style={styles.move}>
+              <Text style={styles.label}>Length  {lengthLabel(newLength)}</Text>
+              <View style={styles.lengthRow}>
+                <Pressable
+                  onPress={() => setNewLength((m) => Math.max(15, m - 15))}
+                  style={styles.stepButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="15 minutes shorter"
+                >
+                  <Text style={styles.stepperText}>−</Text>
+                </Pressable>
+                <Text style={styles.lengthValue}>{lengthLabel(newLength)}</Text>
+                <Pressable
+                  onPress={() => setNewLength((m) => Math.min(12 * 60, m + 15))}
+                  style={styles.stepButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="15 minutes longer"
+                >
+                  <Text style={styles.stepperText}>+</Text>
+                </Pressable>
+              </View>
+              <Chips
+                options={LENGTH_CHOICES.map((m) => ({ value: m, label: lengthLabel(m) }))}
+                isSelected={(m) => m === newLength}
+                onPress={setNewLength}
+              />
+              {isEvent ? (
+                repeats && (
+                  <>
+                    <Text style={styles.label}>Which weeks</Text>
+                    <Chips options={SCOPES} isSelected={(s) => s === scope} onPress={setScope} />
+                  </>
+                )
+              ) : (
+                <Text style={styles.hint}>Every session of {row.title} gets this length, from this week on.</Text>
+              )}
+              {lengthProblem(row.start, newLength) && (
+                <Text style={styles.error}>{lengthProblem(row.start, newLength)}</Text>
+              )}
+              <View style={styles.moveButtons}>
+                <Pressable onPress={() => setMode("menu")} style={styles.secondary} accessibilityRole="button">
+                  <Text style={styles.secondaryText}>Back</Text>
+                </Pressable>
+                <Pressable
+                  onPress={async () => {
+                    const err = await props.onResize(row, newLength, scope);
+                    if (err) setError(err);
+                    else onClose();
+                  }}
+                  disabled={!!lengthProblem(row.start, newLength)}
+                  style={[styles.primary, !!lengthProblem(row.start, newLength) && styles.disabled]}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.primaryText}>Save length</Text>
+                </Pressable>
+              </View>
             </View>
           ) : mode === "rename" ? (
             <View style={styles.move}>
@@ -400,6 +472,17 @@ const styles = StyleSheet.create({
   scopeButton: { flex: 1, alignItems: "center", justifyContent: "center" },
   center: { textAlign: "center" },
   move: { gap: 10 },
+  lengthRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  stepButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surfaceAlt,
+  },
+  stepperText: { fontFamily: font.bold, fontSize: 20, color: colors.textSoft },
+  lengthValue: { fontFamily: font.heavy, fontSize: 22, color: colors.text, minWidth: 90, textAlign: "center" },
   checklist: { gap: 2, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.surfaceAlt },
   step: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9, paddingHorizontal: 4, borderRadius: 8 },
   box: {

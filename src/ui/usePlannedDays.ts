@@ -4,7 +4,7 @@
 // repeat weekly while touched sessions and sleep changes are stored per week.
 import { useEffect, useState } from "react";
 import { planWeek } from "../engine";
-import { loadWeek, type Db } from "../db/weekStore";
+import { loadDoneEvents, loadWeek, type Db } from "../db/weekStore";
 import { dayLoads, loadsByDate, type DayLoad } from "./dayLoad";
 import { addWeeks, plannableFromKey } from "./weekDate";
 
@@ -22,7 +22,7 @@ export function usePlannedDays(db: Db, weekStarts: string[], todayKey: string): 
       for (const weekStart of key.split(",")) {
         const { week } = await loadWeek(db, weekStart, addWeeks(weekStart, 1));
         const planned = { ...week, settings: { ...week.settings, earliestStart: plannableFromKey(weekStart, todayKey) } };
-        weeks.set(weekStart, dayLoads(planned, planWeek(planned)));
+        weeks.set(weekStart, dayLoads(planned, planWeek(planned), await loadDoneEvents(db, weekStart)));
       }
       if (!cancelled) setByDate(loadsByDate(weeks));
     })().catch(console.error);

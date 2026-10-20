@@ -58,4 +58,19 @@ describe("dayLoad", () => {
     expect(hoursLabel(0)).toBe("");
     expect(hoursLabel(90)).toBe("1.5h");
   });
+
+  it("counts fixed events marked done as done time", () => {
+    const week: WeekInput = {
+      fixed: [{ id: "w", title: "Work", start: 9 * 60, end: 17 * 60 }],
+      rest: [],
+      routines: [{ id: "m", title: "Morning", start: DAY + 7 * 60, end: DAY + 8 * 60, routineId: "r" }],
+      items: [],
+      placements: [],
+      settings,
+    };
+    const empty: PlanResult = { placements: [], unplaced: [], capacity };
+    expect(dayLoads(week, empty, new Set(["w"]))[0]).toEqual({ fixed: 0, flexible: 0, done: 480 });
+    expect(dayLoads(week, empty, new Set(["m"]))[1]).toEqual({ fixed: 0, flexible: 0, done: 60 });
+    expect(weekTotals(week, empty, new Set(["w"]))).toEqual({ plannedMin: 540, doneMin: 480 });
+  });
 });

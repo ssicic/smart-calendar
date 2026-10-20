@@ -62,4 +62,10 @@ describe("weekReview", () => {
     const all = reviewStats([row("gym", "done", h(18), 1)], sleep, groups);
     expect(reviewHeadline(all, 0)).toMatch(/Everything/);
   });
+
+  it("counts events marked done in the done total", () => {
+    const s = reviewStats([{ ...row("work", "fixed", h(9), 8), done: true }, row("game", "done", DAY, 2)], sleep, groups);
+    expect(s.doneMin).toBe(h(10));
+    expect(s.sessions.done).toBe(1); // sessions are flexible only
+  });
 });

@@ -273,6 +273,15 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE week_items ADD COLUMN day INTEGER CHECK (day BETWEEN 0 AND 6);
   `,
+  // Version 15: fixed events and routines can be marked done, per week
+  // (a repeating event is done or not separately each week).
+  `
+  CREATE TABLE event_done (
+    event_id   TEXT NOT NULL,
+    week_start TEXT NOT NULL,
+    PRIMARY KEY (event_id, week_start)
+  );
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -515,7 +524,41 @@ export async function deleteEvent(db: Db, id: string): Promise<void> {
   await db.withTransactionAsync(async () => {
     await db.runAsync("DELETE FROM event_exceptions WHERE event_id = ?", [id]);
     await db.runAsync("DELETE FROM routine_checks WHERE event_id = ?", [id]);
+    await db.runAsync("DELETE FROM event_done WHERE event_id = ?", [id]);
     await db.runAsync("DELETE FROM events WHERE id = ?", [id]);
+  });
+}
+
+/** Events (fixed or routine) marked done in `weekStart`. */
+export async function loadDoneEvents(db: Db, weekStart: string): Promise<Set<string>> {
+  const rows = await db.getAllAsync<{ event_id: string }>("SELECT event_id FROM event_done WHERE week_start = ?", [
+    weekStart,
+  ]);
+  return new Set(rows.map((r) => r.event_id));
+}
+
+/** Marks an event done (or not) in `weekStart` only. */
+export async function setEventDone(db: Db, id: string, weekStart: string, done: boolean): Promise<void> {
+  if (done) {
+    await db.runAsync("INSERT OR IGNORE INTO event_done (event_id, week_start) VALUES (?, ?)", [id, weekStart]);
+  } else {
+    await db.runAsync("DELETE FROM event_done WHERE event_id = ? AND week_start = ?", [id, weekStart]);
+  }
+}
+
+/**
+ * A flexible item's new length, for all its sessions. Sessions the user
+ * placed (kept or locked) from `fromWeek` on get the new length too; done
+ * ones keep theirs, since they already happened.
+ */
+export async function setItemDuration(db: Db, itemId: string, minutes: number, fromWeek: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("UPDATE flexible_items SET duration_min = ? WHERE id = ?", [minutes, itemId]);
+    await db.runAsync(
+      `UPDATE placements SET end_min = MIN(start_min + ?, 10080)
+       WHERE item_id = ? AND state IN ('kept', 'locked') AND week_start >= ?`,
+      [minutes, itemId, fromWeek],
+    );
   });
 }
 

@@ -52,7 +52,7 @@ export function ReviewSheet(props: Props) {
             <Text style={styles.headline}>{reviewHeadline(stats, finished.length)}</Text>
 
             <View style={styles.tiles}>
-              <Tile value={hours(sessions.doneMin)} label="done" color={colors.successStrong} />
+              <Tile value={hours(stats.doneMin)} label="done" color={colors.successStrong} />
               <Tile value={hours(stats.plannedMin)} label="planned" color={colors.accentStrong} />
               <Tile value={`${stats.freePercent}%`} label="free time" color={colors.textSoft} />
             </View>

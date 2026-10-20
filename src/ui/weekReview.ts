@@ -2,7 +2,7 @@
 // much awake time stayed free. Pure, no React.
 import type { DaySleep } from "../engine";
 import type { Category } from "../db/weekStore";
-import type { WeekRow } from "./weekRows";
+import { isDone, type WeekRow } from "./weekRows";
 
 /** One bar in "Time by group": a group (or no group, or Free) and its share of awake time. */
 export interface GroupShare {
@@ -20,6 +20,8 @@ export interface ReviewStats {
   awakeMin: number;
   /** Everything on the calendar (fixed, routines, flexible incl. done; not queued). */
   plannedMin: number;
+  /** Everything marked done: flexible sessions, fixed events, routines. */
+  doneMin: number;
   /** Awake time with nothing planned. */
   freeMin: number;
   freePercent: number;
@@ -56,6 +58,7 @@ export function reviewStats(rows: WeekRow[], sleep: DaySleep[], groups: Map<stri
   return {
     awakeMin,
     plannedMin,
+    doneMin: onCalendar.filter(isDone).reduce((sum, r) => sum + length(r), 0),
     freeMin,
     freePercent: pct(freeMin, awakeMin),
     sessions: {

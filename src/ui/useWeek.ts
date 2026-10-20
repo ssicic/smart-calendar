@@ -20,6 +20,9 @@ import {
   loadChecks,
   loadRoutines,
   loadWeek,
+  loadDoneEvents,
+  setEventDone,
+  setItemDuration,
   insertRoutine,
   deleteRoutine,
   setCheck,
@@ -47,6 +50,7 @@ import {
   weekMinute,
   type ActionId,
   type EventScope,
+  lengthProblem,
 } from "./itemActions";
 import {
   deleteWeekItem,
@@ -92,6 +96,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const [movedOn, setMovedOn] = useState<MovedOn[]>([]);
   // Ticked routine steps this week, as checkKey(eventId, stepId).
   const [checks, setChecks] = useState<Set<string>>(new Set());
+  // Fixed events and routines marked done this week.
+  const [doneEvents, setDoneEvents] = useState<Set<string>>(new Set());
 
   // useCallback keeps the same function between renders (unless db or the
   // week changes), so the useEffect below doesn't re-run on every render.
@@ -103,6 +109,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setLater(await loadLater(db));
     setMovedOn(await loadMovedOn(db, weekStart));
     setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
+    setDoneEvents(await loadDoneEvents(db, weekStart));
   }, [db, weekStart, nextWeek]);
 
   useEffect(() => {
@@ -134,7 +141,9 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       if (!week || !plan) return;
       const p = plan.placements.find((x) => x.id === row.id);
 
-      if (action === "delete") {
+      if (isEventKind(row.kind) && (action === "done" || action === "undone")) {
+        await setEventDone(db, row.id, weekStart, action === "done"); // this week only
+      } else if (action === "delete") {
         if (isEventKind(row.kind)) {
           if (scopeFor(row, scope) === "week") await changeEventForWeek(db, row.id, weekStart, null);
           else await deleteEvent(db, row.id);
@@ -315,11 +324,40 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   /** Ticks or unticks one step of a routine on the calendar (this week only). */
   const toggleStep = (eventId: string, stepId: string) =>
     attempt(async () => {
-      await setCheck(db, eventId, weekStart, stepId, !checks.has(checkKey(eventId, stepId)));
+      const ticking = !checks.has(checkKey(eventId, stepId));
+      await setCheck(db, eventId, weekStart, stepId, ticking);
+      // Ticking the last step marks the routine done; unticking one takes that back.
+      const routineId = week?.routines?.find((e) => e.id === eventId)?.routineId;
+      const steps = routines.find((r) => r.id === routineId)?.steps ?? [];
+      const after = new Set(checks);
+      if (ticking) after.add(checkKey(eventId, stepId));
+      else after.delete(checkKey(eventId, stepId));
+      const complete = steps.length > 0 && steps.every((s) => after.has(checkKey(eventId, s.id)));
+      if (complete !== doneEvents.has(eventId)) await setEventDone(db, eventId, weekStart, complete);
+      await refresh();
+    });
+
+  /**
+   * New length in minutes. Events: this week only or every week (`scope`, for a
+   * repeating one). Flexible items: the item and its placed sessions from this week on.
+   */
+  const resize = (row: WeekRow, minutes: number, scope: EventScope = "week") =>
+    attempt(async () => {
+      const bad = lengthProblem(row.start, minutes);
+      if (bad) return bad;
+      if (isEventKind(row.kind)) {
+        const times = { start: row.start, end: row.start + minutes };
+        if (scopeFor(row, scope) === "week") await changeEventForWeek(db, row.id, weekStart, times);
+        else await moveEvent(db, row.id, times.start, times.end, weekStart);
+      } else if (row.itemId) {
+        await setItemDuration(db, row.itemId, minutes, weekStart);
+      }
       await refresh();
     });
 
   return {
+    doneEvents,
+    resize,
     /** Reloads everything from the database (after changes made elsewhere, e.g. Plan next week). */
     refresh,
     routines,

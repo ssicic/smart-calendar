@@ -67,7 +67,7 @@ export function WeekScreen() {
   const { categories, groupActions, setRowCategory, rename } = data;
   const { routines, checks, addRoutine, editRoutine, removeRoutine, toggleStep } = data;
   const { weekItems, addWeekItem, changeWeekItem, removeWeekItem, later, addFromLater, removeLater } = data;
-  const { movedOn, refresh } = data;
+  const { movedOn, refresh, doneEvents, resize } = data;
   // Whole-week to-dos and goals (the "This week" panel) vs. to-dos for the day in Day view.
   const weeklyItems = useMemo(() => weekItems.filter((i) => i.day === null), [weekItems]);
   const dayTodos = useMemo(() => weekItems.filter((i) => i.day === day && i.kind === "todo"), [weekItems, day]);
@@ -116,7 +116,7 @@ export function WeekScreen() {
 
   // Hooks must run on every render in the same order, so this comes before
   // the early return below. It copes with `week` being undefined.
-  const days = useMemo(() => (week && plan ? rowsByDay(week, plan) : []), [week, plan]);
+  const days = useMemo(() => (week && plan ? rowsByDay(week, plan, doneEvents) : []), [week, plan, doneEvents]);
   const allRows = useMemo(() => days.flat(), [days]);
   // Progress on each routine block ("2/5", or ✓ when every step is ticked).
   const badges = useMemo(() => {
@@ -144,7 +144,7 @@ export function WeekScreen() {
 
   const { capacity } = plan;
   // Planned = fixed events + flexible sessions (done ones too); rest blocks are time off.
-  const { plannedMin, doneMin } = weekTotals(week, plan);
+  const { plannedMin, doneMin } = weekTotals(week, plan, doneEvents);
   const hours = (minutes: number) => Math.round(minutes / 6) / 10;
   const unplacedSessions = plan.unplaced.reduce((sum, u) => sum + u.missing, 0);
   const isEmpty = week.fixed.length + (week.routines ?? []).length + week.items.length === 0;
@@ -190,7 +190,7 @@ export function WeekScreen() {
         : dayOffset === -1
           ? "Yesterday"
           : `${DAY_NAMES[day]} ${dayDate(weekStart, day)}`;
-  const dayLoad = dayLoads(week, plan)[day];
+  const dayLoad = dayLoads(week, plan, doneEvents)[day];
   const dayName = dayOffset === 0 ? "Today" : dayOffset === 1 ? "Tomorrow" : dayOffset === -1 ? "Yesterday" : (DAY_NAMES[day] ?? "");
   const title =
     view === "day"
@@ -520,6 +520,7 @@ export function WeekScreen() {
         onEditRoutine={editRoutine}
         onDeleteRoutine={removeRoutine}
         onRename={rename}
+        onResize={resize}
         onAction={act}
         onMove={move}
         checkMove={(row, day, minute) => moveProblem(week, plan, allRows, row, day, minute)}

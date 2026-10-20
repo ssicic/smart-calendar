@@ -4,11 +4,11 @@ import { dayKey } from "./weekDate";
 
 /** Minutes planned on one day, split the way the Month view shows it. */
 export interface DayLoad {
-  /** Fixed events (work, classes). Rest blocks are time off, so they don't count. */
+  /** Fixed events and routines not marked done. */
   fixed: number;
   /** Flexible sessions still to do (suggested, kept or locked). */
   flexible: number;
-  /** Flexible sessions marked done. */
+  /** Anything marked done: flexible sessions, fixed events, routines. */
   done: number;
 }
 
@@ -26,9 +26,12 @@ function addSpan(loads: DayLoad[], field: keyof DayLoad, start: number, end: num
 }
 
 /** Planned minutes per day of the week (index 0 = Monday). Queued (skipped) sessions don't count. */
-export function dayLoads(week: WeekInput, plan: PlanResult): DayLoad[] {
+/** `doneEvents`: fixed events and routines marked done this week; their time counts as done. */
+export function dayLoads(week: WeekInput, plan: PlanResult, doneEvents: Set<string> = new Set()): DayLoad[] {
   const loads = Array.from({ length: 7 }, () => ({ ...EMPTY_LOAD }));
-  for (const e of [...week.fixed, ...(week.routines ?? [])]) addSpan(loads, "fixed", e.start, e.end);
+  for (const e of [...week.fixed, ...(week.routines ?? [])]) {
+    addSpan(loads, doneEvents.has(e.id) ? "done" : "fixed", e.start, e.end);
+  }
   for (const p of plan.placements) {
     if (p.state === "done") addSpan(loads, "done", p.start, p.end);
     else if (p.state !== "skipped") addSpan(loads, "flexible", p.start, p.end);
@@ -61,8 +64,12 @@ export function hoursLabel(minutes: number): string {
 }
 
 /** The week's totals for the header: everything planned (fixed + flexible, done included) and what's done. */
-export function weekTotals(week: WeekInput, plan: PlanResult): { plannedMin: number; doneMin: number } {
-  const loads = dayLoads(week, plan);
+export function weekTotals(
+  week: WeekInput,
+  plan: PlanResult,
+  doneEvents: Set<string> = new Set(),
+): { plannedMin: number; doneMin: number } {
+  const loads = dayLoads(week, plan, doneEvents);
   return {
     plannedMin: loads.reduce((sum, l) => sum + totalMinutes(l), 0),
     doneMin: loads.reduce((sum, l) => sum + l.done, 0),

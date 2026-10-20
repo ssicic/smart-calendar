@@ -21,6 +21,9 @@ import {
   keepPlacement,
   insertCategory,
   insertEvents,
+  loadDoneEvents,
+  setEventDone,
+  setItemDuration,
   insertRoutine,
   deleteRoutine,
   loadChecks,
@@ -101,7 +104,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 14 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 15 });
   });
 
   it("round-trips and moves fixed events and routines", async () => {
@@ -293,6 +296,33 @@ describe("weekStore", () => {
     await migrate(old);
     expect((await loadWeek(old, W1, W2)).week.fixed[0]?.categoryId).toBe("mine");
     expect((await loadCategories(old)).filter((c) => c.name.toLowerCase() === "rest")).toHaveLength(1);
+  });
+
+  it("marks events done per week, and forgets it when the event is deleted", async () => {
+    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null);
+    await setEventDone(db, "w1", W1, true);
+    await setEventDone(db, "w1", W1, true); // twice is fine
+    expect([...(await loadDoneEvents(db, W1))]).toEqual(["w1"]);
+    expect([...(await loadDoneEvents(db, W2))]).toEqual([]); // the next week starts not done
+    await setEventDone(db, "w1", W1, false);
+    expect([...(await loadDoneEvents(db, W1))]).toEqual([]);
+    await setEventDone(db, "w1", W2, true);
+    await deleteEvent(db, "w1");
+    expect([...(await loadDoneEvents(db, W2))]).toEqual([]);
+  });
+
+  it("changes a flexible item's length, and its placed sessions from this week on (not done ones)", async () => {
+    await insertItem(db, gym);
+    const kept = { id: "p1", itemId: "g", start: 1020, end: 1080, state: "kept" as const };
+    await savePlacement(db, W1, { ...kept, id: "old" }); // an earlier week
+    await savePlacement(db, W2, kept);
+    await savePlacement(db, W2, { ...kept, id: "d", start: 2000, end: 2060, state: "done" });
+    await setItemDuration(db, "g", 90, W2);
+    expect((await loadWeek(db, W2, W3)).week.items[0]?.durationMin).toBe(90);
+    const w2 = (await loadWeek(db, W2, W3)).week.placements;
+    expect(w2.find((p) => p.id === "p1")?.end).toBe(1020 + 90);
+    expect(w2.find((p) => p.id === "d")?.end).toBe(2060);
+    expect((await loadWeek(db, W1, W2)).week.placements[0]?.end).toBe(1080);
   });
 
   it("round-trips flexible items, with and without preferred windows", async () => {

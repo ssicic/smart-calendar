@@ -2,7 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Category } from "../db/weekStore";
 import { categoryStyle } from "./categories";
 import { shortDate } from "./weekDate";
-import { DAY_NAMES, clock, type RowKind, type WeekRow } from "./weekRows";
+import { isDone, DAY_NAMES, clock, type RowKind, type WeekRow } from "./weekRows";
 import { colors, font } from "./theme";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -21,6 +21,8 @@ export type Groups = Map<string, Category>;
 
 /** A row's colours: its group's colour if it has one, otherwise the colours for its kind. */
 export function rowColors(row: WeekRow, groups: Groups): { bg: string; bar: string } {
+  // Anything done (a done session, or an event marked done) looks done.
+  if (isDone(row)) return KIND_STYLE.done;
   const group = row.categoryId ? groups.get(row.categoryId) : undefined;
   return categoryStyle(row.kind, group?.color) ?? KIND_STYLE[row.kind];
 }
@@ -44,6 +46,7 @@ function Block(props: { row: WeekRow; groups: Groups; badge?: string; onPress: (
       <Text style={[styles.kind, { color: k.bar }]}>
         {row.kind === "locked" ? <Ionicons name="lock-closed" size={11} color={k.bar} /> : null}
         {row.kind === "locked" ? " " : ""}
+        {row.done ? "Done · " : ""}
         {KIND_STYLE[row.kind].label}
         {group ? ` · ${group.name}` : ""}
         {props.badge ? ` · ${props.badge}` : ""}

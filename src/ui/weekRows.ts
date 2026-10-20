@@ -21,6 +21,8 @@ export interface WeekRow {
   categoryId?: string;
   /** Set for routines: which saved checklist it follows. */
   routineId?: string;
+  /** Fixed events and routines marked done this week. (Flexible sessions use kind "done".) */
+  done?: boolean;
 }
 
 /** "17:15" from week-minutes. */
@@ -30,14 +32,23 @@ export function clock(minute: number): string {
 }
 
 /** All rows for the week, grouped by day (index 0 = Monday), each day sorted by time. */
-export function rowsByDay(input: WeekInput, plan: PlanResult): WeekRow[][] {
+/** Done, whatever kind it is: a done flexible session, or an event marked done. */
+export const isDone = (row: WeekRow) => row.kind === "done" || row.done === true;
+
+/** `doneEvents`: ids of fixed events and routines marked done this week. */
+export function rowsByDay(input: WeekInput, plan: PlanResult, doneEvents: Set<string> = new Set()): WeekRow[][] {
+  const event = <K extends "fixed" | "routine">(e: WeekInput["fixed"][number], kind: K) => ({
+    ...e,
+    kind,
+    ...(doneEvents.has(e.id) ? { done: true } : {}),
+  });
   const titles = new Map(input.items.map((i) => [i.id, i.title]));
   const groups = new Map(input.items.map((i) => [i.id, i.categoryId]));
   const rows: WeekRow[] = [
-    ...input.fixed.map((e) => ({ ...e, kind: "fixed" as const })),
+    ...input.fixed.map((e) => event(e, "fixed")),
     // Rest blocks only come from old sample data now (rest is a group); they show as fixed time.
-    ...input.rest.map((e) => ({ ...e, kind: "fixed" as const })),
-    ...(input.routines ?? []).map((e) => ({ ...e, kind: "routine" as const })),
+    ...input.rest.map((e) => event(e, "fixed")),
+    ...(input.routines ?? []).map((e) => event(e, "routine")),
     ...plan.placements.map((p) => ({
       id: p.id,
       title: titles.get(p.itemId) ?? p.itemId,

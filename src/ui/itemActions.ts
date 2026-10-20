@@ -17,6 +17,7 @@ import { isEventKind, type RowKind, type WeekRow } from "./weekRows";
 
 export type ActionId =
   | "move"
+  | "length"
   | "steps"
   | "rename"
   | "suggest"
@@ -38,16 +39,22 @@ export interface Action {
   destructive?: boolean;
 }
 
-/** The actions for one kind of row, in the order they're shown. */
-export function actionsFor(kind: RowKind, title: string): Action[] {
+/**
+ * The actions for one kind of row, in the order they're shown. `done`: a
+ * fixed event or routine already marked done this week.
+ */
+export function actionsFor(kind: RowKind, title: string, done = false): Action[] {
   const remove: Action = { id: "delete", label: `Delete ${title}`, destructive: true };
   const rename: Action = { id: "rename", label: "Rename" };
+  const length: Action = { id: "length", label: "Change length" };
+  // Fixed events and routines: done (or not) per week, like flexible sessions.
+  const eventDone: Action = done ? { id: "undone", label: "Not done yet" } : { id: "done", label: "Done" };
   switch (kind) {
     case "fixed":
       // The scheduler never moves these, so there is nothing to lock.
-      return [{ id: "move", label: "Move" }, rename, remove];
+      return [eventDone, { id: "move", label: "Move" }, length, rename, remove];
     case "routine":
-      return [{ id: "move", label: "Move" }, { id: "steps", label: "Edit steps" }, rename, remove];
+      return [eventDone, { id: "move", label: "Move" }, { id: "steps", label: "Edit steps" }, length, rename, remove];
     case "suggested":
     case "kept":
       return [
@@ -55,6 +62,7 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
         { id: "suggest", label: "Suggest new slot" },
         { id: "lock", label: "Lock here" },
         { id: "done", label: "Done" },
+        length,
         rename,
         { ...remove, label: `Delete ${title} (every week)` },
         { id: "queue", label: "Move to queue…" },
@@ -64,6 +72,7 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
       return [
         { id: "unlock", label: "Unlock (to move it)" },
         { id: "done", label: "Done" },
+        length,
         rename,
         { ...remove, label: `Delete ${title} (every week)` },
         { id: "queue", label: "Move to queue…" },
@@ -73,6 +82,25 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
     case "skipped":
       return [{ id: "unqueue", label: "Bring back to this week" }];
   }
+}
+
+/** Quick picks for "Change length", in minutes. */
+export const LENGTH_CHOICES = [15, 30, 45, 60, 90, 120, 180];
+
+/** "45 min", "1h", "1h 30m". */
+export function lengthLabel(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/** Why `minutes` can't be the new length of something starting at week-minute `start`, or undefined. */
+export function lengthProblem(start: number, minutes: number): string | undefined {
+  if (!Number.isInteger(minutes) || minutes < 15) return "Make it at least 15 minutes.";
+  if (minutes > 12 * 60) return "Keep it under 12 hours.";
+  if (start + minutes > WEEK) return "It would run past Sunday midnight.";
+  return undefined;
 }
 
 /** Why a new name can't be used, or undefined if it's fine. */

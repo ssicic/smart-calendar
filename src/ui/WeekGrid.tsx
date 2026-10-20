@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { DAY, type DaySleep } from "../engine";
-import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
+import { DAY_NAMES, clock, type WeekRow, isDone } from "./weekRows";
 import {
   adjustDraft,
   canDrag,
@@ -350,6 +350,8 @@ function DraggableBlock(props: {
           // Narrow side-by-side blocks: one line with "…" instead of breaking words.
           numberOfLines={b.lanes > 1 ? 1 : Math.max(1, Math.floor(height / 13))}
         >
+          {isDone(b.row) ? <Ionicons name="checkmark" size={10} color={colors.textMuted} /> : null}
+          {isDone(b.row) ? " " : ""}
           {b.row.kind === "locked" ? <Ionicons name="lock-closed" size={9} color={colors.accentStrong} /> : null}
           {b.row.kind === "locked" ? " " : ""}
           {/* Routine progress first, so narrow columns still show it. */}

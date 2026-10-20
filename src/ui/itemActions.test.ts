@@ -7,6 +7,8 @@ import {
   moveProblem,
   moveSession,
   nextSlot,
+  lengthLabel,
+  lengthProblem,
   renameProblem,
   sameNameEvents,
   storedId,
@@ -31,18 +33,18 @@ const week: WeekInput = {
 
 describe("actionsFor", () => {
   it("follows the agreed order for a suggested session", () => {
-    expect(actionsFor("suggested", "Gym").map((a) => a.id)).toEqual(["move", "suggest", "lock", "done", "rename", "delete", "queue"]);
+    expect(actionsFor("suggested", "Gym").map((a) => a.id)).toEqual(["move", "suggest", "lock", "done", "length", "rename", "delete", "queue"]);
   });
   it("offers Lock here for kept sessions too", () => {
     expect(actionsFor("kept", "Gym").map((a) => a.id)).toEqual(actionsFor("suggested", "Gym").map((a) => a.id));
   });
 
   it("offers unlock instead of lock once locked, and no way to move it", () => {
-    expect(actionsFor("locked", "Gym").map((a) => a.id)).toEqual(["unlock", "done", "rename", "delete", "queue"]);
+    expect(actionsFor("locked", "Gym").map((a) => a.id)).toEqual(["unlock", "done", "length", "rename", "delete", "queue"]);
   });
   it("never offers lock for fixed events and routines", () => {
-    expect(actionsFor("fixed", "Work").map((a) => a.id)).toEqual(["move", "rename", "delete"]);
-    expect(actionsFor("routine", "Night routine").map((a) => a.id)).toEqual(["move", "steps", "rename", "delete"]);
+    expect(actionsFor("fixed", "Work").map((a) => a.id)).toEqual(["done", "move", "length", "rename", "delete"]);
+    expect(actionsFor("routine", "Night routine").map((a) => a.id)).toEqual(["done", "move", "steps", "length", "rename", "delete"]);
   });
 });
 
@@ -157,5 +159,22 @@ describe("rename", () => {
     const work = row("w1", "Work", "fixed");
     const rows = [work, row("w2", "Work", "fixed"), row("w3", "Work", "routine"), row("c", "Class", "fixed")];
     expect(sameNameEvents(rows, work).map((r) => r.id)).toEqual(["w2"]);
+  });
+});
+
+describe("change length", () => {
+  it("offers Not done yet for an event already done this week", () => {
+    expect(actionsFor("fixed", "Work", true)[0]).toEqual({ id: "undone", label: "Not done yet" });
+  });
+
+  it("labels lengths simply", () => {
+    expect([15, 60, 90, 125].map(lengthLabel)).toEqual(["15 min", "1h", "1h 30m", "2h 5m"]);
+  });
+
+  it("needs 15 minutes to 12 hours, ending by Sunday midnight", () => {
+    expect(lengthProblem(0, 10)).toMatch(/at least 15/);
+    expect(lengthProblem(0, 13 * 60)).toMatch(/under 12 hours/);
+    expect(lengthProblem(7 * 1440 - 30, 60)).toMatch(/Sunday midnight/);
+    expect(lengthProblem(600, 90)).toBeUndefined();
   });
 });
