@@ -13,6 +13,7 @@ import { weekSummary } from "./weekItems";
 import { reviewStats } from "./weekReview";
 import { ReviewSheet } from "./ReviewSheet";
 import { PlanSheet } from "./PlanSheet";
+import { HistorySheet } from "./HistorySheet";
 import { WeekPanelSheet } from "./WeekPanelSheet";
 import { DayTodos } from "./DayTodos";
 import { canAddFromLater, laterHeading } from "./later";
@@ -73,6 +74,7 @@ export function WeekScreen() {
   const dayTodos = useMemo(() => weekItems.filter((i) => i.day === day && i.kind === "todo"), [weekItems, day]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -292,6 +294,11 @@ export function WeekScreen() {
                 <Text style={styles.todayButtonText}>Review</Text>
               </Pressable>
             )}
+            {view === "year" && (
+              <Pressable onPress={() => setHistoryOpen(true)} style={styles.todayButton} accessibilityRole="button">
+                <Text style={styles.todayButtonText}>Past weeks</Text>
+              </Pressable>
+            )}
           </View>
         </View>
         <Text style={styles.sub}>{subtitle}</Text>
@@ -452,9 +459,22 @@ export function WeekScreen() {
             setReviewOpen(false);
             setPlanOpen(true);
           }}
+          onPastWeeks={() => {
+            setReviewOpen(false);
+            setHistoryOpen(true);
+          }}
           onClose={() => setReviewOpen(false)}
         />
       )}
+      <HistorySheet
+        db={db}
+        visible={historyOpen}
+        thisWeek={thisWeek}
+        todayKey={dateKey(now)}
+        groups={groups}
+        later={later}
+        onClose={() => setHistoryOpen(false)}
+      />
       <PlanSheet
         db={db}
         visible={planOpen}

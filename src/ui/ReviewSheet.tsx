@@ -21,8 +21,10 @@ interface Props {
   items: WeekItem[];
   movedOn: MovedOn[];
   later: LaterEntry[];
-  /** Opens "Plan next week". */
-  onPlanNext: () => void;
+  /** Opens "Plan next week" (left out for a past week: no button). */
+  onPlanNext?: () => void;
+  /** Opens "Past weeks" (left out when already looking at history). */
+  onPastWeeks?: () => void;
   onClose: () => void;
 }
 
@@ -31,6 +33,7 @@ const hours = (minutes: number) => `${Math.round(minutes / 6) / 10}h`;
 /** Looking back at a week: what got done, where the time went, what moved on. */
 export function ReviewSheet(props: Props) {
   const { visible, weekLabel, nextWeekStart, stats, routines, items, movedOn, later, onPlanNext, onClose } = props;
+  const { onPastWeeks } = props;
   const finished = items.filter(isFinished);
   const { sessions } = stats;
 
@@ -96,9 +99,16 @@ export function ReviewSheet(props: Props) {
                 <Text style={styles.note}>Waiting in Later now: {later.map((l) => l.title).join(", ")}</Text>
               )}
             </Section>
-            <Pressable onPress={onPlanNext} style={styles.planButton} accessibilityRole="button">
-              <Text style={styles.planText}>Plan next week ›</Text>
-            </Pressable>
+            {onPlanNext && (
+              <Pressable onPress={onPlanNext} style={styles.planButton} accessibilityRole="button">
+                <Text style={styles.planText}>Plan next week ›</Text>
+              </Pressable>
+            )}
+            {onPastWeeks && (
+              <Pressable onPress={onPastWeeks} style={styles.pastLink} accessibilityRole="button">
+                <Text style={styles.pastText}>Past weeks ›</Text>
+              </Pressable>
+            )}
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -163,6 +173,8 @@ const styles = StyleSheet.create({
   muted: { fontFamily: font.regular, fontSize: 15, color: colors.textFaint },
   note: { fontFamily: font.regular, fontSize: 12, color: colors.textMuted },
   planButton: { backgroundColor: colors.accent, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  pastLink: { alignSelf: "center", paddingVertical: 6 },
+  pastText: { fontFamily: font.bold, fontSize: 15, color: colors.accentStrong },
   planText: { color: colors.white, fontSize: 16, fontFamily: font.bold },
   groupTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, overflow: "hidden" },
   groupFill: { height: 8, borderRadius: 4 },
