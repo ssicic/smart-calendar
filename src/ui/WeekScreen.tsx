@@ -11,6 +11,7 @@ import { dayLoads, totalMinutes, weekTotals } from "./dayLoad";
 import { progress, progressLabel } from "./routines";
 import { weekSummary } from "./weekItems";
 import { WeekPanelSheet } from "./WeekPanelSheet";
+import { canAddFromLater, laterHeading } from "./later";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { MonthView } from "./MonthView";
@@ -55,11 +56,12 @@ export function WeekScreen() {
   // The clock, refreshed every minute, so the red "now" line moves.
   const [now, setNow] = useState(() => new Date());
   // Suggestions only from today on (none in past weeks). Changes at midnight, not every minute.
-  const data = useWeek(db, weekStart, plannableFrom(weekStart, now));
+  const earliestStart = plannableFrom(weekStart, now);
+  const data = useWeek(db, weekStart, earliestStart);
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = data;
   const { categories, groupActions, setRowCategory, rename } = data;
   const { routines, checks, addRoutine, editRoutine, removeRoutine, toggleStep } = data;
-  const { weekItems, addWeekItem, changeWeekItem, removeWeekItem } = data;
+  const { weekItems, addWeekItem, changeWeekItem, removeWeekItem, later, addFromLater, removeLater } = data;
   const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -277,6 +279,7 @@ export function WeekScreen() {
               {weekItems.length === 0
                 ? "+ To-dos & goals for this week"
                 : `This week: ${weekSummary(weekItems).done}/${weekItems.length} to-dos & goals done ›`}
+              {later.length > 0 ? ` · ${laterHeading(later.length)}` : ""}
             </Text>
           </Pressable>
         )}
@@ -404,6 +407,10 @@ export function WeekScreen() {
         onAdd={addWeekItem}
         onChange={changeWeekItem}
         onDelete={removeWeekItem}
+        later={later}
+        canAddFromLater={canAddFromLater(earliestStart)}
+        onAddFromLater={addFromLater}
+        onDeleteLater={removeLater}
         onClose={() => setPanelOpen(false)}
       />
       <QuickAddSheet

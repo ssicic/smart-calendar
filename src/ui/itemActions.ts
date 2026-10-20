@@ -25,7 +25,8 @@ export type ActionId =
   | "done"
   | "undone"
   | "delete"
-  | "queue"
+  | "queue" // to next week
+  | "later" // to the Later list (no week yet)
   | "unqueue";
 
 /** For a repeating event: change "Just this week" or "Every week". */
@@ -56,7 +57,7 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
         { id: "done", label: "Done" },
         rename,
         { ...remove, label: `Delete ${title} (every week)` },
-        { id: "queue", label: "Move to queue (next week)" },
+        { id: "queue", label: "Move to queue…" },
       ];
     case "locked":
       // Locked means "don't move it": no Move or Suggest (and no dragging) until it's unlocked.
@@ -65,7 +66,7 @@ export function actionsFor(kind: RowKind, title: string): Action[] {
         { id: "done", label: "Done" },
         rename,
         { ...remove, label: `Delete ${title} (every week)` },
-        { id: "queue", label: "Move to queue (next week)" },
+        { id: "queue", label: "Move to queue…" },
       ];
     case "done":
       return [{ id: "undone", label: "Not done yet" }, rename, { ...remove, label: `Delete ${title} (every week)` }];

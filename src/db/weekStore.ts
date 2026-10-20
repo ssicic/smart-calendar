@@ -240,6 +240,21 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX week_items_by_week ON week_items (week_start);
   `,
+  // Version 12: the "Later" list. A queue entry with target_week NULL waits
+  // in Later (no week yet) until the user adds it to a week. SQLite can't
+  // drop NOT NULL, so the table is rebuilt and copied in the same order.
+  `
+  CREATE TABLE queue_v12 (
+    id           TEXT PRIMARY KEY,
+    item_id      TEXT NOT NULL,
+    placement_id TEXT NOT NULL, -- the skipped session it came from, for undo
+    target_week  TEXT           -- NULL = Later
+  );
+  INSERT INTO queue_v12 (id, item_id, placement_id, target_week)
+    SELECT id, item_id, placement_id, target_week FROM queue ORDER BY rowid;
+  DROP TABLE queue;
+  ALTER TABLE queue_v12 RENAME TO queue;
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -605,12 +620,12 @@ export async function forgetPlacement(db: Db, placementId: string): Promise<void
   });
 }
 
-/** Skip this session and add one extra session of the same item to `targetWeek`. */
+/** Skip this session and add one extra session of the same item to `targetWeek` (null = the Later list). */
 export async function queuePlacement(
   db: Db,
   weekStart: string,
   p: Placement,
-  targetWeek: string,
+  targetWeek: string | null,
   queueId: string,
 ): Promise<void> {
   await db.withTransactionAsync(async () => {

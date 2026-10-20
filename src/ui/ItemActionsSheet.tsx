@@ -8,6 +8,7 @@ import { CategoryPicker } from "./CategoryPicker";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { Chips } from "./Chips";
 import { actionsFor, renameProblem, sameNameEvents, type ActionId, type EventScope } from "./itemActions";
+import { QUEUE_CHOICES } from "./later";
 import { overlapping, summarize } from "./overlaps";
 import { parseTime } from "./quickAdd";
 import { TimePicker } from "./TimePicker";
@@ -63,6 +64,8 @@ export function ItemActionsSheet(props: Props) {
   const [renameAll, setRenameAll] = useState(false);
   const [error, setError] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // "Move to queue…" was tapped: show Next week / Later.
+  const [pickQueue, setPickQueue] = useState(false);
   const [moveDay, setMoveDay] = useState(0);
   const [moveTime, setMoveTime] = useState("");
   const [scope, setScope] = useState<EventScope>("week");
@@ -74,6 +77,7 @@ export function ItemActionsSheet(props: Props) {
     setMode("menu");
     setError(undefined);
     setConfirmDelete(false);
+    setPickQueue(false);
     setWarningsOff(false);
     setScope("week");
     setRenameAll(false);
@@ -114,6 +118,7 @@ export function ItemActionsSheet(props: Props) {
     // Deleting can't be undone, so the first tap only asks for a second one
     // (for a repeating event: which weeks, which is the second tap).
     if (action === "delete" && !confirmDelete) return setConfirmDelete(true);
+    if (action === "queue" && !pickQueue) return setPickQueue(true);
     const err = await onAction(row, action, deleteScope);
     if (err) setError(err);
     else onClose();
@@ -206,6 +211,23 @@ export function ItemActionsSheet(props: Props) {
             <View style={styles.list}>
               {actionsFor(row.kind, row.title).map((a) => {
                 const confirming = a.id === "delete" && confirmDelete;
+                if (a.id === "queue" && pickQueue) {
+                  return (
+                    <View key={a.id} style={styles.scopeRow}>
+                      {QUEUE_CHOICES.map((c) => (
+                        <Pressable
+                          key={c.id}
+                          onPress={() => run(c.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Move to queue: ${c.label}`}
+                          style={({ pressed }) => [styles.action, styles.scopeButton, pressed && styles.pressed]}
+                        >
+                          <Text style={[styles.actionText, styles.center]}>{c.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  );
+                }
                 if (confirming && repeats) {
                   return (
                     <View key={a.id} style={styles.scopeRow}>

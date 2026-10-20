@@ -101,7 +101,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 11 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 12 });
   });
 
   it("round-trips and moves fixed events and routines", async () => {

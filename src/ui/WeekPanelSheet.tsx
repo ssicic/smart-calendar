@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import type { LaterEntry } from "../db/laterStore";
 import type { WeekItem, WeekItemKind } from "../db/weekItemsStore";
+import { laterHeading } from "./later";
 import { isFinished, stepProgress, weekItemProblem, weekSummary } from "./weekItems";
 
 interface Props {
@@ -12,11 +14,18 @@ interface Props {
   onAdd: (kind: WeekItemKind, title: string, target?: number) => Promise<string | undefined>;
   onChange: (item: WeekItem) => Promise<string | undefined>;
   onDelete: (id: string) => Promise<string | undefined>;
+  /** Sessions moved to the queue with no week yet. */
+  later: LaterEntry[];
+  /** False for a past week: nothing new can be planned there. */
+  canAddFromLater: boolean;
+  onAddFromLater: (id: string) => Promise<string | undefined>;
+  onDeleteLater: (id: string) => Promise<string | undefined>;
   onClose: () => void;
 }
 
 /** The week's to-do list (tick off) and goals (count up to a target), saved with the week. */
-export function WeekPanelSheet({ visible, weekLabel, items, onAdd, onChange, onDelete, onClose }: Props) {
+export function WeekPanelSheet(props: Props) {
+  const { visible, weekLabel, items, onAdd, onChange, onDelete, onClose, later } = props;
   const [error, setError] = useState<string>();
   // Which row is being renamed, and which one asked "tap again to delete".
   const [editing, setEditing] = useState<{ id: string; title: string }>();
@@ -44,11 +53,11 @@ export function WeekPanelSheet({ visible, weekLabel, items, onAdd, onChange, onD
     if (editing.title.trim() !== item.title) await run(onChange({ ...item, title: editing.title.trim() }));
   };
 
-  const remove = async (id: string) => {
+  const remove = async (id: string, del = onDelete) => {
     // Can't be undone, so the first tap only asks.
     if (confirmDelete !== id) return setConfirmDelete(id);
     setConfirmDelete(undefined);
-    await run(onDelete(id));
+    await run(del(id));
   };
 
   const todos = items.filter((i) => i.kind === "todo");
@@ -77,9 +86,9 @@ export function WeekPanelSheet({ visible, weekLabel, items, onAdd, onChange, onD
       </Pressable>
     );
 
-  const deleteButton = (item: WeekItem) => (
+  const deleteButton = (item: { id: string; title: string }, del = onDelete) => (
     <Pressable
-      onPress={() => remove(item.id)}
+      onPress={() => remove(item.id, del)}
       hitSlop={8}
       style={[styles.delete, confirmDelete === item.id && styles.deleteConfirm]}
       accessibilityRole="button"
@@ -157,6 +166,29 @@ export function WeekPanelSheet({ visible, weekLabel, items, onAdd, onChange, onD
               onAdd={(text, target) => onAdd("goal", text, target)}
               onError={setError}
             />
+
+            {later.length > 0 && (
+              <>
+                <Text style={[styles.section, styles.sectionGap]}>{laterHeading(later.length)}</Text>
+                <Text style={styles.hint}>Sessions you moved to the queue for later.</Text>
+                {later.map((entry) => (
+                  <View key={entry.id} style={styles.row}>
+                    <Text style={[styles.itemText, styles.flex]}>{entry.title}</Text>
+                    {props.canAddFromLater && (
+                      <Pressable
+                        onPress={() => run(props.onAddFromLater(entry.id))}
+                        style={styles.laterAdd}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add ${entry.title} to this week`}
+                      >
+                        <Text style={styles.laterAddText}>Add to this week</Text>
+                      </Pressable>
+                    )}
+                    {deleteButton(entry, props.onDeleteLater)}
+                  </View>
+                ))}
+              </>
+            )}
 
             {error && <Text style={styles.error}>{error}</Text>}
           </ScrollView>
@@ -276,4 +308,7 @@ const styles = StyleSheet.create({
   targetRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   targetLabel: { flex: 1, fontSize: 13, color: "#6B7280" },
   error: { color: "#B91C1C", fontWeight: "600" },
+  hint: { fontSize: 13, color: "#6B7280" },
+  laterAdd: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#EEF0FE" },
+  laterAddText: { color: "#5B6CF0", fontWeight: "700", fontSize: 13 },
 });

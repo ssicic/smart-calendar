@@ -56,6 +56,7 @@ import {
   type WeekItem,
   type WeekItemKind,
 } from "../db/weekItemsStore";
+import { addLaterToWeek, deleteLater, loadLater, type LaterEntry } from "../db/laterStore";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { checkKey } from "./routines";
 import type { QuickAddResult } from "./QuickAddSheet";
@@ -84,6 +85,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const [routines, setRoutines] = useState<Routine[]>([]);
   // This week's to-do list and goals.
   const [weekItems, setWeekItems] = useState<WeekItem[]>([]);
+  // The Later list (sessions moved to the queue with no week yet).
+  const [later, setLater] = useState<LaterEntry[]>([]);
   // Ticked routine steps this week, as checkKey(eventId, stepId).
   const [checks, setChecks] = useState<Set<string>>(new Set());
 
@@ -94,6 +97,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setCategories(await loadCategories(db));
     setRoutines(await loadRoutines(db));
     setWeekItems(await loadWeekItems(db, weekStart));
+    setLater(await loadLater(db));
     setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
   }, [db, weekStart, nextWeek]);
 
@@ -139,8 +143,9 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
         const r = nextSlot(week, plan, p.id, newId);
         if (!r.ok) return r.error;
         await savePlacement(db, weekStart, r.placement);
-      } else if (p && action === "queue") {
-        await queuePlacement(db, weekStart, { ...p, id: storedId(p, newId) }, nextWeek, newId());
+      } else if (p && (action === "queue" || action === "later")) {
+        const target = action === "queue" ? nextWeek : null; // null = Later, no week yet
+        await queuePlacement(db, weekStart, { ...p, id: storedId(p, newId) }, target, newId());
       }
       await refresh();
     });
@@ -282,6 +287,19 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       await refresh();
     });
 
+  /** Adds one session from Later to the week on screen. */
+  const addFromLater = (id: string) =>
+    attempt(async () => {
+      await addLaterToWeek(db, id, weekStart);
+      await refresh();
+    });
+
+  const removeLater = (id: string) =>
+    attempt(async () => {
+      await deleteLater(db, id);
+      await refresh();
+    });
+
   /** Deletes a saved routine; its blocks stay on the calendar as fixed events. */
   const removeRoutine = (id: string) =>
     attempt(async () => {
@@ -307,6 +325,9 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     addWeekItem,
     changeWeekItem,
     removeWeekItem,
+    later,
+    addFromLater,
+    removeLater,
     rename,
     week,
     categories,
