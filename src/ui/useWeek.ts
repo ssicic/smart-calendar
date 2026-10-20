@@ -62,11 +62,12 @@ import {
 } from "../db/weekItemsStore";
 import { addLaterToWeek, deleteLater, loadLater, type LaterEntry } from "../db/laterStore";
 import { loadMovedOn, type MovedOn } from "../db/reviewStore";
+import { deleteGoal, insertGoal, loadGoals, updateGoal, type Goal, type GoalHorizon } from "../db/goalsStore";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { checkKey } from "./routines";
 import type { QuickAddResult } from "./QuickAddSheet";
 import type { SleepScope } from "./SleepSheet";
-import { addWeeks } from "./weekDate";
+import { addWeeks, periodsOfWeek } from "./weekDate";
 import { isEventKind, type WeekRow } from "./weekRows";
 
 let counter = 0;
@@ -90,6 +91,9 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const [routines, setRoutines] = useState<Routine[]>([]);
   // This week's to-do list and goals.
   const [weekItems, setWeekItems] = useState<WeekItem[]>([]);
+  // Goals for the year and month this week belongs to.
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const periods = periodsOfWeek(weekStart);
   // The Later list (sessions moved to the queue with no week yet).
   const [later, setLater] = useState<LaterEntry[]>([]);
   // For the week review: this week's sessions that were moved to the queue, and where to.
@@ -106,6 +110,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setCategories(await loadCategories(db));
     setRoutines(await loadRoutines(db));
     setWeekItems(await loadWeekItems(db, weekStart));
+    const p = periodsOfWeek(weekStart);
+    setGoals(await loadGoals(db, [p.year, p.month]));
     setLater(await loadLater(db));
     setMovedOn(await loadMovedOn(db, weekStart));
     setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
@@ -314,6 +320,42 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       await refresh();
     });
 
+  /** Adds a goal for this week's year or month, optionally part of a year goal. */
+  const addGoal = (horizon: GoalHorizon, title: string, parentId: string | null = null) =>
+    attempt(async () => {
+      const period = horizon === "year" ? periods.year : periods.month;
+      await insertGoal(db, { id: `g${newId()}`, title, horizon, period, parentId, done: false });
+      await refresh();
+    });
+
+  const changeGoal = (goal: Goal) =>
+    attempt(async () => {
+      await updateGoal(db, goal);
+      await refresh();
+    });
+
+  const removeGoal = (id: string) =>
+    attempt(async () => {
+      await deleteGoal(db, id);
+      await refresh();
+    });
+
+  /** A week goal that's part of a month or year goal ("Add to this week"). */
+  const addWeekGoalFor = (goal: Goal, target = 1) =>
+    attempt(async () => {
+      await insertWeekItem(db, weekStart, {
+        id: `w${newId()}`,
+        kind: "goal",
+        title: goal.title,
+        done: false,
+        progress: 0,
+        target,
+        day: null,
+        goalId: goal.id,
+      });
+      await refresh();
+    });
+
   /** Deletes a saved routine; its blocks stay on the calendar as fixed events. */
   const removeRoutine = (id: string) =>
     attempt(async () => {
@@ -358,6 +400,12 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   return {
     doneEvents,
     resize,
+    goals,
+    periods,
+    addGoal,
+    changeGoal,
+    removeGoal,
+    addWeekGoalFor,
     /** Reloads everything from the database (after changes made elsewhere, e.g. Plan next week). */
     refresh,
     routines,

@@ -15,6 +15,8 @@ export interface WeekItem {
   target: number;
   /** A to-do for one day of the week (0 = Monday), or null for the whole week. */
   day: number | null;
+  /** A week goal that's part of a month or year goal. */
+  goalId?: string | null;
 }
 
 interface WeekItemRow {
@@ -25,33 +27,35 @@ interface WeekItemRow {
   progress: number;
   target: number;
   day: number | null;
+  goal_id: string | null;
 }
 
 /** The week's to-dos and goals, in the order they were added. */
 export async function loadWeekItems(db: Db, weekStart: string): Promise<WeekItem[]> {
   const rows = await db.getAllAsync<WeekItemRow>(
-    "SELECT id, kind, title, done, progress, target, day FROM week_items WHERE week_start = ? ORDER BY position, rowid",
+    "SELECT id, kind, title, done, progress, target, day, goal_id FROM week_items WHERE week_start = ? ORDER BY position, rowid",
     [weekStart],
   );
-  return rows.map((r) => ({ ...r, done: r.done === 1 }));
+  return rows.map(({ goal_id, ...r }) => ({ ...r, done: r.done === 1, ...(goal_id ? { goalId: goal_id } : {}) }));
 }
 
 /** Adds a to-do or goal at the end of the week's list. */
 export async function insertWeekItem(db: Db, weekStart: string, item: WeekItem): Promise<void> {
   await db.runAsync(
-    `INSERT INTO week_items (id, week_start, kind, title, done, progress, target, day, position)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM week_items WHERE week_start = ?))`,
-    [item.id, weekStart, item.kind, item.title, item.done ? 1 : 0, item.progress, item.target, item.day, weekStart],
+    `INSERT INTO week_items (id, week_start, kind, title, done, progress, target, day, goal_id, position)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM week_items WHERE week_start = ?))`,
+    [item.id, weekStart, item.kind, item.title, item.done ? 1 : 0, item.progress, item.target, item.day, item.goalId ?? null, weekStart],
   );
 }
 
 /** Changes a to-do or goal (name, ticked, progress, target). */
 export async function updateWeekItem(db: Db, item: WeekItem): Promise<void> {
-  await db.runAsync("UPDATE week_items SET title = ?, done = ?, progress = ?, target = ? WHERE id = ?", [
+  await db.runAsync("UPDATE week_items SET title = ?, done = ?, progress = ?, target = ?, goal_id = ? WHERE id = ?", [
     item.title,
     item.done ? 1 : 0,
     item.progress,
     item.target,
+    item.goalId ?? null,
     item.id,
   ]);
 }

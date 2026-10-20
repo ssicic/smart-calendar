@@ -7,6 +7,8 @@ import {
   monthGrid,
   monthOfWeek,
   monthTitle,
+  periodLabel,
+  periodsOfWeek,
   plannableFrom,
   shortDate,
   stepDay,
@@ -99,5 +101,13 @@ describe("weekDate", () => {
     expect(stepDay("2026-10-19", 6, 1)).toEqual({ weekStart: "2026-10-26", day: 0 });
     expect(stepDay("2026-10-19", 0, -1)).toEqual({ weekStart: "2026-10-12", day: 6 });
     expect(stepDay("2026-10-19", 3, 1)).toEqual({ weekStart: "2026-10-19", day: 4 });
+  });
+
+  it("names goal periods for a week", () => {
+    expect(periodsOfWeek("2026-10-19")).toEqual({ year: "2026", month: "2026-10" });
+    expect(periodsOfWeek("2026-12-28")).toEqual({ year: "2026", month: "2026-12" }); // Thu 31 Dec
+    expect(periodsOfWeek("2025-12-29")).toEqual({ year: "2026", month: "2026-01" }); // Thu 1 Jan
+    expect(periodLabel("2026-10")).toBe("October 2026");
+    expect(periodLabel("2026")).toBe("2026");
   });
 });

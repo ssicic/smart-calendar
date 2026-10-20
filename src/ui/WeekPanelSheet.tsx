@@ -23,6 +23,8 @@ interface Props {
   onAddFromLater: (id: string) => Promise<string | undefined>;
   onDeleteLater: (id: string) => Promise<string | undefined>;
   onClose: () => void;
+  /** Opens the year and month goals. */
+  onOpenGoals?: () => void;
 }
 
 /** The week's to-do list (tick off) and goals (count up to a target), saved with the week. */
@@ -135,7 +137,14 @@ export function WeekPanelSheet(props: Props) {
             ))}
             <AddRow placeholder="Add a to-do…" onAdd={(text) => onAdd("todo", text)} onError={setError} />
 
-            <Text style={[styles.section, styles.sectionGap]}>Goals</Text>
+            <View style={[styles.sectionRow, styles.sectionGap]}>
+              <Text style={styles.section}>Goals</Text>
+              {props.onOpenGoals && (
+                <Pressable onPress={props.onOpenGoals} hitSlop={8} accessibilityRole="button">
+                  <Text style={styles.goalsLink}>Year & month goals ›</Text>
+                </Pressable>
+              )}
+            </View>
             {goals.map((item) => (
               <View key={item.id} style={styles.row}>
                 {title(item)}
@@ -272,6 +281,8 @@ const styles = StyleSheet.create({
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   body: { gap: 8, paddingBottom: 16 },
   section: { fontSize: 13, fontFamily: font.bold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
+  sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  goalsLink: { fontFamily: font.bold, fontSize: 13, color: colors.accentStrong },
   sectionGap: { marginTop: 12 },
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
   flex: { flex: 1 },

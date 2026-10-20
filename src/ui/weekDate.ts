@@ -157,3 +157,17 @@ export function stepDay(weekStart: string, day: number, n: number): { weekStart:
   const weeks = Math.floor(total / 7);
   return { weekStart: addWeeks(weekStart, weeks), day: total - weeks * 7 };
 }
+
+// ---- Goal periods: a year is "2026", a month is "2026-10" ----
+
+/** The year and month a week belongs to (by its Thursday), as goal periods. */
+export function periodsOfWeek(weekStart: string): { year: string; month: string } {
+  const m = monthOfWeek(weekStart);
+  return { year: String(m.year), month: `${m.year}-${pad(m.month + 1)}` };
+}
+
+/** "2026" stays "2026"; "2026-10" becomes "October 2026". */
+export function periodLabel(period: string): string {
+  const [y, m] = period.split("-").map(Number);
+  return m ? monthTitle({ year: y ?? 1970, month: m - 1 }) : period;
+}

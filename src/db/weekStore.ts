@@ -282,6 +282,22 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (event_id, week_start)
   );
   `,
+  // Version 16: goals for the year ("2026") and the month ("2026-10"). A
+  // month goal can sit under a year goal (parent_id); a week goal
+  // (week_items, kind 'goal') can sit under either (goal_id).
+  `
+  CREATE TABLE goals (
+    id        TEXT PRIMARY KEY,
+    title     TEXT NOT NULL,
+    horizon   TEXT NOT NULL CHECK (horizon IN ('year', 'month')),
+    period    TEXT NOT NULL,
+    parent_id TEXT,
+    done      INTEGER NOT NULL DEFAULT 0,
+    position  INTEGER NOT NULL
+  );
+  CREATE INDEX goals_by_period ON goals (period);
+  ALTER TABLE week_items ADD COLUMN goal_id TEXT;
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

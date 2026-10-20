@@ -14,6 +14,7 @@ import { reviewStats } from "./weekReview";
 import { ReviewSheet } from "./ReviewSheet";
 import { PlanSheet } from "./PlanSheet";
 import { HistorySheet } from "./HistorySheet";
+import { GoalsSheet } from "./GoalsSheet";
 import { WeekPanelSheet } from "./WeekPanelSheet";
 import { DayTodos } from "./DayTodos";
 import { canAddFromLater, laterHeading } from "./later";
@@ -75,6 +76,8 @@ export function WeekScreen() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [goalsOpen, setGoalsOpen] = useState(false);
+  const { goals, periods, addGoal, changeGoal, removeGoal, addWeekGoalFor } = data;
   const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -294,6 +297,11 @@ export function WeekScreen() {
                 <Text style={styles.todayButtonText}>Review</Text>
               </Pressable>
             )}
+            {(view === "month" || view === "year") && (
+              <Pressable onPress={() => setGoalsOpen(true)} style={styles.todayButton} accessibilityRole="button">
+                <Text style={styles.todayButtonText}>Goals</Text>
+              </Pressable>
+            )}
             {view === "year" && (
               <Pressable onPress={() => setHistoryOpen(true)} style={styles.todayButton} accessibilityRole="button">
                 <Text style={styles.todayButtonText}>Past weeks</Text>
@@ -502,6 +510,22 @@ export function WeekScreen() {
         onAddFromLater={addFromLater}
         onDeleteLater={removeLater}
         onClose={() => setPanelOpen(false)}
+        onOpenGoals={() => {
+          setPanelOpen(false);
+          setGoalsOpen(true);
+        }}
+      />
+      <GoalsSheet
+        visible={goalsOpen}
+        periods={periods}
+        goals={goals}
+        weekGoals={weeklyItems.filter((i) => i.kind === "goal")}
+        onAddGoal={addGoal}
+        onChangeGoal={changeGoal}
+        onDeleteGoal={removeGoal}
+        onAddToWeek={(g) => addWeekGoalFor(g)}
+        onChangeWeekGoal={changeWeekItem}
+        onClose={() => setGoalsOpen(false)}
       />
       <QuickAddSheet
         form={adding}
