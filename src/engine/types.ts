@@ -78,6 +78,11 @@ export interface PlannerSettings {
   dayWindows?: Interval[];
   /** Gap kept between a placement and anything adjacent. */
   bufferMin: number;
+  /**
+   * Week-minute before which nothing new is suggested (time that's already
+   * over). 0 or unset = the whole week; WEEK = none of it (a past week).
+   */
+  earliestStart?: number;
   /** Free minutes per week the scheduler must leave unfilled. */
   minFreeMinutes: number;
 }

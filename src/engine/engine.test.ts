@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DAY,
+  WEEK,
   capacity,
   checkNewItem,
   dayOf,
@@ -132,6 +133,18 @@ describe("planWeek", () => {
   it("reports items longer than any gap as no-slot", () => {
     const { unplaced } = planWeek(week({ items: [item("marathon", h(15), 1)] }));
     expect(unplaced).toEqual([{ itemId: "marathon", missing: 1, reason: "no-slot" }]);
+  });
+
+  it("suggests nothing before earliestStart, and nothing at all in a past week", () => {
+    const base = week({ items: [item("gym", 60, 3)] });
+    const today = { ...base, settings: { ...base.settings, earliestStart: at(3, 0) } }; // it's Thursday
+    const { placements, capacity: cap } = planWeek(today);
+    expect(placements.length).toBeGreaterThan(0);
+    for (const p of placements) expect(p.start).toBeGreaterThanOrEqual(at(3, 0));
+    expect(cap.freeMinutes).toBeLessThan(planWeek(base).capacity.freeMinutes);
+
+    const past = { ...base, settings: { ...base.settings, earliestStart: WEEK } };
+    expect(planWeek(past).placements).toEqual([]);
   });
 
   it("treats routines as busy time", () => {

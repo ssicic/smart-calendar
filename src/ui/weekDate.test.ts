@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { addMonths, addWeeks, dayKey, monthGrid, monthOfWeek, monthTitle, shortDate, weekRange, weekStartOf, weeksBetween, weeksOfYear } from "./weekDate";
+import {
+  addMonths,
+  addWeeks,
+  dayKey,
+  monthGrid,
+  monthOfWeek,
+  monthTitle,
+  plannableFrom,
+  shortDate,
+  weekRange,
+  weekStartOf,
+  weeksBetween,
+  weeksOfYear,
+} from "./weekDate";
 
 describe("weekDate", () => {
   it("finds the Monday of any day in the week", () => {
@@ -65,5 +78,13 @@ describe("weekDate", () => {
     expect(weeks[weeks.length - 1]).toBe("2026-12-28");
     expect(new Set(weeks).size).toBe(weeks.length);
     expect(weeks).toHaveLength(53);
+  });
+
+  it("knows which part of a week can still get suggestions", () => {
+    const thursday = new Date(2026, 9, 22, 15, 30);
+    expect(plannableFrom("2026-10-19", thursday)).toBe(3 * 1440); // this week: from Thursday 00:00
+    expect(plannableFrom("2026-10-26", thursday)).toBe(0); // next week: all of it
+    expect(plannableFrom("2026-10-12", thursday)).toBe(7 * 1440); // last week: none
+    expect(plannableFrom("2026-10-19", new Date(2026, 9, 19, 8))).toBe(0); // Monday
   });
 });

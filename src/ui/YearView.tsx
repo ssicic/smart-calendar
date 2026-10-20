@@ -19,7 +19,7 @@ interface Props {
 /** Year view: 12 small months, each day shaded by how much is planned. */
 export function YearView({ db, year, todayKey, onPressMonth }: Props) {
   const weeks = useMemo(() => weeksOfYear(year), [year]);
-  const byDate = usePlannedDays(db, weeks);
+  const byDate = usePlannedDays(db, weeks, todayKey);
   const months = useMemo(() => Array.from({ length: 12 }, (_, month) => monthGrid({ year, month })), [year]);
 
   return (

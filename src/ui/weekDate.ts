@@ -127,3 +127,19 @@ export function weeksOfYear(year: number): string[] {
 export function weeksBetween(from: string, to: string): number {
   return Math.round((fromKey(to).getTime() - fromKey(from).getTime()) / (7 * 86_400_000));
 }
+
+/**
+ * Where suggestions may start in `weekStart`, as a week-minute (the planner's
+ * earliestStart): the whole week if it's in the future, from today's midnight
+ * if it's this week (so today stays usable and nothing jumps as the clock
+ * moves), and none of it if the week is over.
+ */
+export function plannableFrom(weekStart: string, now: Date): number {
+  const thisWeek = weekStartOf(now);
+  if (weekStart > thisWeek) return 0; // "YYYY-MM-DD" strings sort like dates
+  if (weekStart < thisWeek) return 7 * 24 * 60;
+  return ((now.getDay() + 6) % 7) * 24 * 60;
+}
+
+/** plannableFrom() with today given as "YYYY-MM-DD" (for code that keeps today as a key). */
+export const plannableFromKey = (weekStart: string, todayKey: string) => plannableFrom(weekStart, fromKey(todayKey));

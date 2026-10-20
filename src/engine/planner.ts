@@ -21,7 +21,9 @@ function fulfilled(placements: Placement[], itemId: string): number {
 }
 
 export function busyIntervals(input: WeekInput, extra: Interval[] = []): Interval[] {
-  return [...input.fixed, ...input.rest, ...(input.routines ?? []), ...keptPlacements(input.placements), ...extra];
+  // Time that's already over counts as taken, so nothing new lands there.
+  const over = input.settings.earliestStart ? [{ start: 0, end: input.settings.earliestStart }] : [];
+  return [...over, ...input.fixed, ...input.rest, ...(input.routines ?? []), ...keptPlacements(input.placements), ...extra];
 }
 
 export function missingOccurrences(input: WeekInput, item: FlexibleItem): number {

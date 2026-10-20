@@ -12,7 +12,7 @@ import { progress, progressLabel } from "./routines";
 import { useWeek } from "./useWeek";
 import { WeekGrid } from "./WeekGrid";
 import { MonthView } from "./MonthView";
-import { addMonths, addWeeks, dateKey, monthOfWeek, monthTitle, weekRange, weekStartOf, weeksBetween, type Month } from "./weekDate";
+import { addMonths, addWeeks, dateKey, monthOfWeek, monthTitle, plannableFrom, weekRange, weekStartOf, weeksBetween, type Month } from "./weekDate";
 import { WeekView } from "./WeekView";
 import { clock, rowsByDay, type WeekRow } from "./weekRows";
 import { YearView } from "./YearView";
@@ -29,7 +29,10 @@ export function WeekScreen() {
   // The month shown in Month, and the year shown in Year.
   const [month, setMonth] = useState<Month>(() => monthOfWeek(weekStartOf(new Date())));
   const [year, setYear] = useState(() => new Date().getFullYear());
-  const data = useWeek(db, weekStart);
+  // The clock, refreshed every minute, so the red "now" line moves.
+  const [now, setNow] = useState(() => new Date());
+  // Suggestions only from today on (none in past weeks). Changes at midnight, not every minute.
+  const data = useWeek(db, weekStart, plannableFrom(weekStart, now));
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = data;
   const { categories, groupActions, setRowCategory, rename } = data;
   const { routines, checks, addRoutine, editRoutine, removeRoutine, toggleStep } = data;
@@ -49,9 +52,6 @@ export function WeekScreen() {
   const [saveError, setSaveError] = useState<string>();
   const [view, setView] = useState<ViewMode>("calendar");
   const [sleepTarget, setSleepTarget] = useState<{ day: number; field: "wake" | "bed" }>();
-
-  // The clock, refreshed every minute, so the red "now" line moves.
-  const [now, setNow] = useState(() => new Date());
 
   // Swiping sideways over the calendar goes to the next/previous week (or
   // month, year). It only takes over clearly sideways moves, so scrolling up
@@ -209,7 +209,8 @@ export function WeekScreen() {
           )}
         </View>
         <Text style={styles.sub}>{subtitle}</Text>
-        {isWeekView && unplacedSessions > 0 && (
+        {/* A past week can't get new sessions, so "doesn't fit" would only nag. */}
+        {isWeekView && weekOffset >= 0 && unplacedSessions > 0 && (
           <Text style={styles.warn}>
             {unplacedSessions} {unplacedSessions === 1 ? "session doesn't" : "sessions don't"} fit this week
           </Text>

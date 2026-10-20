@@ -68,7 +68,8 @@ async function attempt(work: () => Promise<string | void>): Promise<string | und
   }
 }
 
-export function useWeek(db: Db, weekStart: string) {
+/** `earliestStart`: where suggestions may start this week (plannableFrom), so nothing lands in the past. */
+export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const nextWeek = addWeeks(weekStart, 1);
   const [loaded, setLoaded] = useState<LoadedWeek>();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -89,7 +90,10 @@ export function useWeek(db: Db, weekStart: string) {
     refresh();
   }, [refresh]);
 
-  const week = loaded?.week;
+  const week = useMemo(
+    () => loaded && { ...loaded.week, settings: { ...loaded.week.settings, earliestStart } },
+    [loaded, earliestStart],
+  );
   const plan = useMemo(() => (week ? planWeek(week) : undefined), [week]);
   const repeatingEventIds = useMemo(() => new Set(loaded?.repeatingEventIds), [loaded]);
 
@@ -100,7 +104,8 @@ export function useWeek(db: Db, weekStart: string) {
   const add = (r: QuickAddResult) =>
     attempt(async () => {
       if (r.kind === "flexible") await insertItem(db, r.item);
-      else await insertEvents(db, r.kind, r.events, r.repeat ? null : weekStart);
+      // A repeating event starts from the week it's added in; it doesn't fill past weeks.
+      else await insertEvents(db, r.kind, r.events, r.repeat ? null : weekStart, weekStart);
       await refresh();
     });
 

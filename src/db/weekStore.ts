@@ -215,6 +215,15 @@ const MIGRATIONS: string[] = [
     WHERE id IN ('morning', 'night')
       AND NOT EXISTS (SELECT 1 FROM events WHERE events.routine_id = routines.id);
   `,
+  // Version 10: a repeating event starts from the week it was added
+  // (from_week, a Monday), instead of showing in every past week too.
+  // Repeating events from before get this week's Monday: SQLite's
+  // 'weekday 0' jumps to the coming Sunday (or stays on a Sunday), and
+  // 6 days back from that is Monday.
+  `
+  ALTER TABLE events ADD COLUMN from_week TEXT;
+  UPDATE events SET from_week = date('now', 'localtime', 'weekday 0', '-6 days') WHERE week_start IS NULL;
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -348,8 +357,10 @@ export interface LoadedWeek {
 export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string): Promise<LoadedWeek> {
   // Events that repeat every week, plus the one-off events of this week.
   const allEvents = await db.getAllAsync<EventRow>(
-    "SELECT * FROM events WHERE week_start IS NULL OR week_start = ? ORDER BY start_min",
-    [weekStart],
+    `SELECT * FROM events
+     WHERE (week_start IS NULL AND (from_week IS NULL OR from_week <= ?)) OR week_start = ?
+     ORDER BY start_min`,
+    [weekStart, weekStart],
   );
   const exceptions = await db.getAllAsync<ExceptionRow>(
     "SELECT event_id, start_min, end_min FROM event_exceptions WHERE week_start = ?",
@@ -396,20 +407,22 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
 
 // ---- Writes: what you plan ----
 
-/** `weekStart`: the only week these events are in, or null to repeat them every week. */
+/** `weekStart`: the only week these events are in, or null to repeat them every week (from `fromWeek` on). */
 export async function insertEvents(
   db: Db,
   kind: "fixed" | "routine",
   events: FixedEvent[],
   weekStart: string | null,
+  /** For repeating events: the first week they show in (null = every week, tests only). */
+  fromWeek: string | null = weekStart,
 ): Promise<void> {
   // `?` placeholders: the driver inserts values safely, so a title like
   // "Bob's class" can't break the SQL (or inject any).
   for (const e of events) {
     await db.runAsync(
-      `INSERT INTO events (id, kind, title, start_min, end_min, week_start, category_id, routine_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [e.id, kind, e.title, e.start, e.end, weekStart, e.categoryId ?? null, e.routineId ?? null],
+      `INSERT INTO events (id, kind, title, start_min, end_min, week_start, category_id, routine_id, from_week)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [e.id, kind, e.title, e.start, e.end, weekStart, e.categoryId ?? null, e.routineId ?? null, fromWeek],
     );
   }
 }

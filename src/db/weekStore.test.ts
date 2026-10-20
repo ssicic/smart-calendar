@@ -3,6 +3,7 @@
 import { createRequire } from "node:module";
 import { DEFAULT_SLEEP, planWeek, planningWindows } from "../engine";
 import { nextSlot, storedId } from "../ui/itemActions";
+import { weekStartOf } from "../ui/weekDate";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_SETTINGS,
@@ -100,7 +101,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 9 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 10 });
   });
 
   it("round-trips and moves fixed events and routines", async () => {
@@ -111,6 +112,26 @@ describe("weekStore", () => {
     expect(week.fixed).toEqual([{ id: "w1", title: "Work", start: 600, end: 1080 }]);
     expect(week.routines).toEqual([{ id: "m1", title: "Morning routine", start: 420, end: 465, routineId: "morning" }]);
     expect(week.rest).toEqual([]);
+  });
+
+  it("starts a repeating event from the week it was added, not before", async () => {
+    await insertEvents(db, "fixed", [{ id: "w1", title: "Work", start: 540, end: 1020 }], null, W2);
+    expect((await loadWeek(db, W1, W2)).week.fixed).toEqual([]);
+    expect((await loadWeek(db, W2, W3)).week.fixed.map((e) => e.id)).toEqual(["w1"]);
+    expect((await loadWeek(db, W4, W4)).week.fixed.map((e) => e.id)).toEqual(["w1"]);
+  });
+
+  it("starts repeating events from before v10 at this week", async () => {
+    const old = nodeDb();
+    await migrate(old, 9);
+    old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min) VALUES ('w1', 'fixed', 'Work', 540, 1020)`);
+    old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min, week_start) VALUES ('d1', 'fixed', 'Dentist', 600, 660, '${W1}')`);
+    await migrate(old);
+    const rows = old.raw.prepare("SELECT id, from_week FROM events ORDER BY id").all();
+    expect(rows).toEqual([
+      { id: "d1", from_week: null }, // one-off: unchanged
+      { id: "w1", from_week: weekStartOf(new Date()) },
+    ]);
   });
 
   it("shows a one-off event only in its own week, and a repeating one in every week", async () => {

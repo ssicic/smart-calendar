@@ -26,7 +26,7 @@ interface Props {
 /** Month view: a Monday-first grid; each day shows its planned hours as a bar. */
 export function MonthView({ db, month, todayKey, onPressWeek }: Props) {
   const rows = useMemo(() => monthGrid(month), [month]);
-  const byDate = usePlannedDays(db, rows.map((r) => r.weekStart));
+  const byDate = usePlannedDays(db, rows.map((r) => r.weekStart), todayKey);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
