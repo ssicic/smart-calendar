@@ -21,6 +21,7 @@ import {
   loadRoutines,
   loadWeek,
   insertRoutine,
+  deleteRoutine,
   setCheck,
   updateRoutine,
   type Routine,
@@ -245,6 +246,13 @@ export function useWeek(db: Db, weekStart: string) {
       await refresh();
     });
 
+  /** Deletes a saved routine; its blocks stay on the calendar as fixed events. */
+  const removeRoutine = (id: string) =>
+    attempt(async () => {
+      await deleteRoutine(db, id);
+      await refresh();
+    });
+
   /** Ticks or unticks one step of a routine on the calendar (this week only). */
   const toggleStep = (eventId: string, stepId: string) =>
     attempt(async () => {
@@ -257,6 +265,7 @@ export function useWeek(db: Db, weekStart: string) {
     checks,
     addRoutine,
     editRoutine,
+    removeRoutine,
     toggleStep,
     rename,
     week,

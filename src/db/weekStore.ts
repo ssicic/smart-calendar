@@ -207,6 +207,14 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (event_id, week_start, step_id)
   );
   `,
+  // Version 9: no ready-made routines (everyone's mornings differ). The two
+  // that v8 added are removed, unless something on the calendar already
+  // follows them; then they stay and the user can edit or delete them.
+  `
+  DELETE FROM routines
+    WHERE id IN ('morning', 'night')
+      AND NOT EXISTS (SELECT 1 FROM events WHERE events.routine_id = routines.id);
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -649,6 +657,18 @@ export async function insertRoutine(db: Db, r: Routine): Promise<void> {
 /** Changes a routine's name and steps; every event that follows it shows the new checklist. */
 export async function updateRoutine(db: Db, r: Routine): Promise<void> {
   await db.runAsync("UPDATE routines SET name = ?, steps = ? WHERE id = ?", [r.name, JSON.stringify(r.steps), r.id]);
+}
+
+/**
+ * Deletes a saved routine. Anything on the calendar that followed it stays,
+ * as a plain fixed event (same time, no checklist), and its ticks go.
+ */
+export async function deleteRoutine(db: Db, id: string): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM routine_checks WHERE event_id IN (SELECT id FROM events WHERE routine_id = ?)", [id]);
+    await db.runAsync("UPDATE events SET kind = 'fixed', routine_id = NULL WHERE routine_id = ?", [id]);
+    await db.runAsync("DELETE FROM routines WHERE id = ?", [id]);
+  });
 }
 
 /** Ticked steps for every routine in `weekStart`. */

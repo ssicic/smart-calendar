@@ -21,6 +21,7 @@ import {
   insertCategory,
   insertEvents,
   insertRoutine,
+  deleteRoutine,
   loadChecks,
   loadRoutines,
   setCheck,
@@ -99,7 +100,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 8 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 9 });
   });
 
   it("round-trips and moves fixed events and routines", async () => {
@@ -181,15 +182,35 @@ describe("weekStore", () => {
     expect(week.items[0]?.title).toBe("Climbing");
   });
 
-  it("starts with a Morning and a Night routine, saves new ones and edits steps", async () => {
-    const start = await loadRoutines(db);
-    expect(start.map((r) => r.name)).toEqual(["Morning routine", "Night routine"]);
-    expect(start[0]?.steps[0]).toEqual({ id: "m1", text: "Drink a glass of water" });
-    await insertRoutine(db, { id: "r9", name: "Gym bag", steps: [{ id: "a", text: "Towel" }] });
-    await updateRoutine(db, { id: "morning", name: "Mornings", steps: [{ id: "m2", text: "Brush teeth" }] });
+  it("starts with no routines, saves new ones and edits them", async () => {
+    expect(await loadRoutines(db)).toEqual([]);
+    await insertRoutine(db, { id: "r1", name: "Morning", steps: [{ id: "a", text: "Water" }] });
+    await insertRoutine(db, { id: "r2", name: "Gym bag", steps: [{ id: "b", text: "Towel" }] });
+    await updateRoutine(db, { id: "r1", name: "Mornings", steps: [{ id: "c", text: "Brush teeth" }] });
     const after = await loadRoutines(db);
-    expect(after.map((r) => r.name)).toEqual(["Mornings", "Night routine", "Gym bag"]);
-    expect(after[0]?.steps).toEqual([{ id: "m2", text: "Brush teeth" }]);
+    expect(after.map((r) => r.name)).toEqual(["Mornings", "Gym bag"]);
+    expect(after[0]?.steps).toEqual([{ id: "c", text: "Brush teeth" }]);
+  });
+
+  it("deletes a routine; its blocks stay as fixed events without ticks", async () => {
+    await insertRoutine(db, { id: "r1", name: "Morning", steps: [{ id: "a", text: "Water" }] });
+    await insertEvents(db, "routine", [{ id: "e1", title: "Morning", start: 420, end: 465, routineId: "r1" }], null);
+    await setCheck(db, "e1", W1, "a", true);
+    await deleteRoutine(db, "r1");
+    expect(await loadRoutines(db)).toEqual([]);
+    const { week } = await loadWeek(db, W1, W2);
+    expect(week.fixed).toEqual([{ id: "e1", title: "Morning", start: 420, end: 465 }]);
+    expect(week.routines).toEqual([]);
+    expect(await loadChecks(db, W1)).toEqual([]);
+  });
+
+  it("removes the old ready-made routines unless something follows them", async () => {
+    const old = nodeDb();
+    await migrate(old, 8);
+    old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min, routine_id)
+      VALUES ('e1', 'routine', 'Night routine', 1320, 1365, 'night')`);
+    await migrate(old);
+    expect((await loadRoutines(old)).map((r) => r.id)).toEqual(["night"]);
   });
 
   it("remembers ticked routine steps per event and week", async () => {

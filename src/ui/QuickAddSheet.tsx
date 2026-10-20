@@ -60,6 +60,8 @@ interface Props {
   /** Saved routines to pick from (Morning routine…). */
   routines: Routine[];
   onAddRoutine: (name: string, steps: RoutineStep[]) => Promise<{ id: string } | { error: string }>;
+  onEditRoutine: (routine: Routine) => Promise<string | undefined>;
+  onDeleteRoutine: (id: string) => Promise<string | undefined>;
 }
 
 let idCounter = 0;
@@ -95,8 +97,9 @@ const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0,
 
 export function QuickAddSheet(props: Props) {
   const { form: openForm, onChange, size, onSizeChange, week, rows, onSave, onClose, weekStart } = props;
-  const { categories, groupActions, routines, onAddRoutine } = props;
-  const [newRoutine, setNewRoutine] = useState(false);
+  const { categories, groupActions, routines, onAddRoutine, onEditRoutine, onDeleteRoutine } = props;
+  // The routine editor inside the form: making a new routine, or editing the picked one.
+  const [routineEditor, setRoutineEditor] = useState<"new" | "edit" | null>(null);
   // The form's values live in the screen (passed in as `form`); every change
   // goes back up through onChange, and React redraws both sheet and calendar.
   const form = openForm ?? EMPTY_FORM;
@@ -118,7 +121,7 @@ export function QuickAddSheet(props: Props) {
     setError(undefined);
     setWarning(undefined);
     setOverlapOff(false);
-    setNewRoutine(false);
+    setRoutineEditor(null);
     onClose();
   };
 
@@ -262,27 +265,57 @@ export function QuickAddSheet(props: Props) {
                     </Pressable>
                   );
                 })}
-                {!newRoutine && (
-                  <Pressable onPress={() => setNewRoutine(true)} style={styles.newRoutine} accessibilityRole="button">
+                {!routineEditor && (
+                  <Pressable onPress={() => setRoutineEditor("new")} style={styles.newRoutine} accessibilityRole="button">
                     <Text style={styles.newRoutineText}>+ New routine</Text>
                   </Pressable>
                 )}
               </View>
-              {newRoutine ? (
+              {routineEditor === "new" ? (
                 <RoutineEditor
                   existing={routines}
-                  onCancel={() => setNewRoutine(false)}
+                  onCancel={() => setRoutineEditor(null)}
                   onSave={async (name, steps) => {
                     const r = await onAddRoutine(name, steps);
                     if ("error" in r) return r.error;
-                    setNewRoutine(false);
+                    setRoutineEditor(null);
                     update({ routineId: r.id, title: name });
                     return undefined;
                   }}
                 />
-              ) : (
-                picked && <Text style={styles.stepsPreview}>{picked.steps.map((s) => s.text).join(" · ")}</Text>
-              )}
+              ) : routineEditor === "edit" && picked ? (
+                <RoutineEditor
+                  routine={picked}
+                  existing={routines}
+                  onCancel={() => setRoutineEditor(null)}
+                  onSave={async (name, steps) => {
+                    const err = await onEditRoutine({ id: picked.id, name, steps });
+                    if (err) return err;
+                    setRoutineEditor(null);
+                    update({ title: name });
+                    return undefined;
+                  }}
+                  onDelete={async () => {
+                    const err = await onDeleteRoutine(picked.id);
+                    if (err) return err;
+                    setRoutineEditor(null);
+                    // The name came from the deleted routine: clear it too.
+                    update({ routineId: null, title: form.title === picked.name ? "" : form.title });
+                    return undefined;
+                  }}
+                />
+              ) : picked ? (
+                <View style={styles.preview}>
+                  <Text style={styles.stepsPreview}>{picked.steps.map((s) => s.text).join(" · ")}</Text>
+                  <Pressable onPress={() => setRoutineEditor("edit")} hitSlop={8} accessibilityRole="button">
+                    <Text style={styles.editRoutine}>Edit routine</Text>
+                  </Pressable>
+                </View>
+              ) : routines.length === 0 ? (
+                <Text style={styles.stepsPreview}>
+                  No routines yet. Make your first one, like the steps of your morning or your bedtime.
+                </Text>
+              ) : null}
             </Field>
           )}
 
@@ -431,6 +464,8 @@ const styles = StyleSheet.create({
   newRoutine: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: "#CBD5E1", borderStyle: "dashed" },
   newRoutineText: { fontSize: 14, fontWeight: "600", color: "#D97706" },
   stepsPreview: { fontSize: 13, color: "#6B7280", lineHeight: 19 },
+  preview: { gap: 6 },
+  editRoutine: { fontSize: 14, fontWeight: "600", color: "#D97706" },
   cancel: { fontSize: 16, color: "#5B6CF0", fontWeight: "600" },
   body: { padding: 16, paddingBottom: 32, gap: 16 },
   row: { flexDirection: "row", gap: 12 },

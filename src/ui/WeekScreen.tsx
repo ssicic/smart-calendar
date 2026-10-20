@@ -32,7 +32,7 @@ export function WeekScreen() {
   const data = useWeek(db, weekStart);
   const { week, plan, queuedForNextWeek, sleep, windDownMin, add, act, move, changeSleep } = data;
   const { categories, groupActions, setRowCategory, rename } = data;
-  const { routines, checks, addRoutine, editRoutine, toggleStep } = data;
+  const { routines, checks, addRoutine, editRoutine, removeRoutine, toggleStep } = data;
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
@@ -304,6 +304,8 @@ export function WeekScreen() {
         form={adding}
         routines={routines}
         onAddRoutine={addRoutine}
+        onEditRoutine={editRoutine}
+        onDeleteRoutine={removeRoutine}
         onChange={setAdding}
         categories={categories}
         groupActions={groupActions}
@@ -333,6 +335,7 @@ export function WeekScreen() {
         checks={checks}
         onToggleStep={toggleStep}
         onEditRoutine={editRoutine}
+        onDeleteRoutine={removeRoutine}
         onRename={rename}
         onAction={act}
         onMove={move}

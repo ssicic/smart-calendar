@@ -14,10 +14,13 @@ interface Props {
   /** Saves; returns an error message to show, or undefined when it worked. */
   onSave: (name: string, steps: RoutineStep[]) => Promise<string | undefined>;
   onCancel: () => void;
+  /** Shown for a saved routine: deletes it (asks for a second tap first). */
+  onDelete?: () => Promise<string | undefined>;
 }
 
 /** A routine's name and checklist: one line per step, "+ Add step", × to remove one. */
-export function RoutineEditor({ routine, existing, onSave, onCancel }: Props) {
+export function RoutineEditor({ routine, existing, onSave, onCancel, onDelete }: Props) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [name, setName] = useState(routine?.name ?? "");
   // Steps keep their id while edited, so ticks already made stay attached to them.
   const [steps, setSteps] = useState<{ id?: string; text: string }[]>(
@@ -47,7 +50,7 @@ export function RoutineEditor({ routine, existing, onSave, onCancel }: Props) {
           setName(t);
           setError(undefined);
         }}
-        placeholder="Routine name, e.g. Gym prep"
+        placeholder="Name, e.g. Morning routine"
       />
       <Text style={styles.label}>Steps</Text>
       {steps.map((s, i) => (
@@ -73,6 +76,22 @@ export function RoutineEditor({ routine, existing, onSave, onCancel }: Props) {
         <Text style={styles.add}>+ Add step</Text>
       </Pressable>
       {error && <Text style={styles.error}>{error}</Text>}
+      {onDelete && (
+        <Pressable
+          onPress={async () => {
+            // Can't be undone, so the first tap only asks.
+            if (!confirmDelete) return setConfirmDelete(true);
+            const err = await onDelete();
+            if (err) setError(err);
+          }}
+          style={[styles.delete, confirmDelete && styles.deleteConfirm]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.deleteText}>
+            {confirmDelete ? "Tap again to delete (its blocks stay, without a checklist)" : "Delete routine"}
+          </Text>
+        </Pressable>
+      )}
       <View style={styles.buttons}>
         <Pressable onPress={onCancel} style={styles.secondary} accessibilityRole="button">
           <Text style={styles.secondaryText}>Cancel</Text>
@@ -104,6 +123,9 @@ const styles = StyleSheet.create({
   remove: { fontSize: 22, color: "#9CA3AF", paddingHorizontal: 4 },
   add: { fontSize: 15, fontWeight: "600", color: "#5B6CF0", paddingVertical: 4 },
   error: { color: "#B91C1C", fontWeight: "600" },
+  delete: { paddingVertical: 8, paddingHorizontal: 4, borderRadius: 8 },
+  deleteConfirm: { backgroundColor: "#FEE2E2", paddingHorizontal: 10 },
+  deleteText: { color: "#B91C1C", fontWeight: "600" },
   buttons: { flexDirection: "row", gap: 10, marginTop: 4 },
   secondary: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center", backgroundColor: "#E5E7EB" },
   secondaryText: { fontWeight: "700", color: "#374151" },

@@ -46,6 +46,8 @@ interface Props {
   onToggleStep: (eventId: string, stepId: string) => Promise<string | undefined>;
   /** Saves a changed routine (name and steps) everywhere it's used. */
   onEditRoutine: (routine: Routine) => Promise<string | undefined>;
+  /** Deletes the saved routine; its blocks stay as fixed events. */
+  onDeleteRoutine: (id: string) => Promise<string | undefined>;
 }
 
 const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
@@ -245,6 +247,12 @@ export function ItemActionsSheet(props: Props) {
                   const err = await props.onEditRoutine({ id: routine.id, name, steps });
                   if (err) return err;
                   setMode("menu");
+                  return undefined;
+                }}
+                onDelete={async () => {
+                  const err = await props.onDeleteRoutine(routine.id);
+                  if (err) return err;
+                  onClose();
                   return undefined;
                 }}
               />
