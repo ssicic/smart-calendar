@@ -36,6 +36,8 @@ interface NextWeek {
   stats: ReviewStats;
   plannedMin: number;
   unplaced: number;
+  /** Time planned for goals ("Make time for it" items). */
+  goalMin: number;
 }
 
 /**
@@ -58,12 +60,18 @@ export function PlanSheet(props: Props) {
     };
     const plan = planWeek(week);
     const sleep = Array.from({ length: 7 }, (_, d) => sleepForDay(loaded.sleep, loaded.overrides, d));
-    const stats = reviewStats(rowsByDay(week, plan).flat(), sleep, groups);
+    const rows = rowsByDay(week, plan).flat();
+    const stats = reviewStats(rows, sleep, groups);
+    const goalItemIds = new Set(week.items.filter((i) => i.goalId).map((i) => i.id));
+    const goalMin = rows
+      .filter((r) => r.kind !== "skipped" && r.itemId && goalItemIds.has(r.itemId))
+      .reduce((sum, r) => sum + (r.end - r.start), 0);
     setNext({
       items: await loadWeekItems(db, nextWeekStart),
       stats,
       plannedMin: stats.plannedMin,
       unplaced: plan.unplaced.reduce((sum, u) => sum + u.missing, 0),
+      goalMin,
     });
   }, [db, nextWeekStart, groups]);
 
@@ -181,6 +189,12 @@ export function PlanSheet(props: Props) {
                 <Text style={styles.line}>
                   {Math.round(next.plannedMin / 6) / 10}h planned · {next.stats.freePercent}% free
                 </Text>
+                {next.goalMin > 0 && (
+                  <Text style={styles.line}>
+                    Time for your goals: {Math.round(next.goalMin / 6) / 10}h (
+                    {Math.round((next.goalMin / Math.max(1, next.stats.awakeMin)) * 100)}% of awake time)
+                  </Text>
+                )}
                 {next.unplaced > 0 && (
                   <Text style={styles.warn}>
                     {next.unplaced} {next.unplaced === 1 ? "session doesn't" : "sessions don't"} fit. Consider dropping

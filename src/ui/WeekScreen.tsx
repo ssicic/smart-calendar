@@ -77,7 +77,15 @@ export function WeekScreen() {
   const [planOpen, setPlanOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
+  // Going from one sheet to another: close the first, then open the next once
+  // it's gone. Opening both in the same moment leaves the first one stuck on
+  // screen on web.
+  const switchSheet = (close: () => void, open: () => void) => {
+    close();
+    setTimeout(open, 350);
+  };
   const { goals, periods, addGoal, changeGoal, removeGoal, addWeekGoalFor } = data;
+  const { goalSessions, checkGoalTime, makeTimeFor, stopGoalTime } = data;
   const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -155,6 +163,13 @@ export function WeekScreen() {
   const isEmpty = week.fixed.length + (week.routines ?? []).length + week.items.length === 0;
 
   const isWeekView = view === "day" || view === "calendar" || view === "list";
+  // Flexible items made for goals, with this week's done sessions (counted, not ticked).
+  const goalItems = week.items
+    .filter((i) => i.goalId)
+    .map((item) => ({
+      item,
+      doneThisWeek: plan.placements.filter((p) => p.itemId === item.id && p.state === "done").length,
+    }));
 
   // The event being added, drawn on the calendar so its time can be dragged there.
   const draftStart = adding && parseTime(adding.startTime);
@@ -463,14 +478,8 @@ export function WeekScreen() {
           items={weekItems}
           movedOn={movedOn}
           later={later}
-          onPlanNext={() => {
-            setReviewOpen(false);
-            setPlanOpen(true);
-          }}
-          onPastWeeks={() => {
-            setReviewOpen(false);
-            setHistoryOpen(true);
-          }}
+          onPlanNext={() => switchSheet(() => setReviewOpen(false), () => setPlanOpen(true))}
+          onPastWeeks={() => switchSheet(() => setReviewOpen(false), () => setHistoryOpen(true))}
           onClose={() => setReviewOpen(false)}
         />
       )}
@@ -502,6 +511,11 @@ export function WeekScreen() {
         visible={panelOpen}
         weekLabel={weekRange(weekStart)}
         items={weeklyItems}
+        goalTime={goalItems.map(({ item, doneThisWeek }) => ({
+          title: goals.find((g) => g.id === item.goalId)?.title ?? item.title,
+          done: doneThisWeek,
+          total: item.timesPerWeek,
+        }))}
         onAdd={addWeekItem}
         onChange={changeWeekItem}
         onDelete={removeWeekItem}
@@ -510,10 +524,7 @@ export function WeekScreen() {
         onAddFromLater={addFromLater}
         onDeleteLater={removeLater}
         onClose={() => setPanelOpen(false)}
-        onOpenGoals={() => {
-          setPanelOpen(false);
-          setGoalsOpen(true);
-        }}
+        onOpenGoals={() => switchSheet(() => setPanelOpen(false), () => setGoalsOpen(true))}
       />
       <GoalsSheet
         visible={goalsOpen}
@@ -525,6 +536,11 @@ export function WeekScreen() {
         onDeleteGoal={removeGoal}
         onAddToWeek={(g) => addWeekGoalFor(g)}
         onChangeWeekGoal={changeWeekItem}
+        goalItems={goalItems}
+        sessions={goalSessions}
+        onCheckTime={checkGoalTime}
+        onMakeTime={makeTimeFor}
+        onStopTime={stopGoalTime}
         onClose={() => setGoalsOpen(false)}
       />
       <QuickAddSheet

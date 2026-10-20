@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { deleteGoal, insertGoal, loadGoals, updateGoal } from "./goalsStore";
+import { countGoalSessions, deleteGoal, insertGoal, loadGoals, updateGoal } from "./goalsStore";
 import { nodeDb } from "./nodeDb";
 import { insertWeekItem, loadWeekItems } from "./weekItemsStore";
-import { insertItem, loadWeek, migrate } from "./weekStore";
+import { insertItem, loadWeek, migrate, savePlacement } from "./weekStore";
 
 const W1 = "2026-10-19";
 const fit = { id: "y1", title: "Get fit", horizon: "year" as const, period: "2026", parentId: null, done: false };
@@ -47,5 +47,18 @@ describe("goalsStore", () => {
     expect((await loadGoals(db, ["2026-10"]))[0]?.parentId).toBeNull();
     expect((await loadWeekItems(db, W1))[0]?.goalId).toBeUndefined();
     expect((await loadWeek(db, W1, W1)).week.items[0]?.goalId).toBeUndefined();
+  });
+
+  it("counts done sessions of a goal's items over some weeks", async () => {
+    await insertItem(db, { id: "gym", title: "Gym", durationMin: 60, timesPerWeek: 3, priority: 3, goalId: "y1" });
+    await insertItem(db, { id: "read", title: "Read", durationMin: 30, timesPerWeek: 3, priority: 1 });
+    const done = (id: string, itemId: string, start: number) => ({ id, itemId, start, end: start + 60, state: "done" as const });
+    await savePlacement(db, W1, done("a", "gym", 600));
+    await savePlacement(db, W1, done("b", "gym", 2000));
+    await savePlacement(db, W1, { ...done("c", "gym", 3000), state: "kept" }); // not done
+    await savePlacement(db, W1, done("d", "read", 4000)); // no goal
+    await savePlacement(db, "2026-09-07", done("e", "gym", 600)); // another week
+    expect(await countGoalSessions(db, [W1, "2026-10-26"])).toEqual(new Map([["y1", 2]]));
+    expect(await countGoalSessions(db, [])).toEqual(new Map());
   });
 });

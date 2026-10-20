@@ -25,6 +25,8 @@ interface Props {
   onClose: () => void;
   /** Opens the year and month goals. */
   onOpenGoals?: () => void;
+  /** Time made for goals this week: sessions done, counted by the app. */
+  goalTime?: { title: string; done: number; total: number }[];
 }
 
 /** The week's to-do list (tick off) and goals (count up to a target), saved with the week. */
@@ -136,6 +138,21 @@ export function WeekPanelSheet(props: Props) {
               </View>
             ))}
             <AddRow placeholder="Add a to-do…" onAdd={(text) => onAdd("todo", text)} onError={setError} />
+
+            {props.goalTime && props.goalTime.length > 0 && (
+              <>
+                <Text style={[styles.section, styles.sectionGap]}>From your goals</Text>
+                {props.goalTime.map((g, i) => (
+                  <View key={i} style={styles.row}>
+                    <Text style={[styles.itemText, styles.flex]}>{g.title}</Text>
+                    <Text style={[styles.count, g.done >= g.total && styles.countDone]}>
+                      {g.done >= g.total ? "✓ " : ""}
+                      {g.done}/{g.total} sessions
+                    </Text>
+                  </View>
+                ))}
+              </>
+            )}
 
             <View style={[styles.sectionRow, styles.sectionGap]}>
               <Text style={styles.section}>Goals</Text>

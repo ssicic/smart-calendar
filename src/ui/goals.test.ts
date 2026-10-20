@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { goalProgress, partsOf, tooManyGoalsNote } from "./goals";
+import type { WeekInput } from "../engine";
+import { goalProgress, partsOf, timeCheck, tooManyGoalsNote } from "./goals";
 
 const goal = (id: string, horizon: "year" | "month", parentId: string | null = null, done = false) => ({
   id,
@@ -41,5 +42,26 @@ describe("goals", () => {
     expect(tooManyGoalsNote(months, "month")).toBeUndefined();
     expect(tooManyGoalsNote([...months, goal("d", "month")], "month")).toMatch(/4 goals this month/);
     expect(tooManyGoalsNote([...months, goal("d", "month", null, true)], "month")).toBeUndefined();
+  });
+
+  it("checks if a goal's weekly time fits, and how many times would", () => {
+    // Free time: 2 hours each weekday evening (18-20), nothing else; 0 kept free.
+    const week: WeekInput = {
+      fixed: [],
+      rest: [],
+      items: [{ id: "old", title: "Reading", durationMin: 60, timesPerWeek: 5, priority: 1 }],
+      placements: [],
+      settings: {
+        dayStart: 18 * 60,
+        dayEnd: 20 * 60,
+        bufferMin: 0,
+        minFreeMinutes: 0,
+        dayWindows: Array.from({ length: 7 }, (_, d) => (d < 5 ? { start: 18 * 60, end: 20 * 60 } : { start: 0, end: 0 })),
+      },
+    };
+    const gym = { id: "gym", title: "Gym", durationMin: 60, timesPerWeek: 3, priority: 3 };
+    expect(timeCheck(week, gym)).toMatchObject({ fits: true, overflowMin: 0, fitsTimes: 3 });
+    const tooMuch = timeCheck(week, { ...gym, timesPerWeek: 7 });
+    expect(tooMuch).toMatchObject({ fits: false, overflowMin: 120, fitsTimes: 5, swapTitles: ["Reading"] });
   });
 });

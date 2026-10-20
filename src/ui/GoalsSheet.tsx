@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Goal, GoalHorizon } from "../db/goalsStore";
 import type { WeekItem } from "../db/weekItemsStore";
-import { goalProgress, tooManyGoalsNote } from "./goals";
+import type { FlexibleItem } from "../engine";
+import { goalProgress, tooManyGoalsNote, type TimeCheck } from "./goals";
+import { lengthLabel } from "./itemActions";
 import { colors, font, radius } from "./theme";
 import { periodLabel } from "./weekDate";
 import { isFinished, weekItemProblem } from "./weekItems";
@@ -22,6 +24,13 @@ interface Props {
   onDeleteGoal: (id: string) => Result;
   onAddToWeek: (goal: Goal) => Result;
   onChangeWeekGoal: (item: WeekItem) => Result;
+  /** Flexible items made for goals, with how many of their sessions are done this week. */
+  goalItems: { item: FlexibleItem; doneThisWeek: number }[];
+  /** Done sessions per goal id this month and this year. */
+  sessions: { month: Map<string, number>; year: Map<string, number> };
+  onCheckTime: (goal: Goal, minutes: number, times: number) => TimeCheck | undefined;
+  onMakeTime: (goal: Goal, minutes: number, times: number) => Result;
+  onStopTime: (itemId: string) => Result;
   onClose: () => void;
 }
 
@@ -42,9 +51,26 @@ export function GoalsSheet(props: Props) {
   const monthGoals = goals.filter((g) => g.horizon === "month");
   const titleOf = (id: string | null | undefined) => goals.find((g) => g.id === id)?.title;
 
+  // Done sessions for a goal: its own items, plus (for a year goal) its month goals' items.
+  const sessionsOf = (goal: Goal) => {
+    const map = goal.horizon === "month" ? props.sessions.month : props.sessions.year;
+    const children = goals.filter((g) => g.parentId === goal.id);
+    return (map.get(goal.id) ?? 0) + children.reduce((sum, c) => sum + (map.get(c.id) ?? 0), 0);
+  };
+
   const goalRow = (goal: Goal, parents: Goal[]) => (
     <GoalRow
       key={goal.id}
+      sessions={sessionsOf(goal)}
+      sessionsPeriod={goal.horizon === "month" ? "this month" : "this year"}
+      makeTime={
+        <MakeTime
+          items={props.goalItems.filter((g) => g.item.goalId === goal.id)}
+          onCheck={(m, t) => props.onCheckTime(goal, m, t)}
+          onMake={(m, t) => run(props.onMakeTime(goal, m, t))}
+          onStop={(id) => run(props.onStopTime(id))}
+        />
+      }
       title={goal.title}
       done={goal.done}
       progress={goalProgress(goal, goals, weekGoals)}
@@ -117,6 +143,9 @@ export function GoalsSheet(props: Props) {
 }
 
 function GoalRow(props: {
+  sessions: number;
+  sessionsPeriod: string;
+  makeTime: React.ReactNode;
   title: string;
   done: boolean;
   progress: { done: number; total: number };
@@ -154,11 +183,15 @@ function GoalRow(props: {
         </Pressable>
         <Pressable style={styles.flex} onPress={props.onToggleOpen} accessibilityRole="button" accessibilityHint="Edit">
           <Text style={[styles.title, props.done && styles.finished]}>{props.title}</Text>
-          {(props.partOf || props.progress.total > 0) && (
+          {(props.partOf || props.progress.total > 0 || props.sessions > 0) && (
             <Text style={styles.meta}>
-              {props.partOf ? `Part of ${props.partOf}` : ""}
-              {props.partOf && props.progress.total > 0 ? " · " : ""}
-              {props.progress.total > 0 ? `${props.progress.done}/${props.progress.total} parts done` : ""}
+              {[
+                props.partOf ? `Part of ${props.partOf}` : "",
+                props.progress.total > 0 ? `${props.progress.done}/${props.progress.total} parts done` : "",
+                props.sessions > 0 ? `${props.sessions} ${props.sessions === 1 ? "session" : "sessions"} done ${props.sessionsPeriod}` : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </Text>
           )}
         </Pressable>
@@ -192,6 +225,7 @@ function GoalRow(props: {
             </Pressable>
           </View>
           {props.parents.length > 0 && <ParentChips parents={props.parents} selected={props.parentId} onSelect={props.onParent} />}
+          {props.makeTime}
           <View style={styles.inline}>
             <Pressable onPress={props.onAddToWeek} style={styles.smallButton} accessibilityRole="button">
               <Text style={styles.smallButtonText}>Add to this week</Text>
@@ -205,6 +239,133 @@ function GoalRow(props: {
             </Pressable>
           </View>
         </View>
+      )}
+    </View>
+  );
+}
+
+const MINUTE_CHOICES = [30, 45, 60, 90];
+
+/**
+ * "Make time for it": a weekly amount of time for the goal, placed by the
+ * planner. Checks first that it fits the week, and offers what would.
+ */
+function MakeTime(props: {
+  items: { item: FlexibleItem; doneThisWeek: number }[];
+  onCheck: (minutes: number, times: number) => TimeCheck | undefined;
+  onMake: (minutes: number, times: number) => void;
+  onStop: (itemId: string) => void;
+}) {
+  const [minutes, setMinutes] = useState(60);
+  const [times, setTimes] = useState(2);
+  const [check, setCheck] = useState<TimeCheck>();
+  const [confirmStop, setConfirmStop] = useState<string>();
+
+  if (props.items.length > 0) {
+    return (
+      <View style={styles.timeBox}>
+        <Text style={styles.timeTitle}>Time for it</Text>
+        {props.items.map(({ item, doneThisWeek }) => (
+          <View key={item.id} style={styles.inline}>
+            <Text style={[styles.meta, styles.flex]}>
+              {lengthLabel(item.durationMin)} × {item.timesPerWeek} a week · {doneThisWeek}/{item.timesPerWeek} done this week
+            </Text>
+            <Pressable
+              onPress={() => (confirmStop === item.id ? props.onStop(item.id) : setConfirmStop(item.id))}
+              style={[styles.deleteButton, confirmStop === item.id && styles.deleteConfirm]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.deleteText}>{confirmStop === item.id ? "Tap again to stop" : "Stop"}</Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  const tryMake = (t: number, force = false) => {
+    const c = props.onCheck(minutes, t);
+    if (!force && c && !c.fits) return setCheck(c);
+    setCheck(undefined);
+    props.onMake(minutes, t);
+  };
+
+  return (
+    <View style={styles.timeBox}>
+      <Text style={styles.timeTitle}>Make time for it</Text>
+      <View style={styles.chips}>
+        {MINUTE_CHOICES.map((m) => (
+          <Pressable
+            key={m}
+            onPress={() => {
+              setMinutes(m);
+              setCheck(undefined);
+            }}
+            style={[styles.chip, m === minutes && styles.chipOn]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: m === minutes }}
+          >
+            <Text style={[styles.chipText, m === minutes && styles.chipTextOn]}>{lengthLabel(m)}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.inline}>
+        <Text style={[styles.meta, styles.flex]}>Times a week</Text>
+        <Pressable
+          onPress={() => {
+            setTimes((t) => Math.max(1, t - 1));
+            setCheck(undefined);
+          }}
+          style={styles.step}
+          accessibilityRole="button"
+          accessibilityLabel="Fewer times"
+        >
+          <Text style={styles.stepText}>−</Text>
+        </Pressable>
+        <Text style={styles.count}>{times}</Text>
+        <Pressable
+          onPress={() => {
+            setTimes((t) => Math.min(14, t + 1));
+            setCheck(undefined);
+          }}
+          style={styles.step}
+          accessibilityRole="button"
+          accessibilityLabel="More times"
+        >
+          <Text style={styles.stepText}>+</Text>
+        </Pressable>
+      </View>
+      {check && !check.fits ? (
+        <View style={styles.warnBox}>
+          <Text style={styles.warnText}>
+            That puts this week {Math.round(check.overflowMin / 6) / 10}h over.
+            {check.fitsTimes > 0 ? ` ${check.fitsTimes}× a week would fit.` : " Even once doesn't fit right now."}
+            {check.swapTitles.length > 0 ? ` To make room you could drop: ${check.swapTitles.join(", ")}.` : ""}
+          </Text>
+          <View style={styles.inline}>
+            {check.fitsTimes > 0 && (
+              <Pressable
+                onPress={() => {
+                  setTimes(check.fitsTimes);
+                  tryMake(check.fitsTimes);
+                }}
+                style={styles.smallButton}
+                accessibilityRole="button"
+              >
+                <Text style={styles.smallButtonText}>Use {check.fitsTimes}× a week</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={() => tryMake(times, true)} style={styles.deleteButton} accessibilityRole="button">
+              <Text style={styles.plainText}>Add anyway</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : (
+        <Pressable onPress={() => tryMake(times)} style={styles.makeButton} accessibilityRole="button">
+          <Text style={styles.makeText}>
+            Make time: {lengthLabel(minutes)} × {times} a week
+          </Text>
+        </Pressable>
       )}
     </View>
   );
@@ -338,6 +499,16 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: font.semibold, fontSize: 12, color: colors.textSoft },
   chipTextOn: { color: colors.white },
   addBox: { gap: 4 },
+  timeBox: { gap: 8, padding: 10, borderRadius: radius.sm, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border },
+  timeTitle: { fontFamily: font.bold, fontSize: 13, color: colors.textSoft },
+  step: { width: 32, height: 32, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceAlt },
+  stepText: { fontFamily: font.bold, fontSize: 18, color: colors.textSoft },
+  count: { minWidth: 24, textAlign: "center", fontFamily: font.bold, fontSize: 15, color: colors.text },
+  warnBox: { gap: 8, padding: 8, borderRadius: radius.sm, backgroundColor: colors.warnSoft },
+  warnText: { fontFamily: font.medium, fontSize: 13, color: colors.warnText, lineHeight: 18 },
+  plainText: { fontFamily: font.bold, fontSize: 13, color: colors.textSoft },
+  makeButton: { alignItems: "center", paddingVertical: 10, borderRadius: radius.sm, backgroundColor: colors.accent },
+  makeText: { fontFamily: font.bold, fontSize: 14, color: colors.white },
   addButton: {
     width: 36,
     height: 36,

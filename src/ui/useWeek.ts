@@ -62,12 +62,21 @@ import {
 } from "../db/weekItemsStore";
 import { addLaterToWeek, deleteLater, loadLater, type LaterEntry } from "../db/laterStore";
 import { loadMovedOn, type MovedOn } from "../db/reviewStore";
-import { deleteGoal, insertGoal, loadGoals, updateGoal, type Goal, type GoalHorizon } from "../db/goalsStore";
+import {
+  countGoalSessions,
+  deleteGoal,
+  insertGoal,
+  loadGoals,
+  updateGoal,
+  type Goal,
+  type GoalHorizon,
+} from "../db/goalsStore";
+import { timeCheck } from "./goals";
 import type { GroupActions } from "./ManageGroupsSheet";
 import { checkKey } from "./routines";
 import type { QuickAddResult } from "./QuickAddSheet";
 import type { SleepScope } from "./SleepSheet";
-import { addWeeks, periodsOfWeek } from "./weekDate";
+import { addWeeks, monthGrid, monthOfWeek, periodsOfWeek, weeksOfYear } from "./weekDate";
 import { isEventKind, type WeekRow } from "./weekRows";
 
 let counter = 0;
@@ -94,6 +103,11 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   // Goals for the year and month this week belongs to.
   const [goals, setGoals] = useState<Goal[]>([]);
   const periods = periodsOfWeek(weekStart);
+  // Done sessions per goal ("Make time for it" items) this month and this year.
+  const [goalSessions, setGoalSessions] = useState<{ month: Map<string, number>; year: Map<string, number> }>({
+    month: new Map(),
+    year: new Map(),
+  });
   // The Later list (sessions moved to the queue with no week yet).
   const [later, setLater] = useState<LaterEntry[]>([]);
   // For the week review: this week's sessions that were moved to the queue, and where to.
@@ -112,6 +126,11 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setWeekItems(await loadWeekItems(db, weekStart));
     const p = periodsOfWeek(weekStart);
     setGoals(await loadGoals(db, [p.year, p.month]));
+    const month = monthOfWeek(weekStart);
+    setGoalSessions({
+      month: await countGoalSessions(db, monthGrid(month).map((r) => r.weekStart)),
+      year: await countGoalSessions(db, weeksOfYear(month.year)),
+    });
     setLater(await loadLater(db));
     setMovedOn(await loadMovedOn(db, weekStart));
     setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
@@ -340,6 +359,34 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       await refresh();
     });
 
+  /** The flexible item "Make time for it" would add for a goal. */
+  const goalItem = (goal: Goal, minutes: number, times: number) => ({
+    id: `i${newId()}`,
+    title: goal.title,
+    durationMin: minutes,
+    timesPerWeek: times,
+    priority: 3, // "medium", like the quick-add default
+    goalId: goal.id,
+  });
+
+  /** Would `times` × `minutes` a week for this goal fit this week? (Nothing is saved.) */
+  const checkGoalTime = (goal: Goal, minutes: number, times: number) =>
+    week ? timeCheck(week, goalItem(goal, minutes, times)) : undefined;
+
+  /** "Make time for it": a flexible item linked to the goal; the planner places it. */
+  const makeTimeFor = (goal: Goal, minutes: number, times: number) =>
+    attempt(async () => {
+      await insertItem(db, goalItem(goal, minutes, times));
+      await refresh();
+    });
+
+  /** Stops making time for a goal: deletes its flexible item (every week). The goal stays. */
+  const stopGoalTime = (itemId: string) =>
+    attempt(async () => {
+      await deleteItem(db, itemId);
+      await refresh();
+    });
+
   /** A week goal that's part of a month or year goal ("Add to this week"). */
   const addWeekGoalFor = (goal: Goal, target = 1) =>
     attempt(async () => {
@@ -406,6 +453,10 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     changeGoal,
     removeGoal,
     addWeekGoalFor,
+    goalSessions,
+    checkGoalTime,
+    makeTimeFor,
+    stopGoalTime,
     /** Reloads everything from the database (after changes made elsewhere, e.g. Plan next week). */
     refresh,
     routines,

@@ -71,3 +71,19 @@ export async function deleteGoal(db: Db, id: string): Promise<void> {
     await db.runAsync("DELETE FROM goals WHERE id = ?", [id]);
   });
 }
+
+/**
+ * Done sessions per goal over some weeks (e.g. all weeks of this month),
+ * counting flexible items made for the goal ("Make time for it").
+ */
+export async function countGoalSessions(db: Db, weekStarts: string[]): Promise<Map<string, number>> {
+  if (weekStarts.length === 0) return new Map();
+  const rows = await db.getAllAsync<{ goal_id: string; n: number }>(
+    `SELECT i.goal_id, COUNT(*) AS n FROM placements p JOIN flexible_items i ON i.id = p.item_id
+     WHERE p.state = 'done' AND i.goal_id IS NOT NULL
+       AND p.week_start IN (${weekStarts.map(() => "?").join(", ")})
+     GROUP BY i.goal_id`,
+    weekStarts,
+  );
+  return new Map(rows.map((r) => [r.goal_id, r.n]));
+}
