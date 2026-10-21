@@ -43,13 +43,25 @@ class ClaudeLLM:
 
 
 class DemoLLM:
-    """AI_FAKE=1: no API call, no cost. Suggests one fewer session a week for the
-    first item that had sessions not done, so the app's Accept flow can be tried."""
+    """AI_FAKE=1: no API call, no cost. Weekly review: suggests one fewer session a
+    week for the first item with sessions not done, so Accept can be tried.
+    Monthly summary: counts the done sessions."""
 
     def structured(self, system: str, user: str, schema: type[T]) -> T:
         import json
 
         facts = json.loads(user.split("\n", 1)[1])
+        if schema.__name__ == "MonthlySummary":
+            done = sum(len(i["done"]) for w in facts["weeks"] for i in w["items"])
+            return schema.model_validate(
+                {
+                    "headline": f"(Demo mode, no AI call.) {facts['month']}: {done} sessions done.",
+                    "wins": [f"(Demo) {done} flexible sessions done this month."],
+                    "patterns": [],
+                    "slipped": [],
+                    "next_month_tip": "",
+                }
+            )
         items = {i["item_id"]: i for i in facts["items"]}
         suggestions = []
         for week_item in facts["weeks"][0]["items"]:

@@ -17,6 +17,13 @@ structured outputs (Pydantic schema), then filtered again (`clean()` drops
 unknown items, out-of-range values and no-op changes), and the app checks each
 action once more before writing to the database.
 
+## Monthly summary
+
+`POST /monthly-summary` takes the month's weeks (same facts), the items and the
+year and month goals, and returns a headline plus up to 3 wins, patterns and
+things that slipped, and one tip. It is read-only: nothing to apply. The app
+saves each month's summary, so it's only written again when asked.
+
 ## Run
 
 ```bash

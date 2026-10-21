@@ -101,7 +101,7 @@ def test_keeps_at_most_three():
 def test_refusal_becomes_a_friendly_error():
     r = client_with(FakeLLM(error=LLMRefused("refusal"))).post("/weekly-review", json=FACTS)
     assert r.status_code == 502
-    assert "couldn't review" in r.json()["detail"]
+    assert "couldn't answer" in r.json()["detail"]
 
 
 def test_rejects_malformed_facts():

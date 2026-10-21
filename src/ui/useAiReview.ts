@@ -23,7 +23,7 @@ import type { Groups } from "./WeekView";
 
 const WEEKS = 4;
 
-async function weekForAi(db: Db, weekStart: string, todayKey: string, groups: Groups): Promise<WeekInputForAi> {
+export async function weekForAi(db: Db, weekStart: string, todayKey: string, groups: Groups): Promise<WeekInputForAi> {
   const loaded = await loadWeek(db, weekStart, addWeeks(weekStart, 1));
   // Same as Past weeks: nothing new is suggested in days that are over.
   const week = { ...loaded.week, settings: { ...loaded.week.settings, earliestStart: plannableFromKey(weekStart, todayKey) } };

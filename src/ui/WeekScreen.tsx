@@ -14,6 +14,8 @@ import { reviewStats } from "./weekReview";
 import { ReviewSheet } from "./ReviewSheet";
 import { AiSuggestions } from "./AiSuggestions";
 import { useAiReview } from "./useAiReview";
+import { MonthSummarySheet } from "./MonthSummarySheet";
+import { useMonthSummary } from "./useMonthSummary";
 import { PlanSheet } from "./PlanSheet";
 import { HistorySheet } from "./HistorySheet";
 import { GoalsSheet } from "./GoalsSheet";
@@ -79,6 +81,7 @@ export function WeekScreen() {
   const [planOpen, setPlanOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   // Going from one sheet to another: close the first, then open the next once
   // it's gone. Opening both in the same moment leaves the first one stuck on
   // screen on web.
@@ -127,6 +130,7 @@ export function WeekScreen() {
   const ai = useAiReview(db, weekStart, dateKey(now), groups, () => data.refresh());
   // Suggestions belong to the week on screen: start fresh when it changes.
   useEffect(() => ai.reset(), [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  const monthSummary = useMonthSummary(db, month, thisWeek, dateKey(now), groups, summaryOpen);
   const today =
     thisWeek === weekStart
       ? { day: (now.getDay() + 6) % 7, minute: now.getHours() * 60 + now.getMinutes() }
@@ -322,6 +326,11 @@ export function WeekScreen() {
                 <Text style={styles.todayButtonText}>Goals</Text>
               </Pressable>
             )}
+            {view === "month" && (
+              <Pressable onPress={() => setSummaryOpen(true)} style={styles.todayButton} accessibilityRole="button">
+                <Text style={styles.todayButtonText}>Summary</Text>
+              </Pressable>
+            )}
             {view === "year" && (
               <Pressable onPress={() => setHistoryOpen(true)} style={styles.todayButton} accessibilityRole="button">
                 <Text style={styles.todayButtonText}>Past weeks</Text>
@@ -489,6 +498,16 @@ export function WeekScreen() {
           onClose={() => setReviewOpen(false)}
         />
       )}
+      <MonthSummarySheet
+        visible={summaryOpen}
+        title={monthTitle(month)}
+        saved={monthSummary.saved}
+        status={monthSummary.status}
+        error={monthSummary.error}
+        canWrite={monthSummary.canWrite}
+        onWrite={monthSummary.write}
+        onClose={() => setSummaryOpen(false)}
+      />
       <HistorySheet
         db={db}
         visible={historyOpen}

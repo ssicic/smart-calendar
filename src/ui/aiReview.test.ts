@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DAY, type FlexibleItem } from "../engine";
-import { buildReviewRequest, changeFor, importanceOf, partOfDay, timeOfDayOf, type AiAction, type WeekInputForAi } from "./aiReview";
+import { weeksOfMonth, buildReviewRequest, changeFor, importanceOf, partOfDay, timeOfDayOf, type AiAction, type WeekInputForAi } from "./aiReview";
 import type { ReviewStats } from "./weekReview";
 import type { WeekRow } from "./weekRows";
 
@@ -136,5 +136,18 @@ describe("changeFor", () => {
     expect(changeFor(act({ type: "set_times_per_week", item_id: "gym", times_per_week: 0 }), [gym])).toHaveProperty("error");
     expect(changeFor(act({ type: "set_duration", item_id: "gym", duration_min: 600 }), [gym])).toHaveProperty("error");
     expect(changeFor(act({ type: "set_time_of_day", item_id: "gym" }), [gym])).toHaveProperty("error");
+  });
+});
+
+describe("weeksOfMonth", () => {
+  it("takes the weeks whose Thursday is in the month, newest first, none in the future", () => {
+    // October 2026: weeks starting 28 Sep (Thu 1 Oct) to 26 Oct (Thu 29 Oct)
+    expect(weeksOfMonth({ year: 2026, month: 9 }, "2026-10-19")).toEqual([
+      "2026-10-19",
+      "2026-10-12",
+      "2026-10-05",
+      "2026-09-28",
+    ]);
+    expect(weeksOfMonth({ year: 2026, month: 10 }, "2026-10-19")).toEqual([]); // November hasn't started
   });
 });

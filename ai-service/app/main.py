@@ -15,6 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .llm import LLM, ClaudeLLM, DemoLLM, LLMRefused
+from . import monthly
 from .review import SYSTEM_PROMPT, ReviewRequest, WeeklyReview, build_user_message, clean
 
 app = FastAPI(title="Smart Calendar AI")
@@ -39,12 +40,12 @@ def health() -> dict:
     return {"ok": True}
 
 
-@app.post("/weekly-review", response_model=WeeklyReview)
-def weekly_review(req: ReviewRequest, llm: LLM = Depends(get_llm)) -> WeeklyReview:
+def ask(llm: LLM, system: str, user: str, schema):
+    """Call the model and turn API problems into messages the app can show."""
     try:
-        review = llm.structured(SYSTEM_PROMPT, build_user_message(req), WeeklyReview)
+        return llm.structured(system, user, schema)
     except LLMRefused:
-        raise HTTPException(502, "The assistant couldn't review this week. Try again later.")
+        raise HTTPException(502, "The assistant couldn't answer this time. Try again later.")
     except anthropic.AuthenticationError:
         raise HTTPException(500, "The AI service has no valid API key. Add ANTHROPIC_API_KEY to ai-service/.env.")
     except anthropic.RateLimitError:
@@ -53,4 +54,13 @@ def weekly_review(req: ReviewRequest, llm: LLM = Depends(get_llm)) -> WeeklyRevi
         raise HTTPException(503, "The AI service can't reach Claude. Check the internet connection.")
     except anthropic.APIStatusError as e:
         raise HTTPException(502, f"Claude returned an error ({e.status_code}).")
-    return clean(review, req)
+
+
+@app.post("/weekly-review", response_model=WeeklyReview)
+def weekly_review(req: ReviewRequest, llm: LLM = Depends(get_llm)) -> WeeklyReview:
+    return clean(ask(llm, SYSTEM_PROMPT, build_user_message(req), WeeklyReview), req)
+
+
+@app.post("/monthly-summary", response_model=monthly.MonthlySummary)
+def monthly_summary(req: monthly.MonthRequest, llm: LLM = Depends(get_llm)) -> monthly.MonthlySummary:
+    return monthly.clean(ask(llm, monthly.SYSTEM_PROMPT, monthly.build_user_message(req), monthly.MonthlySummary))

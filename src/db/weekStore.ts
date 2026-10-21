@@ -610,6 +610,19 @@ export async function insertItem(db: Db, item: FlexibleItem): Promise<void> {
   );
 }
 
+/** A JSON value from the settings table (key/value), or null when it isn't there. */
+export async function loadSetting<T>(db: Db, key: string): Promise<T | null> {
+  const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = ?", [key]);
+  return row ? (JSON.parse(row.value) as T) : null;
+}
+
+export async function saveSetting(db: Db, key: string, value: unknown): Promise<void> {
+  await db.runAsync(
+    "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    [key, JSON.stringify(value)],
+  );
+}
+
 /** All flexible items as they are set up (without any week's queued extras). */
 export async function loadItems(db: Db): Promise<FlexibleItem[]> {
   const rows = await db.getAllAsync<ItemRow>("SELECT * FROM flexible_items ORDER BY rowid", []);

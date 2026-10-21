@@ -6,6 +6,7 @@ import { DAY, dayOf, type FlexibleItem, type Interval } from "../engine";
 import type { ItemPlanPatch } from "../db/weekStore";
 import { TIME_OF_DAY_WINDOWS, type Importance, type TimeOfDay } from "./quickAdd";
 import type { ReviewStats } from "./weekReview";
+import { monthGrid, monthOfWeek, type Month } from "./weekDate";
 import { clock, type WeekRow } from "./weekRows";
 
 // ---- The service's request and response (same shape as ai-service/app/review.py) ----
@@ -192,4 +193,40 @@ export function changeFor(action: AiAction, items: FlexibleItem[]): ItemChange |
       return { kind: "plan", itemId: item.id, patch: { priority: PRIORITY[imp] } };
     }
   }
+}
+
+// ---- Monthly summary ----
+
+export interface GoalFact {
+  title: string;
+  horizon: "year" | "month";
+  done: boolean;
+}
+
+export interface MonthRequest extends ReviewRequest {
+  month: string;
+  month_over: boolean;
+  goals: GoalFact[];
+}
+
+export interface MonthSummary {
+  headline: string;
+  wins: string[];
+  patterns: string[];
+  slipped: string[];
+  next_month_tip: string;
+}
+
+/**
+ * The weeks that belong to `month` (by their Thursday, like everywhere else in
+ * the app), up to and including `thisWeek`, newest first.
+ */
+export function weeksOfMonth(month: Month, thisWeek: string): string[] {
+  return monthGrid(month)
+    .map((r) => r.weekStart)
+    .filter((w) => {
+      const m = monthOfWeek(w);
+      return m.year === month.year && m.month === month.month && w <= thisWeek;
+    })
+    .reverse();
 }
