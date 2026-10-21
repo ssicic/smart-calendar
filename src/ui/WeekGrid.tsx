@@ -14,6 +14,8 @@ import {
 } from "./gridLayout";
 import { tint } from "./categories";
 import { shortDate } from "./weekDate";
+import type { DayWeather } from "./weather";
+import { WeatherTag } from "./WeatherTag";
 import { rowColors, type Groups } from "./WeekView";
 import { colors, font, shadow } from "./theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,6 +53,8 @@ interface Props {
   visibleDays?: number[];
   /** Tapping a day's name at the top (opens that day). */
   onPressDay?: (day: number) => void;
+  /** The forecast for a day (0 = Monday), if there is one. */
+  weatherFor?: (day: number) => DayWeather | undefined;
 }
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -111,6 +115,7 @@ export function WeekGrid(props: Props) {
               <Text style={[styles.headerDate, today?.day === d && styles.todayText]}>
                 {shortDate(weekStart, d).split(" ")[0]}
               </Text>
+              <WeatherTag w={props.weatherFor?.(d)} color={today?.day === d ? colors.white : undefined} />
             </Pressable>
           ))}
         </View>

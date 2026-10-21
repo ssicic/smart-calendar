@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Category } from "../db/weekStore";
 import { categoryStyle } from "./categories";
 import { shortDate } from "./weekDate";
+import { weatherText, type DayWeather } from "./weather";
 import { isDone, DAY_NAMES, clock, type RowKind, type WeekRow } from "./weekRows";
 import { colors, font } from "./theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -64,15 +65,21 @@ interface Props {
   onPressRow: (row: WeekRow) => void;
   /** Shown under Sunday, e.g. the queue for next week. */
   footer?: React.ReactNode;
+  /** The forecast for a day (0 = Monday), if there is one. */
+  weatherFor?: (day: number) => DayWeather | undefined;
 }
 
-export function WeekView({ days, weekStart, groups, badges, onPressRow, footer }: Props) {
+export function WeekView({ days, weekStart, groups, badges, onPressRow, footer, weatherFor }: Props) {
   return (
     <ScrollView contentContainerStyle={styles.list}>
       {days.map((rows, d) => (
         <View key={d} style={styles.day}>
           <Text style={styles.dayName}>
             {DAY_NAMES[d]} <Text style={styles.date}>{shortDate(weekStart, d)}</Text>
+            {(() => {
+              const w = weatherFor?.(d);
+              return w ? <Text style={styles.date}>{`  ·  ${weatherText(w)}`}</Text> : null;
+            })()}
           </Text>
           {rows.length === 0 ? (
             <Text style={styles.empty}>Nothing planned</Text>

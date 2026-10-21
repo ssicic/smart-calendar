@@ -16,6 +16,8 @@ import { AiSuggestions } from "./AiSuggestions";
 import { useAiReview } from "./useAiReview";
 import { MonthSummarySheet } from "./MonthSummarySheet";
 import { useMonthSummary } from "./useMonthSummary";
+import { useWeather } from "./useWeather";
+import { WeatherTag } from "./WeatherTag";
 import { PlanSheet } from "./PlanSheet";
 import { HistorySheet } from "./HistorySheet";
 import { GoalsSheet } from "./GoalsSheet";
@@ -29,6 +31,7 @@ import {
   addMonths,
   addWeeks,
   dateKey,
+  dayKey,
   dayDate,
   monthOfWeek,
   monthTitle,
@@ -130,6 +133,8 @@ export function WeekScreen() {
   const ai = useAiReview(db, weekStart, dateKey(now), groups, () => data.refresh());
   // Suggestions belong to the week on screen: start fresh when it changes.
   useEffect(() => ai.reset(), [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { forecast } = useWeather(db);
+  const weatherFor = (d: number) => forecast[dayKey(weekStart, d)];
   const monthSummary = useMonthSummary(db, month, thisWeek, dateKey(now), groups, summaryOpen);
   const today =
     thisWeek === weekStart
@@ -410,6 +415,7 @@ export function WeekScreen() {
                       <Text style={[styles.stripDate, isToday && styles.stripToday, on && styles.stripTextOn]}>
                         {dayDate(weekStart, d).split(".")[0]}
                       </Text>
+                      <WeatherTag w={weatherFor(d)} color={on ? colors.white : undefined} />
                     </Pressable>
                   );
                 })}
@@ -429,6 +435,7 @@ export function WeekScreen() {
               key={view} // switching Day ↔ Calendar starts fresh, scrolled to now
               visibleDays={view === "day" ? [day] : undefined}
               onPressDay={(d) => openDay(weekStart, d)}
+              weatherFor={weatherFor}
               days={days}
               weekStart={weekStart}
               sleep={sleep}
@@ -466,7 +473,7 @@ export function WeekScreen() {
             />
           </>
         ) : (
-          <WeekView days={days} weekStart={weekStart} groups={groups} badges={badges} onPressRow={setTapped} footer={queueFooter} />
+          <WeekView days={days} weekStart={weekStart} groups={groups} badges={badges} onPressRow={setTapped} footer={queueFooter} weatherFor={weatherFor} />
         )}
       </View>
       {isWeekView && !adding && (
