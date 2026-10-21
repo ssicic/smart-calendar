@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import os
 from typing import Protocol, TypeVar
 
 import anthropic
 from pydantic import BaseModel
 
-MODEL = "claude-opus-5-5"
+# Haiku: fast and very cheap (about $0.001 per weekly review). AI_MODEL in .env overrides it.
+MODEL = os.environ.get("AI_MODEL", "claude-haiku-5-5")
 
 T = TypeVar("T", bound=BaseModel)
 
 
 class LLMRefused(Exception):
-    """Claude (and its fallback) declined the request."""
+    """Claude declined the request (a safety check)."""
 
 
 class LLM(Protocol):
@@ -26,16 +28,13 @@ class ClaudeLLM:
         self.client = anthropic.Anthropic()
 
     def structured(self, system: str, user: str, schema: type[T]) -> T:
-        response = self.client.beta.messages.parse(
+        response = self.client.messages.parse(
             model=MODEL,
-            max_tokens=4000,
+            max_tokens=8000,  # room for the model's thinking plus the JSON answer
             system=system,
             messages=[{"role": "user", "content": user}],
             output_format=schema,  # structured output: the reply must match `schema`
             output_config={"effort": "medium"},
-            # If a safety check declines, retry on Anthropic's recommended fallback model.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
         )
         if response.stop_reason == "refusal" or response.parsed_output is None:
             raise LLMRefused(str(response.stop_reason))
