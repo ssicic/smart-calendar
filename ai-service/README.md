@@ -28,7 +28,7 @@ saves each month's summary, so it's only written again when asked.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements-dev.txt
 cp .env.example .env   # then paste your ANTHROPIC_API_KEY into .env
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8787 --env-file .env
 ```
@@ -37,6 +37,30 @@ cp .env.example .env   # then paste your ANTHROPIC_API_KEY into .env
 same computer that runs Expo, port 8787 (override with `EXPO_PUBLIC_AI_URL`).
 
 Demo mode, no key and no cost: `AI_FAKE=1 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8787`
+
+## App token
+
+When `APP_TOKEN` is set, the AI endpoints only answer requests with a matching
+`X-App-Token` header (the app sends `EXPO_PUBLIC_AI_TOKEN` from its `.env`). It
+stops strangers who find the URL from spending the credit. The token ships
+inside the app, so it isn't a real secret: the spend limit in the Claude Console
+is the hard cap.
+
+## Deploy (Vercel, free Hobby plan)
+
+Vercel finds the FastAPI `app` in `app/main.py` by itself. `requirements.txt`
+holds only what the server needs (tests and uvicorn are in
+`requirements-dev.txt`), `vercel.json` allows 60 s per request, and
+`.vercelignore` keeps `.env` and the venv out of the upload.
+
+```bash
+npx vercel          # first time: log in and link the project (root: ai-service)
+npx vercel --prod   # deploy
+```
+
+Set `ANTHROPIC_API_KEY` and `APP_TOKEN` in the Vercel dashboard: Project →
+Settings → Environment Variables. Then point the app at the address with
+`EXPO_PUBLIC_AI_URL` in the app's `.env`.
 
 ## Test
 

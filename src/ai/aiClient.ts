@@ -26,7 +26,8 @@ export async function postJson<T>(path: string, body: unknown, timeoutMs = 90_00
   try {
     res = await fetch(`${aiBaseUrl()}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      // The app token from .env (EXPO_PUBLIC_AI_TOKEN); see check_token in ai-service/app/main.py.
+      headers: { "Content-Type": "application/json", "X-App-Token": process.env.EXPO_PUBLIC_AI_TOKEN ?? "" },
       body: JSON.stringify(body),
       signal: controller.signal,
     });

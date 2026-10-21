@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 
 import anthropic
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .llm import LLM, ClaudeLLM, DemoLLM, LLMRefused
@@ -33,6 +33,16 @@ def get_llm() -> LLM:
     if _llm is None:
         _llm = DemoLLM() if os.environ.get("AI_FAKE") == "1" else ClaudeLLM()
     return _llm
+
+
+def check_token(x_app_token: str | None = Header(default=None)) -> None:
+    """When APP_TOKEN is set (on Vercel), only requests carrying it may use Claude.
+    It keeps strangers who find the URL from spending the credit. It ships inside
+    the app, so it's a lock against casual misuse, not a vault: the spend limit in
+    the Claude Console is the real cap."""
+    expected = os.environ.get("APP_TOKEN")
+    if expected and x_app_token != expected:
+        raise HTTPException(401, "This app isn't allowed to use the AI service. Check the app token.")
 
 
 @app.get("/health")
@@ -57,10 +67,12 @@ def ask(llm: LLM, system: str, user: str, schema):
 
 
 @app.post("/weekly-review", response_model=WeeklyReview)
-def weekly_review(req: ReviewRequest, llm: LLM = Depends(get_llm)) -> WeeklyReview:
+def weekly_review(req: ReviewRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)) -> WeeklyReview:
     return clean(ask(llm, SYSTEM_PROMPT, build_user_message(req), WeeklyReview), req)
 
 
 @app.post("/monthly-summary", response_model=monthly.MonthlySummary)
-def monthly_summary(req: monthly.MonthRequest, llm: LLM = Depends(get_llm)) -> monthly.MonthlySummary:
+def monthly_summary(
+    req: monthly.MonthRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)
+) -> monthly.MonthlySummary:
     return monthly.clean(ask(llm, monthly.SYSTEM_PROMPT, monthly.build_user_message(req), monthly.MonthlySummary))
