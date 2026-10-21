@@ -610,6 +610,43 @@ export async function insertItem(db: Db, item: FlexibleItem): Promise<void> {
   );
 }
 
+/** All flexible items as they are set up (without any week's queued extras). */
+export async function loadItems(db: Db): Promise<FlexibleItem[]> {
+  const rows = await db.getAllAsync<ItemRow>("SELECT * FROM flexible_items ORDER BY rowid", []);
+  return rows.map(itemFromRow);
+}
+
+/** What an accepted AI suggestion (or a later edit screen) may change on an item. */
+export interface ItemPlanPatch {
+  timesPerWeek?: number;
+  priority?: number;
+  /** null = any time of day. */
+  preferredWindows?: Interval[] | null;
+}
+
+export async function updateItemPlan(db: Db, itemId: string, patch: ItemPlanPatch): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    if (patch.timesPerWeek !== undefined)
+      await db.runAsync("UPDATE flexible_items SET times_per_week = ? WHERE id = ?", [patch.timesPerWeek, itemId]);
+    if (patch.priority !== undefined)
+      await db.runAsync("UPDATE flexible_items SET priority = ? WHERE id = ?", [patch.priority, itemId]);
+    if (patch.preferredWindows !== undefined)
+      await db.runAsync("UPDATE flexible_items SET preferred_windows = ? WHERE id = ?", [
+        patch.preferredWindows ? JSON.stringify(patch.preferredWindows) : null,
+        itemId,
+      ]);
+  });
+}
+
+/** The first week each item has any stored session in, so older weeks don't count it as missed. */
+export async function firstWeekPerItem(db: Db): Promise<Map<string, string>> {
+  const rows = await db.getAllAsync<{ item_id: string; first: string }>(
+    "SELECT item_id, MIN(week_start) AS first FROM placements GROUP BY item_id",
+    [],
+  );
+  return new Map(rows.map((r) => [r.item_id, r.first]));
+}
+
 // ---- Activity groups (categories) ----
 
 export async function loadCategories(db: Db): Promise<Category[]> {

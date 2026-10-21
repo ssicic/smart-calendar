@@ -12,6 +12,8 @@ import { progress, progressLabel } from "./routines";
 import { weekSummary } from "./weekItems";
 import { reviewStats } from "./weekReview";
 import { ReviewSheet } from "./ReviewSheet";
+import { AiSuggestions } from "./AiSuggestions";
+import { useAiReview } from "./useAiReview";
 import { PlanSheet } from "./PlanSheet";
 import { HistorySheet } from "./HistorySheet";
 import { GoalsSheet } from "./GoalsSheet";
@@ -122,6 +124,9 @@ export function WeekScreen() {
     return () => clearInterval(timer); // cleanup: stop the timer when the screen goes away
   }, []);
   const thisWeek = weekStartOf(now);
+  const ai = useAiReview(db, weekStart, dateKey(now), groups, () => data.refresh());
+  // Suggestions belong to the week on screen: start fresh when it changes.
+  useEffect(() => ai.reset(), [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
   const today =
     thisWeek === weekStart
       ? { day: (now.getDay() + 6) % 7, minute: now.getHours() * 60 + now.getMinutes() }
@@ -480,6 +485,7 @@ export function WeekScreen() {
           later={later}
           onPlanNext={() => switchSheet(() => setReviewOpen(false), () => setPlanOpen(true))}
           onPastWeeks={() => switchSheet(() => setReviewOpen(false), () => setHistoryOpen(true))}
+          aiSection={<AiSuggestions state={ai.state} onAsk={ai.ask} onAccept={ai.accept} />}
           onClose={() => setReviewOpen(false)}
         />
       )}

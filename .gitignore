@@ -42,3 +42,8 @@ yarn-error.*
 
 # secrets (API keys later, e.g. for the LLM features)
 .env
+
+# AI service (Python)
+ai-service/.venv/
+__pycache__/
+.pytest_cache/

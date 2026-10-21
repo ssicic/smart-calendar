@@ -25,6 +25,8 @@ interface Props {
   onPlanNext?: () => void;
   /** Opens "Past weeks" (left out when already looking at history). */
   onPastWeeks?: () => void;
+  /** The AI suggestions box (left out for past weeks). */
+  aiSection?: React.ReactNode;
   onClose: () => void;
 }
 
@@ -33,7 +35,7 @@ const hours = (minutes: number) => `${Math.round(minutes / 6) / 10}h`;
 /** Looking back at a week: what got done, where the time went, what moved on. */
 export function ReviewSheet(props: Props) {
   const { visible, weekLabel, nextWeekStart, stats, routines, items, movedOn, later, onPlanNext, onClose } = props;
-  const { onPastWeeks } = props;
+  const { onPastWeeks, aiSection } = props;
   const finished = items.filter(isFinished);
   const { sessions } = stats;
 
@@ -59,6 +61,8 @@ export function ReviewSheet(props: Props) {
               <Tile value={hours(stats.plannedMin)} label="planned" color={colors.accentStrong} />
               <Tile value={`${stats.freePercent}%`} label="free time" color={colors.textSoft} />
             </View>
+
+            {aiSection}
 
             <Section title="Flexible sessions">
               <Text style={styles.line}>
