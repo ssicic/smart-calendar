@@ -35,7 +35,9 @@ export async function postJson<T>(path: string, body: unknown, timeoutMs = 90_00
     throw new Error(
       controller.signal.aborted
         ? "The AI service took too long. Try again."
-        : "Can't reach the AI service. Is it running on your Mac (ai-service, port 8787)?",
+        : process.env.EXPO_PUBLIC_AI_URL
+          ? "Can't reach the AI service. Check your internet connection."
+          : "Can't reach the AI service. Is it running on your Mac (ai-service, port 8787)?",
     );
   } finally {
     clearTimeout(timer);
