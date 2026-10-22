@@ -23,6 +23,7 @@
     "expo-font": "~57.0.4",
     "expo-location": "~57.0.21",
     "expo-sharing": "~57.0.24",
+    "expo-splash-screen": "~57.0.10",
     "expo-sqlite": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",

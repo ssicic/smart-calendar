@@ -35,7 +35,9 @@ export function BackupSheet({ visible, db, onImported, onClose }: Props) {
       await work();
     } catch (e) {
       console.error(e);
-      setMessage({ text: "Something went wrong. Nothing was changed.", ok: false });
+      // Show the reason too: it's the only way to see what failed on a phone.
+      const detail = e instanceof Error ? e.message : String(e);
+      setMessage({ text: `Something went wrong. Nothing was changed. (${detail})`, ok: false });
     } finally {
       setBusy(false);
     }
