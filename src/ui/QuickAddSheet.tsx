@@ -345,6 +345,23 @@ export function QuickAddSheet(props: Props) {
 
           {isFlexible ? (
             <>
+              <View style={styles.repeatRow}>
+                <View style={styles.repeatText}>
+                  <Text style={styles.repeatLabel}>Repeat every week</Text>
+                  <Text style={styles.repeatHint}>
+                    {form.repeat
+                      ? "Every week from this one, until you stop it"
+                      : `Only ${weekRange(weekStart)}`}
+                  </Text>
+                </View>
+                <Switch
+                  value={form.repeat}
+                  onValueChange={(repeat) => update({ repeat })}
+                  trackColor={{ true: colors.accent, false: colors.borderStrong }}
+                  thumbColor={colors.white}
+                  accessibilityLabel="Repeat every week"
+                />
+              </View>
               <View style={styles.row}>
                 <Field label="Minutes" half>
                   <TextInput

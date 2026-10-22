@@ -46,6 +46,13 @@ describe("actionsFor", () => {
     expect(actionsFor("fixed", "Work").map((a) => a.id)).toEqual(["done", "move", "length", "rename", "delete"]);
     expect(actionsFor("routine", "Night routine").map((a) => a.id)).toEqual(["done", "move", "steps", "length", "rename", "delete"]);
   });
+  it("offers Stop after this week only for things that repeat, and says so on Delete", () => {
+    expect(actionsFor("suggested", "Gym", false, true).map((a) => a.id)).toContain("stop");
+    expect(actionsFor("fixed", "Work", false, true).map((a) => a.id)).toEqual(["done", "move", "length", "rename", "stop", "delete"]);
+    expect(actionsFor("suggested", "Gym").map((a) => a.id)).not.toContain("stop");
+    expect(actionsFor("suggested", "Gym").find((a) => a.id === "delete")?.label).toBe("Delete Gym");
+    expect(actionsFor("suggested", "Gym", false, true).find((a) => a.id === "delete")?.label).toBe("Delete Gym (every week)");
+  });
 });
 
 describe("storedId", () => {

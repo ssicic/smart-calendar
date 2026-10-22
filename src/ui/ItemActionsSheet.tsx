@@ -33,6 +33,8 @@ interface Props {
   rows: WeekRow[];
   /** True for an event that repeats every week: Move and Delete then ask "Just this week" or "Every week". */
   repeats: boolean;
+  /** True when the event or flexible item repeats: offers "Stop after this week". */
+  canStop?: boolean;
   /** Each handler returns an error message, or undefined when it worked. */
   onAction: (row: WeekRow, action: ActionId, scope?: EventScope) => Promise<string | undefined>;
   onMove: (
@@ -225,7 +227,7 @@ export function ItemActionsSheet(props: Props) {
 
           {mode === "menu" ? (
             <View style={styles.list}>
-              {actionsFor(row.kind, row.title, row.done).map((a) => {
+              {actionsFor(row.kind, row.title, row.done, props.canStop).map((a) => {
                 const confirming = a.id === "delete" && confirmDelete;
                 if (a.id === "queue" && pickQueue) {
                   return (

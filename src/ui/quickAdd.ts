@@ -55,7 +55,7 @@ export const IMPORTANCE_PRIORITY: Record<Importance, number> = { low: 1, medium:
 
 /** Discriminated union: check `ok` first, then TypeScript knows which fields exist. */
 export type ParseResult =
-  | { ok: true; kind: "flexible"; item: FlexibleItem }
+  | { ok: true; kind: "flexible"; item: FlexibleItem; repeat: boolean }
   | { ok: true; kind: "fixed"; events: FixedEvent[]; repeat: boolean }
   | { ok: true; kind: "routine"; events: FixedEvent[]; repeat: boolean }
   | { ok: false; error: string };
@@ -95,7 +95,7 @@ export function parseQuickAdd(form: QuickAddForm, newId: () => string): ParseRes
       ...(window ? { preferredWindows: [window] } : {}),
       ...group,
     };
-    return { ok: true, kind: "flexible", item };
+    return { ok: true, kind: "flexible", item, repeat: form.repeat };
   }
 
   if (form.kind === "routine" && !form.routineId) return { ok: false, error: "Pick a routine, or make a new one." };

@@ -28,7 +28,8 @@ export type ActionId =
   | "delete"
   | "queue" // to next week
   | "later" // to the Later list (no week yet)
-  | "unqueue";
+  | "unqueue"
+  | "stop"; // a repeating item or event: show up to this week, then no more
 
 /** For a repeating event: change "Just this week" or "Every week". */
 export type EventScope = "week" | "every";
@@ -43,8 +44,14 @@ export interface Action {
  * The actions for one kind of row, in the order they're shown. `done`: a
  * fixed event or routine already marked done this week.
  */
-export function actionsFor(kind: RowKind, title: string, done = false): Action[] {
+/**
+ * `repeats`: the event or flexible item shows up every week, so it can be
+ * stopped after this one. One-off items are deleted without "(every week)".
+ */
+export function actionsFor(kind: RowKind, title: string, done = false, repeats = false): Action[] {
   const remove: Action = { id: "delete", label: `Delete ${title}`, destructive: true };
+  const stop: Action[] = repeats ? [{ id: "stop", label: "Stop after this week" }] : [];
+  const removeItem: Action = repeats ? { ...remove, label: `Delete ${title} (every week)` } : remove;
   const rename: Action = { id: "rename", label: "Rename" };
   const length: Action = { id: "length", label: "Change length" };
   // Fixed events and routines: done (or not) per week, like flexible sessions.
@@ -52,9 +59,9 @@ export function actionsFor(kind: RowKind, title: string, done = false): Action[]
   switch (kind) {
     case "fixed":
       // The scheduler never moves these, so there is nothing to lock.
-      return [eventDone, { id: "move", label: "Move" }, length, rename, remove];
+      return [eventDone, { id: "move", label: "Move" }, length, rename, ...stop, remove];
     case "routine":
-      return [eventDone, { id: "move", label: "Move" }, { id: "steps", label: "Edit steps" }, length, rename, remove];
+      return [eventDone, { id: "move", label: "Move" }, { id: "steps", label: "Edit steps" }, length, rename, ...stop, remove];
     case "suggested":
     case "kept":
       return [
@@ -64,7 +71,8 @@ export function actionsFor(kind: RowKind, title: string, done = false): Action[]
         { id: "done", label: "Done" },
         length,
         rename,
-        { ...remove, label: `Delete ${title} (every week)` },
+        ...stop,
+        removeItem,
         { id: "queue", label: "Move to queue…" },
       ];
     case "locked":
@@ -74,11 +82,12 @@ export function actionsFor(kind: RowKind, title: string, done = false): Action[]
         { id: "done", label: "Done" },
         length,
         rename,
-        { ...remove, label: `Delete ${title} (every week)` },
+        ...stop,
+        removeItem,
         { id: "queue", label: "Move to queue…" },
       ];
     case "done":
-      return [{ id: "undone", label: "Not done yet" }, rename, { ...remove, label: `Delete ${title} (every week)` }];
+      return [{ id: "undone", label: "Not done yet" }, rename, ...stop, removeItem];
     case "skipped":
       return [{ id: "unqueue", label: "Bring back to this week" }];
   }

@@ -616,6 +616,10 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
       <ItemActionsSheet
         row={tapped}
         repeats={!!tapped && data.repeatingEventIds.has(tapped.id)}
+        canStop={
+          !!tapped &&
+          (data.repeatingEventIds.has(tapped.id) || (!!tapped.itemId && data.repeatingItemIds.has(tapped.itemId)))
+        }
         rows={allRows}
         categories={categories}
         groupActions={groupActions}

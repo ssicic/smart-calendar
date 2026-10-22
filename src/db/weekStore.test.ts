@@ -42,6 +42,7 @@ import {
   queuePlacement,
   savePlacement,
   type Db,
+  stopAfterWeek,
 } from "./weekStore";
 
 // Loaded at runtime because vitest 2 doesn't know the newer `node:sqlite` built-in.
@@ -99,12 +100,13 @@ describe("weekStore", () => {
       overrides: [],
       queuedForNextWeek: [],
       repeatingEventIds: [],
+      repeatingItemIds: [],
     });
   });
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 16 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 17 });
   });
 
   it("round-trips and moves fixed events and routines", async () => {
@@ -520,5 +522,44 @@ describe("applyExceptions", () => {
       ["a", 500, 560],
       ["c", 200, 260],
     ]);
+  });
+});
+
+describe("nothing repeats forever by accident (DB v17)", () => {
+  const A = "2026-10-19";
+  const B = "2026-10-26";
+  const C = "2026-11-02";
+  const read = { id: "read", title: "Read", durationMin: 30, timesPerWeek: 2, priority: 3 };
+  const itemsIn = async (db: Db, w: string) => (await loadWeek(db, w, "2099-01-05")).week.items.map((i) => i.id);
+
+  it("keeps a one-off flexible item in its own week only", async () => {
+    const db = nodeDb();
+    await migrate(db);
+    await insertItem(db, read, B);
+    expect(await itemsIn(db, A)).toEqual([]);
+    expect(await itemsIn(db, B)).toEqual(["read"]);
+    expect(await itemsIn(db, C)).toEqual([]);
+    expect((await loadWeek(db, B, C)).repeatingItemIds).toEqual([]);
+  });
+
+  it("starts a repeating item at its first week and stops it after a chosen week", async () => {
+    const db = nodeDb();
+    await migrate(db);
+    await insertItem(db, read, null, B);
+    expect(await itemsIn(db, A)).toEqual([]); // not in the past
+    expect(await itemsIn(db, C)).toEqual(["read"]);
+    expect((await loadWeek(db, B, C)).repeatingItemIds).toEqual(["read"]);
+    await stopAfterWeek(db, "item", "read", B);
+    expect(await itemsIn(db, B)).toEqual(["read"]);
+    expect(await itemsIn(db, C)).toEqual([]);
+  });
+
+  it("stops a repeating event after a chosen week", async () => {
+    const db = nodeDb();
+    await migrate(db);
+    await insertEvents(db, "fixed", [{ id: "w", title: "Work", start: 540, end: 1020 }], null, A);
+    await stopAfterWeek(db, "event", "w", B);
+    expect((await loadWeek(db, B, C)).week.fixed.map((e) => e.id)).toEqual(["w"]);
+    expect((await loadWeek(db, C, "2026-11-09")).week.fixed).toEqual([]);
   });
 });

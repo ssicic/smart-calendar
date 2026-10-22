@@ -298,6 +298,16 @@ const MIGRATIONS: string[] = [
   CREATE INDEX goals_by_period ON goals (period);
   ALTER TABLE week_items ADD COLUMN goal_id TEXT;
   `,
+  // Version 17: nothing repeats forever by accident. A flexible item can be
+  // for one week only (week_start), like events; a repeating item starts at
+  // from_week; and repeating items and events can stop (until_week, the last
+  // week they show in). Existing rows keep NULLs: they repeat as before.
+  `
+  ALTER TABLE flexible_items ADD COLUMN week_start TEXT;
+  ALTER TABLE flexible_items ADD COLUMN from_week TEXT;
+  ALTER TABLE flexible_items ADD COLUMN until_week TEXT;
+  ALTER TABLE events ADD COLUMN until_week TEXT;
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -340,6 +350,8 @@ export interface ItemRow {
   preferred_windows: string | null;
   goal_id: string | null;
   category_id: string | null;
+  /** One week only ("YYYY-MM-DD"), or null for an item that repeats. */
+  week_start: string | null;
 }
 
 /** One step of a routine's checklist. */
@@ -430,6 +442,8 @@ export interface LoadedWeek {
   queuedForNextWeek: { itemId: string; title: string }[];
   /** Ids of the events that repeat every week (the others are one-offs). */
   repeatingEventIds: string[];
+  /** Ids of the flexible items that repeat every week. */
+  repeatingItemIds: string[];
 }
 
 /**
@@ -440,9 +454,10 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
   // Events that repeat every week, plus the one-off events of this week.
   const allEvents = await db.getAllAsync<EventRow>(
     `SELECT * FROM events
-     WHERE (week_start IS NULL AND (from_week IS NULL OR from_week <= ?)) OR week_start = ?
+     WHERE (week_start IS NULL AND (from_week IS NULL OR from_week <= ?) AND (until_week IS NULL OR until_week >= ?))
+        OR week_start = ?
      ORDER BY start_min`,
-    [weekStart, weekStart],
+    [weekStart, weekStart, weekStart],
   );
   const exceptions = await db.getAllAsync<ExceptionRow>(
     "SELECT event_id, start_min, end_min FROM event_exceptions WHERE week_start = ?",
@@ -450,7 +465,14 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
   );
   // Re-sort: a moved event may now come earlier or later.
   const events = applyExceptions(allEvents, exceptions).sort((a, b) => a.start_min - b.start_min);
-  const items = await db.getAllAsync<ItemRow>("SELECT * FROM flexible_items ORDER BY rowid", []);
+  // Same rule for flexible items: repeating ones in their weeks, one-off ones in theirs.
+  const items = await db.getAllAsync<ItemRow>(
+    `SELECT * FROM flexible_items
+     WHERE (week_start IS NULL AND (from_week IS NULL OR from_week <= ?) AND (until_week IS NULL OR until_week >= ?))
+        OR week_start = ?
+     ORDER BY rowid`,
+    [weekStart, weekStart, weekStart],
+  );
   const placements = await db.getAllAsync<PlacementRow>(
     "SELECT id, item_id, start_min, end_min, state FROM placements WHERE week_start = ?",
     [weekStart],
@@ -484,6 +506,7 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
     },
     queuedForNextWeek: queuedNext.map((q) => ({ itemId: q.item_id, title: q.title })),
     repeatingEventIds: events.filter((e) => e.week_start === null).map((e) => e.id),
+    repeatingItemIds: items.filter((i) => i.week_start === null).map((i) => i.id),
   };
 }
 
@@ -592,22 +615,39 @@ export async function changeEventForWeek(
   );
 }
 
-export async function insertItem(db: Db, item: FlexibleItem): Promise<void> {
+/**
+ * `weekStart`: the only week the item is in, or null for one that repeats
+ * every week from `fromWeek` on (null = every week, tests and old data).
+ */
+export async function insertItem(
+  db: Db,
+  item: FlexibleItem,
+  weekStart: string | null = null,
+  fromWeek: string | null = null,
+): Promise<void> {
+  const cols: [string, string | number | null][] = [
+    ["id", item.id],
+    ["title", item.title],
+    ["duration_min", item.durationMin],
+    ["times_per_week", item.timesPerWeek],
+    ["priority", item.priority],
+    ["preferred_windows", item.preferredWindows ? JSON.stringify(item.preferredWindows) : null],
+    ["goal_id", item.goalId ?? null],
+    ["category_id", item.categoryId ?? null],
+  ];
+  // Only name the v17 columns when they're used, so older databases (in tests) still work.
+  if (weekStart) cols.push(["week_start", weekStart]);
+  else if (fromWeek) cols.push(["from_week", fromWeek]);
   await db.runAsync(
-    `INSERT INTO flexible_items
-       (id, title, duration_min, times_per_week, priority, preferred_windows, goal_id, category_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      item.id,
-      item.title,
-      item.durationMin,
-      item.timesPerWeek,
-      item.priority,
-      item.preferredWindows ? JSON.stringify(item.preferredWindows) : null,
-      item.goalId ?? null,
-      item.categoryId ?? null,
-    ],
+    `INSERT INTO flexible_items (${cols.map(([c]) => c).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`,
+    cols.map(([, v]) => v),
   );
+}
+
+/** "Stop after this week": a repeating item or event shows up to `lastWeek` and no longer. */
+export async function stopAfterWeek(db: Db, what: "item" | "event", id: string, lastWeek: string): Promise<void> {
+  const table = what === "item" ? "flexible_items" : "events";
+  await db.runAsync(`UPDATE ${table} SET until_week = ? WHERE id = ? AND week_start IS NULL`, [lastWeek, id]);
 }
 
 /** A JSON value from the settings table (key/value), or null when it isn't there. */

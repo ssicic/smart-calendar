@@ -13,6 +13,7 @@ import {
   insertCategory,
   insertEvents,
   insertItem,
+  stopAfterWeek,
   renameEvent,
   renameEventsNamed,
   renameItem,
@@ -147,6 +148,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   );
   const plan = useMemo(() => (week ? planWeek(week) : undefined), [week]);
   const repeatingEventIds = useMemo(() => new Set(loaded?.repeatingEventIds), [loaded]);
+  const repeatingItemIds = useMemo(() => new Set(loaded?.repeatingItemIds), [loaded]);
 
   /** Only repeating events have a choice; one-off events always change "every week" (their only week). */
   const scopeFor = (row: WeekRow, scope: EventScope): EventScope =>
@@ -154,7 +156,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
 
   const add = (r: QuickAddResult) =>
     attempt(async () => {
-      if (r.kind === "flexible") await insertItem(db, r.item);
+      // Just this week unless "Repeat every week" is on; a repeating item starts this week.
+      if (r.kind === "flexible") await insertItem(db, r.item, r.repeat ? null : weekStart, weekStart);
       // A repeating event starts from the week it's added in; it doesn't fill past weeks.
       else await insertEvents(db, r.kind, r.events, r.repeat ? null : weekStart, weekStart);
       await refresh();
@@ -166,7 +169,11 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       if (!week || !plan) return;
       const p = plan.placements.find((x) => x.id === row.id);
 
-      if (isEventKind(row.kind) && (action === "done" || action === "undone")) {
+      if (action === "stop") {
+        // Shows up to and including this week, then no more. Past weeks keep it.
+        if (isEventKind(row.kind)) await stopAfterWeek(db, "event", row.id, weekStart);
+        else if (row.itemId) await stopAfterWeek(db, "item", row.itemId, weekStart);
+      } else if (isEventKind(row.kind) && (action === "done" || action === "undone")) {
         await setEventDone(db, row.id, weekStart, action === "done"); // this week only
       } else if (action === "delete") {
         if (isEventKind(row.kind)) {
@@ -376,7 +383,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   /** "Make time for it": a flexible item linked to the goal; the planner places it. */
   const makeTimeFor = (goal: Goal, minutes: number, times: number) =>
     attempt(async () => {
-      await insertItem(db, goalItem(goal, minutes, times));
+      await insertItem(db, goalItem(goal, minutes, times), null, weekStart); // time for a goal repeats
       await refresh();
     });
 
@@ -480,6 +487,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setRowCategory,
     plan,
     repeatingEventIds,
+    repeatingItemIds,
     queuedForNextWeek: loaded?.queuedForNextWeek ?? [],
     sleep,
     windDownMin: loaded?.sleep.windDownMin ?? 0,
