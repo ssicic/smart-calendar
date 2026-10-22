@@ -1,0 +1,31 @@
+# What EAS Build uploads. Same as .gitignore, except that .env IS included:
+# it holds EXPO_PUBLIC_AI_URL and EXPO_PUBLIC_AI_TOKEN, which the app needs at
+# build time. (No real secrets: the Anthropic key lives only on Vercel.)
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env*.local
+*.tsbuildinfo
+/ios
+/android
+__pycache__/
+.pytest_cache/
+# Not part of the phone app
+ai-service/
+CLAUDE.md
+.claude/
