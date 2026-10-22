@@ -7,6 +7,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/nunito";
 import { StatusBar } from "expo-status-bar";
+import { useState } from "react";
 import { View } from "react-native";
 import { SQLiteProvider } from "expo-sqlite";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -16,6 +17,9 @@ import { colors } from "./src/ui/theme";
 import { WeekScreen } from "./src/ui/WeekScreen";
 
 export default function App() {
+  // Bumped after importing a backup: a new key makes React build the whole
+  // screen again, so every view reloads from the replaced database.
+  const [generation, setGeneration] = useState(0);
   // The app's font (Nunito). Until it's loaded, show the background only, so
   // text doesn't flash in another font first. If loading fails, carry on
   // with the system font.
@@ -36,7 +40,7 @@ export default function App() {
           errors on screen instead of a blank page. */}
       <DatabaseGate>
         <SQLiteProvider databaseName="smart-calendar.db" onInit={migrate}>
-          <WeekScreen />
+          <WeekScreen key={generation} onDataReplaced={() => setGeneration((g) => g + 1)} />
         </SQLiteProvider>
       </DatabaseGate>
       <StatusBar style="dark" />

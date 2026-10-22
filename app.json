@@ -30,7 +30,8 @@
         {
           "locationWhenInUsePermission": "Smart Calendar uses your rough location to show the weather for each day."
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }

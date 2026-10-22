@@ -15,6 +15,7 @@ import { ReviewSheet } from "./ReviewSheet";
 import { AiSuggestions } from "./AiSuggestions";
 import { useAiReview } from "./useAiReview";
 import { MonthSummarySheet } from "./MonthSummarySheet";
+import { BackupSheet } from "./BackupSheet";
 import { useMonthSummary } from "./useMonthSummary";
 import { useWeather } from "./useWeather";
 import { WeatherTag } from "./WeatherTag";
@@ -56,7 +57,8 @@ const VIEW_LABELS: Record<ViewMode, string> = {
   year: "Year",
 };
 
-export function WeekScreen() {
+/** `onDataReplaced`: after a backup import, the app rebuilds this screen from the new data. */
+export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } = {}) {
   // The database opened by <SQLiteProvider> in App.tsx.
   const db = useSQLiteContext();
   // The week shown in Calendar/Week (its Monday). Starts on this week; the
@@ -85,6 +87,7 @@ export function WeekScreen() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
   // Going from one sheet to another: close the first, then open the next once
   // it's gone. Opening both in the same moment leaves the first one stuck on
   // screen on web.
@@ -341,6 +344,11 @@ export function WeekScreen() {
                 <Text style={styles.todayButtonText}>Past weeks</Text>
               </Pressable>
             )}
+            {view === "year" && (
+              <Pressable onPress={() => setBackupOpen(true)} style={styles.todayButton} accessibilityRole="button">
+                <Text style={styles.todayButtonText}>Backup</Text>
+              </Pressable>
+            )}
           </View>
         </View>
         <Text style={styles.sub}>{subtitle}</Text>
@@ -505,6 +513,12 @@ export function WeekScreen() {
           onClose={() => setReviewOpen(false)}
         />
       )}
+      <BackupSheet
+        visible={backupOpen}
+        db={db}
+        onImported={() => setTimeout(() => onDataReplaced?.(), 1200)} // let "Your calendar is back" show first
+        onClose={() => setBackupOpen(false)}
+      />
       <MonthSummarySheet
         visible={summaryOpen}
         title={monthTitle(month)}
