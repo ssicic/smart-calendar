@@ -21,6 +21,9 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
@@ -53,6 +56,12 @@
         "projectId": "e0e62d1d-6613-42a7-b6a3-bf878c1157b7"
       }
     },
-    "owner": "ssicic"
+    "owner": "ssicic",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e0e62d1d-6613-42a7-b6a3-bf878c1157b7"
+    }
   }
 }
