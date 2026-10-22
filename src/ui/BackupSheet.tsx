@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { backupFileName, checkBackup, exportBackup, importBackup, type Backup } from "../db/backup";
 import type { Db } from "../db/weekStore";
-import { pickBackupText, saveBackupFile } from "./backupFiles";
+import { pickBackupText, saveBackupToFolder, shareBackupFile } from "./backupFiles";
 import { colors, font } from "./theme";
 
 interface Props {
@@ -43,11 +43,22 @@ export function BackupSheet({ visible, db, onImported, onClose }: Props) {
     }
   };
 
+  const backupText = async (now: Date) => JSON.stringify(await exportBackup(db, now));
+
+  /** Main way: pick a folder (Download) and the file is saved there. */
   const doExport = () =>
     run(async () => {
       const now = new Date();
-      await saveBackupFile(backupFileName(now), JSON.stringify(await exportBackup(db, now)));
-      setMessage({ text: "Backup made. Keep the file somewhere you can reach from the other app.", ok: true });
+      const saved = await saveBackupToFolder(backupFileName(now), await backupText(now));
+      if (saved)
+        setMessage({ text: `Saved as ${backupFileName(now)}. In the other app, tap Import and open that folder.`, ok: true });
+    });
+
+  /** Second way: the share menu (WhatsApp, email, Drive…). */
+  const doShare = () =>
+    run(async () => {
+      const now = new Date();
+      await shareBackupFile(backupFileName(now), await backupText(now));
     });
 
   const chooseFile = () =>
@@ -88,7 +99,10 @@ export function BackupSheet({ visible, db, onImported, onClose }: Props) {
 
           <Pressable onPress={doExport} disabled={busy} style={styles.primary} accessibilityRole="button">
             <Ionicons name="download-outline" size={18} color={colors.white} />
-            <Text style={styles.primaryText}>Export a backup</Text>
+            <Text style={styles.primaryText}>Save a backup to this phone…</Text>
+          </Pressable>
+          <Pressable onPress={doShare} disabled={busy} style={styles.plain} accessibilityRole="button">
+            <Text style={styles.link}>Or send it somewhere (email, Drive, WhatsApp…)</Text>
           </Pressable>
 
           {pending ? (
@@ -141,6 +155,7 @@ const styles = StyleSheet.create({
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   note: { fontFamily: font.regular, fontSize: 14, color: colors.textMuted, lineHeight: 20 },
   primary: { ...button, backgroundColor: colors.accent },
+  plain: { alignItems: "center", paddingVertical: 2 },
   primaryText: { color: colors.white, fontFamily: font.bold, fontSize: 16 },
   secondaryWide: { ...button, backgroundColor: colors.surfaceAlt },
   secondary: { ...button, flex: 1, backgroundColor: colors.surfaceAlt },
