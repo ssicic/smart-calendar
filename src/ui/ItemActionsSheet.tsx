@@ -22,6 +22,8 @@ import { overlapping, summarize } from "./overlaps";
 import { parseTime } from "./quickAdd";
 import { TimePicker } from "./TimePicker";
 import { Notice } from "./Notice";
+import { DatePickerGrid } from "./DatePickerGrid";
+import { addWeeks, dayDate, dayKey, monthOfWeek } from "./weekDate";
 import { DAY_NAMES, clock, isEventKind, type WeekRow } from "./weekRows";
 import { colors, font, radius } from "./theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -43,7 +45,12 @@ interface Props {
     minuteOfDay: number,
     force?: boolean,
     scope?: EventScope,
+    /** Another week to move it to (its Monday); undefined = the week on screen. */
+    toWeek?: string,
   ) => Promise<string | undefined>;
+  /** The week on screen (its Monday) and today ("YYYY-MM-DD"), for moving to another week. */
+  weekStart: string;
+  todayKey: string;
   /** Why the row can't move there (live, no saving), or undefined. */
   checkMove: (row: WeekRow, day: number, minuteOfDay: number) => string | undefined;
   onClose: () => void;
@@ -85,6 +92,9 @@ export function ItemActionsSheet(props: Props) {
   const [moveDay, setMoveDay] = useState(0);
   const [moveTime, setMoveTime] = useState("");
   const [scope, setScope] = useState<EventScope>("week");
+  // Moving to another week: its Monday ("YYYY-MM-DD"), and whether the date calendar is open.
+  const [toWeek, setToWeek] = useState(props.weekStart);
+  const [pickingDate, setPickingDate] = useState(false);
   // After one OK, stop showing warnings until the sheet is opened again.
   const [warningsOff, setWarningsOff] = useState(false);
 
@@ -97,6 +107,8 @@ export function ItemActionsSheet(props: Props) {
     setWarningsOff(false);
     setScope("week");
     setRenameAll(false);
+    setToWeek(props.weekStart);
+    setPickingDate(false);
     if (row) {
       setNewTitle(row.title);
       setNewLength(row.end - row.start);
@@ -115,15 +127,16 @@ export function ItemActionsSheet(props: Props) {
   // landing on fixed, rest, placed, locked or done time needs a "Move anyway".
   const pickedStart = parseTime(moveTime);
   const isEvent = isEventKind(row.kind);
+  const otherWeek = toWeek !== props.weekStart;
   const clashes =
-    pickedStart === undefined
+    pickedStart === undefined || otherWeek
       ? []
       : overlapping(
           rows,
           [{ start: moveDay * DAY + pickedStart, end: moveDay * DAY + pickedStart + (row.end - row.start) }],
           row.id,
         );
-  const problem = pickedStart === undefined ? undefined : checkMove(row, moveDay, pickedStart);
+  const problem = pickedStart === undefined || otherWeek ? undefined : checkMove(row, moveDay, pickedStart);
   const pushedAside = isEvent ? [] : clashes.filter((r) => r.kind === "suggested");
   // Running past Sunday can't be overridden; overlapping can.
   const canForce = !!problem && !isEvent;
@@ -155,7 +168,7 @@ export function ItemActionsSheet(props: Props) {
   const saveMove = async () => {
     const minute = parseTime(moveTime);
     if (minute === undefined || minute >= DAY) return setError("Use a time like 18:30.");
-    const err = await onMove(row, moveDay, minute, canForce, scope);
+    const err = await onMove(row, moveDay, minute, canForce, scope, otherWeek ? toWeek : undefined);
     if (err) setError(err);
     else onClose();
   };
@@ -392,8 +405,54 @@ export function ItemActionsSheet(props: Props) {
             </View>
           ) : (
             <View style={styles.move}>
+              <Text style={styles.label}>Week</Text>
+              <Chips
+                options={[
+                  { value: "this", label: "This week" },
+                  { value: "next", label: "Next week" },
+                  {
+                    value: "pick",
+                    label:
+                      otherWeek && toWeek !== addWeeks(props.weekStart, 1)
+                        ? `${DAY_NAMES[moveDay]?.slice(0, 3)} ${dayDate(toWeek, moveDay)}`
+                        : "Pick a date…",
+                  },
+                ]}
+                isSelected={(v) =>
+                  v === "pick"
+                    ? pickingDate || (otherWeek && toWeek !== addWeeks(props.weekStart, 1))
+                    : !pickingDate && (v === "this" ? !otherWeek : toWeek === addWeeks(props.weekStart, 1))
+                }
+                onPress={(v) => {
+                  setError(undefined);
+                  if (v === "pick") return setPickingDate(true);
+                  setPickingDate(false);
+                  setToWeek(v === "this" ? props.weekStart : addWeeks(props.weekStart, 1));
+                }}
+              />
+              {pickingDate && (
+                <DatePickerGrid
+                  start={monthOfWeek(toWeek)}
+                  selected={dayKey(toWeek, moveDay)}
+                  minKey={props.todayKey}
+                  onPick={(week, day) => {
+                    setToWeek(week);
+                    setMoveDay(day);
+                    setPickingDate(false);
+                  }}
+                />
+              )}
               <Text style={styles.label}>Day</Text>
-              <Chips options={DAY_OPTIONS} isSelected={(d) => d === moveDay} onPress={setMoveDay} />
+              <Chips
+                // Another week: show the dates too ("Thu 12."), so it's clear which days these are.
+                options={
+                  otherWeek
+                    ? DAY_OPTIONS.map((o) => ({ ...o, label: `${o.label} ${dayDate(toWeek, o.value).split(".")[0]}` }))
+                    : DAY_OPTIONS
+                }
+                isSelected={(d) => d === moveDay}
+                onPress={setMoveDay}
+              />
               <Text style={styles.label}>Start  {moveTime}</Text>
               <TimePicker
                 value={moveTime}
@@ -415,7 +474,12 @@ export function ItemActionsSheet(props: Props) {
               {!warningsOff && !problem && pushedAside.length > 0 && (
                 <Notice text={`${summarize(pushedAside)} will move to make room.`} onDismiss={() => setWarningsOff(true)} />
               )}
-              {repeats && (
+              {otherWeek && (
+                <Text style={styles.hint}>
+                  Moves just this one to {DAY_NAMES[moveDay]} {dayDate(toWeek, moveDay)} Open that week to check it fits.
+                </Text>
+              )}
+              {repeats && !otherWeek && (
                 <>
                   <Text style={styles.label}>Which weeks</Text>
                   <Chips options={SCOPES} isSelected={(s) => s === scope} onPress={setScope} />

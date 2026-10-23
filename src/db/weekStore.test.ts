@@ -43,6 +43,8 @@ import {
   savePlacement,
   type Db,
   stopAfterWeek,
+  moveEventToWeek,
+  moveSessionToWeek,
 } from "./weekStore";
 
 // Loaded at runtime because vitest 2 doesn't know the newer `node:sqlite` built-in.
@@ -561,5 +563,50 @@ describe("nothing repeats forever by accident (DB v17)", () => {
     await stopAfterWeek(db, "event", "w", B);
     expect((await loadWeek(db, B, C)).week.fixed.map((e) => e.id)).toEqual(["w"]);
     expect((await loadWeek(db, C, "2026-11-09")).week.fixed).toEqual([]);
+  });
+});
+
+describe("moving to another week", () => {
+  const THIS = "2026-10-19";
+  const NOV9 = "2026-11-09"; // the week with Thu 12 Nov
+  const thu = 3 * 1440;
+  const read = { id: "read", title: "Read", durationMin: 60, timesPerWeek: 2, priority: 3 };
+
+  it("moves a one-off event to 12 November", async () => {
+    const db = nodeDb();
+    await migrate(db);
+    await insertEvents(db, "fixed", [{ id: "dentist", title: "Dentist", start: 600, end: 660 }], THIS, THIS);
+    await moveEventToWeek(db, "dentist", THIS, NOV9, thu + 840, thu + 900, "x");
+    expect((await loadWeek(db, THIS, "2026-10-26")).week.fixed).toEqual([]);
+    expect((await loadWeek(db, NOV9, "2026-11-16")).week.fixed).toMatchObject([{ id: "dentist", start: thu + 840, end: thu + 900 }]);
+  });
+
+  it("takes a repeating event out of this week only and puts a copy in the other week", async () => {
+    const db = nodeDb();
+    await migrate(db);
+    await insertEvents(db, "fixed", [{ id: "yoga", title: "Yoga class", start: 1080, end: 1140 }], null, THIS);
+    await moveEventToWeek(db, "yoga", THIS, NOV9, thu + 600, thu + 660, "yoga2");
+    expect((await loadWeek(db, THIS, "2026-10-26")).week.fixed).toEqual([]);
+    expect((await loadWeek(db, "2026-10-26", "2026-11-02")).week.fixed.map((e) => e.id)).toEqual(["yoga"]);
+    expect((await loadWeek(db, NOV9, "2026-11-16")).week.fixed.map((e) => [e.id, e.start])).toEqual([
+      ["yoga", 1080], // Monday, as every week
+      ["yoga2", thu + 600], // the moved one, Thursday 12 Nov
+    ]);
+  });
+
+  it("moves one session of a one-off item into a week where the item doesn't run", async () => {
+    const db = nodeDb();
+    await migrate(db);
+    await insertItem(db, read, THIS);
+    const p = { id: "p1", itemId: "read", start: 600, end: 660, state: "suggested" as const };
+    await moveSessionToWeek(db, THIS, p, NOV9, thu + 480, thu + 540, { queue: "q1", placement: "p2" });
+
+    const here = await loadWeek(db, THIS, "2026-10-26");
+    expect(here.week.placements).toEqual([{ ...p, state: "skipped" }]);
+    const there = await loadWeek(db, NOV9, "2026-11-16");
+    expect(there.week.items).toMatchObject([{ id: "read", timesPerWeek: 1 }]); // just the moved session
+    expect(there.week.placements).toEqual([{ id: "p2", itemId: "read", start: thu + 480, end: thu + 540, state: "kept" }]);
+    expect(there.repeatingItemIds).toEqual([]);
+    expect(planWeek(there.week).placements).toHaveLength(1); // nothing extra suggested
   });
 });

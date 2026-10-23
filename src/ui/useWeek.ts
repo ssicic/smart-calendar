@@ -3,7 +3,7 @@
 // database, then reload from it. The database is the single source of truth,
 // so the screen can never drift out of sync with what's saved.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { isWeekend, planWeek, sleepForDay, type FixedEvent } from "../engine";
+import { WEEK, isWeekend, planWeek, sleepForDay, type FixedEvent } from "../engine";
 import {
   changeEventForWeek,
   deleteEvent,
@@ -13,6 +13,8 @@ import {
   insertCategory,
   insertEvents,
   insertItem,
+  moveEventToWeek,
+  moveSessionToWeek,
   stopAfterWeek,
   renameEvent,
   renameEventsNamed,
@@ -199,10 +201,31 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
    * `force`: the user saw the warning and chose "Move anyway". `scope`: for a
    * repeating event, move it just this week (the default, also for dragging) or every week.
    */
-  const move = (row: WeekRow, day: number, minuteOfDay: number, force = false, scope: EventScope = "week") =>
+  const move = (
+    row: WeekRow,
+    day: number,
+    minuteOfDay: number,
+    force = false,
+    scope: EventScope = "week",
+    toWeek?: string, // another week's Monday: move just this one there
+  ) =>
     attempt(async () => {
       if (!week || !plan) return;
       const newStart = weekMinute(day, minuteOfDay);
+      if (toWeek && toWeek !== weekStart) {
+        const length = row.end - row.start;
+        if (newStart + length > WEEK) return "It would run past Sunday midnight.";
+        if (isEventKind(row.kind)) {
+          await moveEventToWeek(db, row.id, weekStart, toWeek, newStart, newStart + length, newId());
+        } else {
+          const p = plan.placements.find((x) => x.id === row.id);
+          if (!p) return;
+          const ids = { queue: newId(), placement: newId() };
+          await moveSessionToWeek(db, weekStart, { ...p, id: storedId(p, newId) }, toWeek, newStart, newStart + length, ids);
+        }
+        await refresh();
+        return;
+      }
       if (isEventKind(row.kind)) {
         const events: FixedEvent[] = row.kind === "fixed" ? week.fixed : (week.routines ?? []);
         const event = events.find((e) => e.id === row.id);

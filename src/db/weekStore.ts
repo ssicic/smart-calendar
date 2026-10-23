@@ -466,12 +466,19 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
   // Re-sort: a moved event may now come earlier or later.
   const events = applyExceptions(allEvents, exceptions).sort((a, b) => a.start_min - b.start_min);
   // Same rule for flexible items: repeating ones in their weeks, one-off ones in theirs.
-  const items = await db.getAllAsync<ItemRow>(
-    `SELECT * FROM flexible_items
+  // Same rule for flexible items, plus items with a session moved or queued
+  // into this week. `active` says whether the item itself runs this week; if
+  // not, only its moved/queued sessions count here.
+  const items = await db.getAllAsync<ItemRow & { active: number }>(
+    `SELECT *,
+       CASE WHEN (week_start IS NULL AND (from_week IS NULL OR from_week <= ?) AND (until_week IS NULL OR until_week >= ?))
+              OR week_start = ? THEN 1 ELSE 0 END AS active
+     FROM flexible_items
      WHERE (week_start IS NULL AND (from_week IS NULL OR from_week <= ?) AND (until_week IS NULL OR until_week >= ?))
         OR week_start = ?
+        OR id IN (SELECT item_id FROM queue WHERE target_week = ?)
      ORDER BY rowid`,
-    [weekStart, weekStart, weekStart],
+    [weekStart, weekStart, weekStart, weekStart, weekStart, weekStart, weekStart],
   );
   const placements = await db.getAllAsync<PlacementRow>(
     "SELECT id, item_id, start_min, end_min, state FROM placements WHERE week_start = ?",
@@ -500,13 +507,16 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
       fixed: events.filter((e) => e.kind === "fixed").map(eventFromRow),
       rest: [], // rest is a group now (DB v8), not its own kind
       routines: events.filter((e) => e.kind === "routine").map(eventFromRow),
-      items: items.map(itemFromRow).map((i) => ({ ...i, timesPerWeek: i.timesPerWeek + (extra.get(i.id) ?? 0) })),
+      items: items.map((row) => {
+        const i = itemFromRow(row);
+        return { ...i, timesPerWeek: (row.active ? i.timesPerWeek : 0) + (extra.get(i.id) ?? 0) };
+      }),
       placements: placements.map(placementFromRow),
       settings: { ...DEFAULT_SETTINGS, dayWindows: planningWindows(sleep, overrides) },
     },
     queuedForNextWeek: queuedNext.map((q) => ({ itemId: q.item_id, title: q.title })),
     repeatingEventIds: events.filter((e) => e.week_start === null).map((e) => e.id),
-    repeatingItemIds: items.filter((i) => i.week_start === null).map((i) => i.id),
+    repeatingItemIds: items.filter((i) => i.active && i.week_start === null).map((i) => i.id),
   };
 }
 
@@ -803,6 +813,64 @@ export async function queuePlacement(
       p.id,
       targetWeek,
     ]);
+  });
+}
+
+// ---- Moving to another week ----
+
+/**
+ * Moves an event to `toWeek` at new times. A one-off event just changes week.
+ * A repeating one is left out of `fromWeek` only and copied into `toWeek` as a
+ * one-off (it keeps repeating in every other week).
+ */
+export async function moveEventToWeek(
+  db: Db,
+  id: string,
+  fromWeek: string,
+  toWeek: string,
+  start: number,
+  end: number,
+  newId: string,
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    const e = await db.getFirstAsync<EventRow>("SELECT * FROM events WHERE id = ?", [id]);
+    if (!e) return;
+    if (e.week_start !== null) {
+      await db.runAsync("UPDATE events SET week_start = ?, start_min = ?, end_min = ? WHERE id = ?", [toWeek, start, end, id]);
+      return;
+    }
+    await changeEventForWeek(db, id, fromWeek, null); // not in this week any more
+    await db.runAsync(
+      `INSERT INTO events (id, kind, title, start_min, end_min, week_start, category_id, routine_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [newId, e.kind, e.title, start, end, toWeek, e.category_id, e.routine_id],
+    );
+  });
+}
+
+/**
+ * Moves one flexible session to `toWeek` at new times: here it counts as moved
+ * on (like the queue, so "Bring back" works), there it gets one extra session,
+ * placed and kept at the chosen time.
+ */
+export async function moveSessionToWeek(
+  db: Db,
+  fromWeek: string,
+  p: Placement,
+  toWeek: string,
+  start: number,
+  end: number,
+  ids: { queue: string; placement: string },
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await savePlacement(db, fromWeek, { ...p, state: "skipped" });
+    await db.runAsync("INSERT INTO queue (id, item_id, placement_id, target_week) VALUES (?, ?, ?, ?)", [
+      ids.queue,
+      p.itemId,
+      p.id,
+      toWeek,
+    ]);
+    await savePlacement(db, toWeek, { id: ids.placement, itemId: p.itemId, start, end, state: "kept" });
   });
 }
 

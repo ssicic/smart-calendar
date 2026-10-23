@@ -177,7 +177,6 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   const { plannedMin, doneMin } = weekTotals(week, plan, doneEvents);
   const hours = (minutes: number) => Math.round(minutes / 6) / 10;
   const unplacedSessions = plan.unplaced.reduce((sum, u) => sum + u.missing, 0);
-  const isEmpty = week.fixed.length + (week.routines ?? []).length + week.items.length === 0;
 
   const isWeekView = view === "day" || view === "calendar" || view === "list";
   // Flexible items made for goals, with this week's done sessions (counted, not ticked).
@@ -395,14 +394,6 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
               setView("month");
             }}
           />
-        ) : isEmpty && view !== "day" ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Your week is empty</Text>
-            <Text style={styles.emptyText}>
-              Tap + to add work or classes (Fixed), routines with a checklist like your morning (Routine), and
-              things you want to fit in (Flexible).
-            </Text>
-          </View>
         ) : view === "calendar" || view === "day" ? (
           <>
             {view === "day" && (
@@ -633,6 +624,8 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
         onResize={resize}
         onAction={act}
         onMove={move}
+        weekStart={weekStart}
+        todayKey={dateKey(now)}
         checkMove={(row, day, minute) => moveProblem(week, plan, allRows, row, day, minute)}
         onClose={() => setTapped(undefined)}
       />
@@ -691,9 +684,6 @@ const styles = StyleSheet.create({
   heading: { flexShrink: 1, fontSize: 22, fontFamily: font.heavy, color: colors.text, paddingHorizontal: 4 },
   sub: { marginTop: 4, color: colors.textMuted },
   warn: { marginTop: 4, color: colors.warnText, fontFamily: font.semibold },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 8 },
-  emptyTitle: { fontSize: 18, fontFamily: font.bold, color: colors.text },
-  emptyText: { textAlign: "center", color: colors.textMuted, lineHeight: 21 },
   queue: { padding: 12, borderRadius: 10, backgroundColor: colors.warnSoft, gap: 2 },
   queueTitle: { fontFamily: font.bold, color: colors.warnText },
   queueText: { color: colors.warnText },
