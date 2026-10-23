@@ -308,6 +308,22 @@ const MIGRATIONS: string[] = [
   ALTER TABLE flexible_items ADD COLUMN until_week TEXT;
   ALTER TABLE events ADD COLUMN until_week TEXT;
   `,
+  // Version 18: habits ("10k steps", "No alcohol"): ticked yes/no per day.
+  // target_per_week: how many days a week count as "on track" (7 = every day).
+  `
+  CREATE TABLE habits (
+    id              TEXT PRIMARY KEY,
+    title           TEXT NOT NULL,
+    icon            TEXT NOT NULL,
+    target_per_week INTEGER NOT NULL DEFAULT 7 CHECK (target_per_week BETWEEN 1 AND 7),
+    position        INTEGER NOT NULL
+  );
+  CREATE TABLE habit_checks (
+    habit_id TEXT NOT NULL,
+    day      TEXT NOT NULL, -- "YYYY-MM-DD"
+    PRIMARY KEY (habit_id, day)
+  );
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

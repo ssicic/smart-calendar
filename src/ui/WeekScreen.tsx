@@ -16,6 +16,10 @@ import { AiSuggestions } from "./AiSuggestions";
 import { useAiReview } from "./useAiReview";
 import { MonthSummarySheet } from "./MonthSummarySheet";
 import { BackupSheet } from "./BackupSheet";
+import { HabitsRow } from "./HabitsRow";
+import { HabitsSheet } from "./HabitsSheet";
+import { habitReviewLines } from "./habits";
+import { useHabits } from "./useHabits";
 import { useMonthSummary } from "./useMonthSummary";
 import { useWeather } from "./useWeather";
 import { WeatherTag } from "./WeatherTag";
@@ -88,6 +92,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  const [habitsOpen, setHabitsOpen] = useState(false);
   // Going from one sheet to another: close the first, then open the next once
   // it's gone. Opening both in the same moment leaves the first one stuck on
   // screen on web.
@@ -138,6 +143,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   useEffect(() => ai.reset(), [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
   const { forecast } = useWeather(db);
   const weatherFor = (d: number) => forecast[dayKey(weekStart, d)];
+  const habits = useHabits(db, weekStart);
   const monthSummary = useMonthSummary(db, month, thisWeek, dateKey(now), groups, summaryOpen);
   const today =
     thisWeek === weekStart
@@ -421,6 +427,16 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
               </View>
             )}
             {view === "day" && (
+              <HabitsRow
+                habits={habits.habits}
+                checks={habits.checks}
+                day={dayKey(weekStart, day)}
+                isFuture={dayKey(weekStart, day) > dateKey(now)}
+                onToggle={(id) => habits.toggle(id, dayKey(weekStart, day)).catch(console.error)}
+                onOpen={() => setHabitsOpen(true)}
+              />
+            )}
+            {view === "day" && (
               <DayTodos
                 key={`${weekStart}-${day}`} // a fresh card (closed list, empty field) per day
                 dayName={dayName}
@@ -501,9 +517,22 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
           onPlanNext={() => switchSheet(() => setReviewOpen(false), () => setPlanOpen(true))}
           onPastWeeks={() => switchSheet(() => setReviewOpen(false), () => setHistoryOpen(true))}
           aiSection={<AiSuggestions state={ai.state} onAsk={ai.ask} onAccept={ai.accept} />}
+          habitLines={habitReviewLines(habits.habits, habits.checks, weekStart)}
           onClose={() => setReviewOpen(false)}
         />
       )}
+      <HabitsSheet
+        visible={habitsOpen}
+        weekStart={weekStart}
+        todayKey={dateKey(now)}
+        habits={habits.habits}
+        checks={habits.checks}
+        onToggle={(id, d) => habits.toggle(id, d).catch(console.error)}
+        onAdd={habits.add}
+        onChange={habits.change}
+        onDelete={habits.remove}
+        onClose={() => setHabitsOpen(false)}
+      />
       <BackupSheet
         visible={backupOpen}
         db={db}

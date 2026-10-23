@@ -27,6 +27,8 @@ interface Props {
   onPastWeeks?: () => void;
   /** The AI suggestions box (left out for past weeks). */
   aiSection?: React.ReactNode;
+  /** "No alcohol: 5 of 7 days", one per habit (left out when there are none). */
+  habitLines?: string[];
   onClose: () => void;
 }
 
@@ -35,7 +37,7 @@ const hours = (minutes: number) => `${Math.round(minutes / 6) / 10}h`;
 /** Looking back at a week: what got done, where the time went, what moved on. */
 export function ReviewSheet(props: Props) {
   const { visible, weekLabel, nextWeekStart, stats, routines, items, movedOn, later, onPlanNext, onClose } = props;
-  const { onPastWeeks, aiSection } = props;
+  const { onPastWeeks, aiSection, habitLines = [] } = props;
   const finished = items.filter(isFinished);
   const { sessions } = stats;
 
@@ -87,6 +89,16 @@ export function ReviewSheet(props: Props) {
                 </Text>
               ))}
             </Section>
+
+            {habitLines.length > 0 && (
+              <Section title="Habits">
+                {habitLines.map((line) => (
+                  <Text key={line} style={styles.line}>
+                    {line}
+                  </Text>
+                ))}
+              </Section>
+            )}
 
             <Section title="Time by group">
               <GroupBars stats={stats} />
