@@ -14,6 +14,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { DatabaseGate } from "./src/db/DatabaseGate";
 import { migrate } from "./src/db/weekStore";
 import { colors } from "./src/ui/theme";
+import { UpdateBanner } from "./src/ui/UpdateBanner";
 import { WeekScreen } from "./src/ui/WeekScreen";
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
           <WeekScreen key={generation} onDataReplaced={() => setGeneration((g) => g + 1)} />
         </SQLiteProvider>
       </DatabaseGate>
+      <UpdateBanner />
       <StatusBar style="dark" />
     </SafeAreaProvider>
   );

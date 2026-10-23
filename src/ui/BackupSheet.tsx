@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { backupFileName, checkBackup, exportBackup, importBackup, type Backup } from "../db/backup";
 import type { Db } from "../db/weekStore";
+import { versionLabel } from "./UpdateBanner";
 import { pickBackupText, saveBackupToFolder, shareBackupFile } from "./backupFiles";
 import { colors, font } from "./theme";
 
@@ -129,6 +130,7 @@ export function BackupSheet({ visible, db, onImported, onClose }: Props) {
 
           {busy && <ActivityIndicator color={colors.accent} />}
           {message && <Text style={message.ok ? styles.ok : styles.error}>{message.text}</Text>}
+          <Text style={styles.version}>{versionLabel()}</Text>
         </Pressable>
       </Pressable>
     </Modal>
@@ -164,6 +166,7 @@ const styles = StyleSheet.create({
   confirm: { gap: 10, padding: 12, borderRadius: 12, backgroundColor: colors.dangerSoft },
   confirmText: { fontFamily: font.regular, fontSize: 14, color: colors.text, lineHeight: 20 },
   row: { flexDirection: "row", gap: 8 },
+  version: { fontFamily: font.regular, fontSize: 12, color: colors.textMuted, textAlign: "center" },
   ok: { fontFamily: font.semibold, fontSize: 14, color: colors.successStrong },
   error: { fontFamily: font.semibold, fontSize: 14, color: colors.danger },
 });
