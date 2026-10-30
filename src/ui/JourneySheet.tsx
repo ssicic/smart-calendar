@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { postJson } from "../ai/aiClient";
 import { offerEasier } from "../engine";
 import { draftFromPlan, journeyHeadline, nudgeStep, stepLabel, weekProgress, type JourneyPlanResponse } from "./journeys";
@@ -32,11 +33,29 @@ export function JourneySheet(props: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [confirmStop, setConfirmStop] = useState<string>();
+  // Full screen: swipe the top up (or start typing, so the keyboard covers nothing); down = back, then closed.
+  const [full, setFull] = useState(false);
+  const insets = useSafeAreaInsets();
+  const latest = useRef({ full, onClose });
+  latest.current = { full, onClose };
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderRelease: (_, g) => {
+        if (g.dy < -30) setFull(true);
+        else if (g.dy > 30) {
+          if (latest.current.full) setFull(false);
+          else latest.current.onClose();
+        }
+      },
+    }),
+  ).current;
 
   useEffect(() => {
     if (!visible) {
       setError(undefined);
       setConfirmStop(undefined);
+      setFull(false);
     }
   }, [visible]);
 
@@ -76,12 +95,22 @@ export function JourneySheet(props: Props) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.header}>
-            <Text style={[styles.heading, styles.flex]}>Journeys</Text>
-            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
-              <Text style={styles.link}>Close</Text>
+        <Pressable style={[styles.sheet, full && [styles.fullSheet, { paddingTop: insets.top + 4 }]]} onPress={() => {}}>
+          <View {...swipe.panHandlers}>
+            <Pressable
+              onPress={() => setFull(!full)}
+              style={styles.grabber}
+              accessibilityRole="button"
+              accessibilityLabel={full ? "Make the panel smaller" : "Make the panel full screen"}
+            >
+              <View style={styles.grabBar} />
             </Pressable>
+            <View style={styles.header}>
+              <Text style={[styles.heading, styles.flex]}>Journeys</Text>
+              <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
+                <Text style={styles.link}>Close</Text>
+              </Pressable>
+            </View>
           </View>
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
@@ -141,6 +170,7 @@ export function JourneySheet(props: Props) {
                   style={styles.input}
                   value={draft.title}
                   onChangeText={(title) => setDraft({ ...draft, title })}
+                  onFocus={() => setFull(true)}
                   accessibilityLabel="Name on the calendar"
                 />
                 {why && <Text style={styles.meta}>{why}</Text>}
@@ -177,6 +207,7 @@ export function JourneySheet(props: Props) {
                   style={styles.input}
                   value={goal}
                   onChangeText={setGoal}
+                  onFocus={() => setFull(true)}
                   placeholder="e.g. Get back to the gym"
                   placeholderTextColor={colors.textFaint}
                   onSubmitEditing={makePlan}
@@ -232,6 +263,9 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     gap: 8,
   },
+  fullSheet: { height: "100%", maxHeight: "100%", borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  grabber: { alignItems: "center", paddingBottom: 8 },
+  grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
   header: { flexDirection: "row", alignItems: "center", gap: 12 },
   flex: { flex: 1 },
   heading: { fontFamily: font.heavy, fontSize: 20, color: colors.text },
