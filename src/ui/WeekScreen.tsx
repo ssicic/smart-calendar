@@ -28,6 +28,8 @@ import { WeatherTag } from "./WeatherTag";
 import { PlanSheet } from "./PlanSheet";
 import { HistorySheet } from "./HistorySheet";
 import { GoalsSheet } from "./GoalsSheet";
+import { JourneySheet } from "./JourneySheet";
+import { stepLabel } from "./journeys";
 import { WeekPanelSheet } from "./WeekPanelSheet";
 import { DayTodos } from "./DayTodos";
 import { canAddFromLater, laterHeading } from "./later";
@@ -90,6 +92,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   const dayTodos = useMemo(() => weekItems.filter((i) => i.day === day && i.kind === "todo"), [weekItems, day]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
+  const [journeysOpen, setJourneysOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
@@ -105,6 +108,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   };
   const { goals, periods, addGoal, changeGoal, removeGoal, addWeekGoalFor } = data;
   const { goalSessions, checkGoalTime, makeTimeFor, stopGoalTime } = data;
+  const { journeys, beginJourney, easierJourney, endJourney } = data;
   const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -195,6 +199,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   // Planned = fixed events + flexible sessions (done ones too); rest blocks are time off.
   const { plannedMin, doneMin } = weekTotals(week, plan, doneEvents);
   const hours = (minutes: number) => Math.round(minutes / 6) / 10;
+  const awakeMin = (week.settings.dayWindows ?? []).reduce((sum, w) => sum + (w.end - w.start), 0);
   const unplacedSessions = plan.unplaced.reduce((sum, u) => sum + u.missing, 0);
 
   const isWeekView = view === "day" || view === "calendar" || view === "list";
@@ -615,6 +620,21 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
         onDeleteLater={removeLater}
         onClose={() => setPanelOpen(false)}
         onOpenGoals={() => switchSheet(() => setPanelOpen(false), () => setGoalsOpen(true))}
+        journeys={journeys.map((v) => {
+          const step = v.journey.steps[v.state.step]!;
+          return { title: v.title, step: stepLabel(step), done: v.doneThisWeek, total: step.timesPerWeek };
+        })}
+        onOpenJourneys={() => switchSheet(() => setPanelOpen(false), () => setJourneysOpen(true))}
+      />
+      <JourneySheet
+        visible={journeysOpen}
+        journeys={journeys}
+        freeHours={Math.max(0, awakeMin - plannedMin) / 60}
+        canStart={canAddFromLater(earliestStart)}
+        onStart={beginJourney}
+        onEasier={easierJourney}
+        onStop={endJourney}
+        onClose={() => setJourneysOpen(false)}
       />
       <GoalsSheet
         visible={goalsOpen}

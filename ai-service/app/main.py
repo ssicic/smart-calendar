@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .llm import LLM, ClaudeLLM, DemoLLM, LLMRefused
-from . import agent, monthly, tracing
+from . import agent, journey, monthly, tracing
 from .review import SYSTEM_PROMPT, ReviewRequest, WeeklyReview, build_user_message, clean
 
 app = FastAPI(title="Smart Calendar AI")
@@ -83,6 +83,13 @@ def monthly_summary(
     req: monthly.MonthRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)
 ) -> monthly.MonthlySummary:
     return monthly.clean(ask(llm, monthly.SYSTEM_PROMPT, monthly.build_user_message(req), monthly.MonthlySummary))
+
+
+@app.post("/journey-plan", response_model=journey.JourneyPlan)
+def journey_plan(
+    req: journey.JourneyRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)
+) -> journey.JourneyPlan:
+    return journey.clean(ask(llm, journey.SYSTEM_PROMPT, journey.build_user_message(req), journey.JourneyPlan))
 
 
 def get_plan_model():

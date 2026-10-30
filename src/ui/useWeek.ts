@@ -3,7 +3,18 @@
 // database, then reload from it. The database is the single source of truth,
 // so the screen can never drift out of sync with what's saved.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { WEEK, isWeekend, planWeek, sleepForDay, type FixedEvent } from "../engine";
+import {
+  WEEK,
+  isWeekend,
+  journeyWeek,
+  planWeek,
+  sleepForDay,
+  type FixedEvent,
+  type Journey,
+  type JourneyStep,
+  type JourneyWeek,
+} from "../engine";
+import { doneByWeek, loadJourneys, startJourney, stepDown, stopJourney } from "../db/journeyStore";
 import {
   changeEventForWeek,
   deleteEvent,
@@ -79,8 +90,26 @@ import type { GroupActions } from "./ManageGroupsSheet";
 import { checkKey } from "./routines";
 import type { QuickAddResult } from "./QuickAddSheet";
 import type { SleepScope } from "./SleepSheet";
+import { IMPORTANCE_PRIORITY, TIME_OF_DAY_WINDOWS, type TimeOfDay } from "./quickAdd";
 import { addWeeks, monthGrid, monthOfWeek, periodsOfWeek, weeksOfYear } from "./weekDate";
 import { isEventKind, type WeekRow } from "./weekRows";
+
+/** A journey as the screen shows it: where it is this week and what's done. */
+export interface JourneyView {
+  journey: Journey;
+  /** The calendar title of its item, e.g. "Gym". */
+  title: string;
+  state: JourneyWeek;
+  doneThisWeek: number;
+}
+
+/** What the user starts after looking at (and maybe editing) the AI's draft. */
+export interface JourneyDraft {
+  goal: string;
+  title: string;
+  timeOfDay: TimeOfDay;
+  steps: JourneyStep[];
+}
 
 let counter = 0;
 const newId = () => `p${Date.now().toString(36)}${counter++}`;
@@ -119,6 +148,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const [checks, setChecks] = useState<Set<string>>(new Set());
   // Fixed events and routines marked done this week.
   const [doneEvents, setDoneEvents] = useState<Set<string>>(new Set());
+  // Journeys running this week.
+  const [journeys, setJourneys] = useState<JourneyView[]>([]);
 
   // useCallback keeps the same function between renders (unless db or the
   // week changes), so the useEffect below doesn't re-run on every render.
@@ -138,6 +169,13 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setMovedOn(await loadMovedOn(db, weekStart));
     setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
     setDoneEvents(await loadDoneEvents(db, weekStart));
+    const views: JourneyView[] = [];
+    for (const j of await loadJourneys(db, weekStart)) {
+      const done = await doneByWeek(db, j.itemId);
+      const row = await db.getFirstAsync<{ title: string }>("SELECT title FROM flexible_items WHERE id = ?", [j.itemId]);
+      views.push({ journey: j, title: row?.title ?? j.goal, state: journeyWeek(j, weekStart, done), doneThisWeek: done.get(weekStart) ?? 0 });
+    }
+    setJourneys(views);
   }, [db, weekStart, nextWeek]);
 
   useEffect(() => {
@@ -417,6 +455,45 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       await refresh();
     });
 
+  /** Starts a journey this week: a repeating item at the first step's amount. */
+  const beginJourney = (d: JourneyDraft) =>
+    attempt(async () => {
+      const first = d.steps[0];
+      if (!first) return "A journey needs at least one step.";
+      const itemId = `i${newId()}`;
+      const window = TIME_OF_DAY_WINDOWS[d.timeOfDay];
+      await startJourney(
+        db,
+        { id: `j${newId()}`, itemId, goal: d.goal, steps: d.steps, startWeek: weekStart, stepDowns: [] },
+        {
+          id: itemId,
+          title: d.title,
+          durationMin: first.minutes,
+          timesPerWeek: first.timesPerWeek,
+          priority: IMPORTANCE_PRIORITY.medium,
+          ...(window ? { preferredWindows: [window] } : {}),
+        },
+      );
+      await refresh();
+    });
+
+  /** "Make it easier": one step down from this week on. */
+  const easierJourney = (id: string) =>
+    attempt(async () => {
+      const view = journeys.find((v) => v.journey.id === id);
+      if (view) await stepDown(db, view.journey, weekStart);
+      await refresh();
+    });
+
+  /** Ends a journey; its item keeps going at this week's step (from next week, as a normal item). */
+  const endJourney = (id: string) =>
+    attempt(async () => {
+      const view = journeys.find((v) => v.journey.id === id);
+      const step = view?.journey.steps[view.state.step];
+      if (view && step) await stopJourney(db, view.journey, weekStart, step);
+      await refresh();
+    });
+
   /** A week goal that's part of a month or year goal ("Add to this week"). */
   const addWeekGoalFor = (goal: Goal, target = 1) =>
     attempt(async () => {
@@ -487,6 +564,10 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     checkGoalTime,
     makeTimeFor,
     stopGoalTime,
+    journeys,
+    beginJourney,
+    easierJourney,
+    endJourney,
     /** Reloads everything from the database (after changes made elsewhere, e.g. Plan next week). */
     refresh,
     routines,

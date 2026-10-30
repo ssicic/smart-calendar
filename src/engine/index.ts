@@ -3,3 +3,4 @@ export * from "./intervals";
 export * from "./planner";
 export * from "./edits";
 export * from "./sleep";
+export * from "./journey";

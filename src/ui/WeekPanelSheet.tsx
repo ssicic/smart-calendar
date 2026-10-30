@@ -27,6 +27,9 @@ interface Props {
   onOpenGoals?: () => void;
   /** Time made for goals this week: sessions done, counted by the app. */
   goalTime?: { title: string; done: number; total: number }[];
+  /** Journeys running this week: this week's step and how much of it is done. */
+  journeys?: { title: string; step: string; done: number; total: number }[];
+  onOpenJourneys?: () => void;
 }
 
 /** The week's to-do list (tick off) and goals (count up to a target), saved with the week. */
@@ -148,6 +151,28 @@ export function WeekPanelSheet(props: Props) {
                     <Text style={[styles.count, g.done >= g.total && styles.countDone]}>
                       {g.done >= g.total ? "✓ " : ""}
                       {g.done}/{g.total} sessions
+                    </Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {props.onOpenJourneys && (
+              <>
+                <View style={[styles.sectionRow, styles.sectionGap]}>
+                  <Text style={styles.section}>Journeys</Text>
+                  <Pressable onPress={props.onOpenJourneys} hitSlop={8} accessibilityRole="button">
+                    <Text style={styles.goalsLink}>{props.journeys?.length ? "Journeys ›" : "Start a journey ›"}</Text>
+                  </Pressable>
+                </View>
+                {props.journeys?.map((j, i) => (
+                  <View key={i} style={styles.row}>
+                    <Text style={[styles.itemText, styles.flex]}>
+                      {j.title} · {j.step}
+                    </Text>
+                    <Text style={[styles.count, j.done >= j.total && styles.countDone]}>
+                      {j.done >= j.total ? "✓ " : ""}
+                      {Math.min(j.done, j.total)}/{j.total}
                     </Text>
                   </View>
                 ))}

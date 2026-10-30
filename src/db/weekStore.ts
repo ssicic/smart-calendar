@@ -3,8 +3,10 @@
 // engine objects (FixedEvent, RestBlock, FlexibleItem, Placement).
 import {
   DEFAULT_SLEEP,
+  journeyWeek,
   planningWindows,
   type DayOverride,
+  type JourneyStep,
   type SleepSettings,
 } from "../engine";
 import type {
@@ -16,6 +18,8 @@ import type {
   RestBlock,
   WeekInput,
 } from "../engine";
+
+import { doneByWeek, loadJourneys } from "./journeyStore";
 
 type Param = string | number | null;
 
@@ -324,6 +328,20 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (habit_id, day)
   );
   `,
+  // Version 19: journeys. Weekly steps for one flexible item that build up to
+  // a habit. Only the plan is stored; which step a week is on is worked out
+  // from the done sessions (engine/journey.ts).
+  `
+  CREATE TABLE journeys (
+    id           TEXT PRIMARY KEY,
+    item_id      TEXT NOT NULL,
+    goal         TEXT NOT NULL,
+    steps        TEXT NOT NULL, -- JSON [{timesPerWeek, minutes, note}]
+    start_week   TEXT NOT NULL,
+    step_downs   TEXT NOT NULL DEFAULT '[]', -- JSON ["YYYY-MM-DD"]: "make it easier" from that week
+    stopped_week TEXT -- the last week it ran, or NULL while it runs
+  );
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -516,6 +534,8 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
   const overrides = await loadOverrides(db, weekStart);
 
   const extra = new Map(queuedHere.map((q) => [q.item_id, q.n]));
+  // An item on a journey gets this week's step instead of its own times and length.
+  const steps = await journeyStepsFor(db, weekStart);
   return {
     sleep,
     overrides,
@@ -525,7 +545,13 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
       routines: events.filter((e) => e.kind === "routine").map(eventFromRow),
       items: items.map((row) => {
         const i = itemFromRow(row);
-        return { ...i, timesPerWeek: (row.active ? i.timesPerWeek : 0) + (extra.get(i.id) ?? 0) };
+        const step = steps.get(i.id);
+        const times = step?.timesPerWeek ?? i.timesPerWeek;
+        return {
+          ...i,
+          durationMin: step?.minutes ?? i.durationMin,
+          timesPerWeek: (row.active ? times : 0) + (extra.get(i.id) ?? 0),
+        };
       }),
       placements: placements.map(placementFromRow),
       settings: { ...DEFAULT_SETTINGS, dayWindows: planningWindows(sleep, overrides) },
@@ -534,6 +560,18 @@ export async function loadWeek(db: Db, weekStart: string, nextWeekStart: string)
     repeatingEventIds: events.filter((e) => e.week_start === null).map((e) => e.id),
     repeatingItemIds: items.filter((i) => i.active && i.week_start === null).map((i) => i.id),
   };
+}
+
+/** This week's journey step per item id, for the journeys running in `weekStart`. */
+async function journeyStepsFor(db: Db, weekStart: string): Promise<Map<string, JourneyStep>> {
+  const journeys = await loadJourneys(db, weekStart);
+  const out = new Map<string, JourneyStep>();
+  for (const j of journeys) {
+    const state = journeyWeek(j, weekStart, await doneByWeek(db, j.itemId));
+    const step = j.steps[state.step];
+    if (step) out.set(j.itemId, step);
+  }
+  return out;
 }
 
 // ---- Writes: what you plan ----
@@ -778,6 +816,7 @@ export async function deleteItem(db: Db, itemId: string): Promise<void> {
   await db.withTransactionAsync(async () => {
     await db.runAsync("DELETE FROM placements WHERE item_id = ?", [itemId]);
     await db.runAsync("DELETE FROM queue WHERE item_id = ?", [itemId]);
+    await db.runAsync("DELETE FROM journeys WHERE item_id = ?", [itemId]);
     await db.runAsync("DELETE FROM flexible_items WHERE id = ?", [itemId]);
   });
 }
