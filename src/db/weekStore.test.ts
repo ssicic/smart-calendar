@@ -76,6 +76,10 @@ function nodeDb(): Db & { raw: DatabaseSync } {
 
 const W1 = "2026-10-19";
 const W2 = "2026-10-26";
+// Upgrades from before v10 start old repeating events in the week the upgrade
+// runs (today), so tests that load them after an upgrade use a week far ahead.
+const LATER = "2099-01-05";
+const LATER2 = "2099-01-12";
 const W3 = "2026-11-02";
 const W4 = "2026-11-09";
 const gym = { id: "g", title: "Gym", durationMin: 60, timesPerWeek: 3, priority: 5, preferredWindows: [{ start: 1020, end: 1320 }] };
@@ -272,7 +276,7 @@ describe("weekStore", () => {
       ('r1', 'rest', 'Nap', 840, 900), ('r2', 'rest', 'Walk', 600, 660), ('w1', 'fixed', 'Work', 540, 1020)`);
     old.raw.exec(`UPDATE events SET category_id = 'fun' WHERE id = 'r2'`);
     await migrate(old);
-    const { week } = await loadWeek(old, W1, W2);
+    const { week } = await loadWeek(old, LATER, LATER2);
     expect(week.fixed.map((e) => [e.id, e.categoryId])).toEqual([
       ["w1", undefined],
       ["r2", "fun"], // already had a group: kept
@@ -298,7 +302,7 @@ describe("weekStore", () => {
     old.raw.exec(`INSERT INTO categories (id, name, color, position) VALUES ('mine', 'rest', '#000000', 9)`);
     old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min) VALUES ('r1', 'rest', 'Nap', 840, 900)`);
     await migrate(old);
-    expect((await loadWeek(old, W1, W2)).week.fixed[0]?.categoryId).toBe("mine");
+    expect((await loadWeek(old, LATER, LATER2)).week.fixed[0]?.categoryId).toBe("mine");
     expect((await loadCategories(old)).filter((c) => c.name.toLowerCase() === "rest")).toHaveLength(1);
   });
 
@@ -404,7 +408,7 @@ describe("weekStore", () => {
     old.raw.exec(`INSERT INTO events (id, kind, title, start_min, end_min) VALUES ('w1', 'fixed', 'Work', 540, 1020)`);
     old.raw.exec(`INSERT INTO flexible_items (id, title, duration_min, times_per_week, priority) VALUES ('r', 'Read', 30, 4, 3)`);
     await migrate(old);
-    const after = await loadWeek(old, W1, W2); // everything else survives the rebuild
+    const after = await loadWeek(old, LATER, LATER2); // everything else survives the rebuild
     expect(after.week.fixed.map((e) => e.id)).toEqual(["w1"]);
     expect(after.week.items).toEqual([read]);
     expect(old.raw.prepare("SELECT id, state FROM placements ORDER BY id").all()).toEqual([
