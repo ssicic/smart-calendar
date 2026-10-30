@@ -47,4 +47,3 @@ yarn-error.*
 ai-service/.venv/
 __pycache__/
 .pytest_cache/
-.mcp.json
