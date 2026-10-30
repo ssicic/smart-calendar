@@ -69,7 +69,9 @@ last day or two), so the step isn't solid yet.
 - time_of_day: if done sessions cluster in one part of the day and skipped ones in another \
 (or the current setting), move to where they actually happen. Otherwise "keep".
 - message: 2-3 short sentences to the user, warm and specific. Name one real fact from the \
-data ("Both sessions were on weekday evenings"), then what this week looks like. No guilt, no \
+data ("Both sessions were on weekday evenings"), then what you suggest for this week. It's a \
+proposal the user accepts or not, so suggest ("How about evenings this week?"), never say \
+you already changed something. No guilt, no \
 streak talk, no exclamation-mark overload, no medical advice. Don't invent facts."""
 
 
