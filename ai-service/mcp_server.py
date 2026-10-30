@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
@@ -36,7 +36,12 @@ def _plan(week_start: str) -> WeekPlan:
         raise ValueError("Set SMART_CALENDAR_BACKUP to the path of a Smart Calendar backup file.")
     backup = json.loads(Path(path).expanduser().read_text())
     week = monday_of(date.fromisoformat(week_start)) if week_start else monday_of(date.today())
-    return WeekPlan(week_from_backup(backup, week))
+    snap = week_from_backup(backup, week)
+    # Nothing is free in the past: this week from now on, a past week not at all.
+    now = datetime.now()
+    since = now - datetime.fromisoformat(week)
+    snap.now = max(0, min(int(since.total_seconds() // 60), 7 * DAY))
+    return WeekPlan(snap)
 
 
 @mcp.tool()
