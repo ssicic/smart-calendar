@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .llm import LLM, ClaudeLLM, DemoLLM, LLMRefused
-from . import agent, coach, journey, monthly, tracing
+from . import agent, brain_dump, coach, journey, monthly, tracing
 from .review import SYSTEM_PROMPT, ReviewRequest, WeeklyReview, build_user_message, clean
 
 app = FastAPI(title="Smart Calendar AI")
@@ -97,6 +97,13 @@ def journey_checkin(
     req: coach.CheckinRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)
 ) -> coach.Checkin:
     return coach.clean(ask(llm, coach.SYSTEM_PROMPT, coach.build_user_message(req), coach.Checkin), req)
+
+
+@app.post("/brain-dump", response_model=brain_dump.BrainDumpPlan)
+def brain_dump_plan(
+    req: brain_dump.BrainDumpRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)
+) -> brain_dump.BrainDumpPlan:
+    return brain_dump.clean(ask(llm, brain_dump.SYSTEM_PROMPT, brain_dump.build_user_message(req), brain_dump.BrainDumpPlan), req)
 
 
 def get_plan_model():

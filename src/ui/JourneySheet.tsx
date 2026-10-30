@@ -3,6 +3,9 @@ import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleShe
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { postJson } from "../ai/aiClient";
 import { offerEasier } from "../engine";
+import type { QueuedJourney } from "../db/journeyStore";
+import { BrainDumpPanel } from "./BrainDumpPanel";
+import { ladderLabel, roomNow, type BrainDumpHabit } from "./brainDump";
 import {
   draftFromPlan,
   journeyHeadline,
@@ -24,6 +27,13 @@ interface Props {
   journeys: JourneyView[];
   /** Awake time this week with nothing planned, so the AI sizes the last step to a real week. */
   freeHours: number;
+  /** What's planned every week already (for the brain dump). */
+  current: { title: string; hours_per_week: number }[];
+  /** Journeys waiting their turn, from a brain dump. */
+  queue: QueuedJourney[];
+  onBrainDump: (habits: BrainDumpHabit[]) => Result;
+  onStartQueued: (id: string) => Result;
+  onRemoveQueued: (id: string) => Result;
   /** False for a past week: a journey starts in the week on screen. */
   canStart: boolean;
   /** Late in the week: a new journey starts next Monday. */
@@ -52,6 +62,9 @@ export function JourneySheet(props: Props) {
   // The coach's proposal per journey while it waits for an answer, and which one is loading.
   const [proposals, setProposals] = useState<Record<string, { req: CheckinRequest; res: CheckinResponse }>>({});
   const [checking, setChecking] = useState<string>();
+  const [dumping, setDumping] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<string>();
+  const room = roomNow(journeys.length);
   // Full screen: swipe the top up (or start typing, so the keyboard covers nothing); down = back, then closed.
   const [full, setFull] = useState(false);
   const insets = useSafeAreaInsets();
@@ -234,8 +247,56 @@ export function JourneySheet(props: Props) {
               );
             })}
 
+            {props.queue.length > 0 && (
+              <View style={styles.card}>
+                <Text style={styles.section}>Waiting their turn</Text>
+                <Text style={styles.meta}>
+                  {room > 0
+                    ? `You have room for ${room === 1 ? "one more" : "two"}. Start the next one when you're ready.`
+                    : "These start once a running journey feels steady (or you stop one)."}
+                </Text>
+                {props.queue.map((q) => (
+                  <View key={q.id} style={styles.queueRow}>
+                    <View style={styles.flex}>
+                      <Text style={styles.queueTitle}>
+                        {q.title} <Text style={styles.meta}>· {q.slot}</Text>
+                      </Text>
+                      <Text style={styles.meta}>{ladderLabel(q.steps)}</Text>
+                    </View>
+                    {props.canStart && room > 0 && (
+                      <Pressable onPress={() => run(props.onStartQueued(q.id))} style={styles.smallButton} accessibilityRole="button">
+                        <Text style={styles.smallButtonText}>{props.startsNextWeek ? "Start Monday" : "Start"}</Text>
+                      </Pressable>
+                    )}
+                    <Pressable
+                      onPress={() => (confirmRemove === q.id ? run(props.onRemoveQueued(q.id)) : setConfirmRemove(q.id))}
+                      style={[styles.quietButton, confirmRemove === q.id && styles.deleteConfirm]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${q.title}`}
+                    >
+                      <Text style={styles.deleteText}>{confirmRemove === q.id ? "Remove?" : "×"}</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+
             {!props.canStart ? (
               journeys.length === 0 && <Text style={styles.muted}>No journeys in this week. Go to this week to start one.</Text>
+            ) : dumping ? (
+              <BrainDumpPanel
+                freeMin={props.freeHours * 60}
+                current={props.current}
+                room={room}
+                startsNextWeek={props.startsNextWeek}
+                onFocus={() => setFull(true)}
+                onCancel={() => setDumping(false)}
+                onDone={async (habits) => {
+                  const err = await props.onBrainDump(habits);
+                  if (!err) setDumping(false);
+                  return err;
+                }}
+              />
             ) : draft ? (
               <View style={styles.card}>
                 <Text style={styles.section}>Your plan</Text>
@@ -296,6 +357,9 @@ export function JourneySheet(props: Props) {
                 </View>
                 <Pressable onPress={makePlan} style={styles.makeButton} accessibilityRole="button" disabled={loading}>
                   {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.makeText}>Make a plan</Text>}
+                </Pressable>
+                <Pressable onPress={() => setDumping(true)} style={styles.dumpLink} accessibilityRole="button">
+                  <Text style={styles.link}>Lots of things at once? Brain dump ›</Text>
                 </Pressable>
               </View>
             )}
@@ -380,6 +444,9 @@ const styles = StyleSheet.create({
   nudgeButton: { width: 28, height: 28, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceAlt },
   nudgeText: { fontFamily: font.bold, fontSize: 16, color: colors.textSoft },
   count: { minWidth: 36, textAlign: "center", fontFamily: font.bold, fontSize: 14, color: colors.text },
+  queueRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  queueTitle: { fontFamily: font.semibold, fontSize: 15, color: colors.text },
+  dumpLink: { alignItems: "center", paddingVertical: 4 },
   coachBox: { gap: 6, padding: 10, borderRadius: radius.sm, backgroundColor: colors.accentSoft },
   coachLabel: { fontFamily: font.bold, fontSize: 12, color: colors.accentStrong, textTransform: "uppercase", letterSpacing: 0.5 },
   coachText: { fontFamily: font.medium, fontSize: 14, color: colors.text, lineHeight: 20 },

@@ -16,9 +16,13 @@ import {
   type JourneyWeek,
 } from "../engine";
 import {
+  deleteQueued,
   doneByWeek,
   loadItemSessions,
   loadJourneys,
+  loadQueue,
+  queueJourney,
+  type QueuedJourney,
   saveCheckin,
   startJourney,
   stepDown,
@@ -26,6 +30,7 @@ import {
 } from "../db/journeyStore";
 import { timeOfDayOf } from "./aiReview";
 import { buildCheckinRequest, type CheckinResponse } from "./journeys";
+import type { BrainDumpHabit } from "./brainDump";
 import {
   changeEventForWeek,
   deleteEvent,
@@ -163,6 +168,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const [doneEvents, setDoneEvents] = useState<Set<string>>(new Set());
   // Journeys running this week.
   const [journeys, setJourneys] = useState<JourneyView[]>([]);
+  // Journeys waiting their turn (from a brain dump).
+  const [journeyQueue, setJourneyQueue] = useState<QueuedJourney[]>([]);
 
   // useCallback keeps the same function between renders (unless db or the
   // week changes), so the useEffect below doesn't re-run on every render.
@@ -200,6 +207,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       });
     }
     setJourneys(views);
+    setJourneyQueue(await loadQueue(db));
   }, [db, weekStart, nextWeek]);
 
   useEffect(() => {
@@ -485,9 +493,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
    */
   const journeyStartsNextWeek = earliestStart >= 3 * DAY;
 
-  /** Starts a journey: a repeating item at the first step's amount. */
-  const beginJourney = (d: JourneyDraft) =>
-    attempt(async () => {
+  /** Saves a new journey and its repeating item, at the first step's amount. */
+  const insertJourney = async (d: JourneyDraft) => {
       const first = d.steps[0];
       if (!first) return "A journey needs at least one step.";
       const itemId = `i${newId()}`;
@@ -512,6 +519,41 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
           ...(window ? { preferredWindows: [window] } : {}),
         },
       );
+  };
+
+  /** Starts a journey. */
+  const beginJourney = (d: JourneyDraft) =>
+    attempt(async () => {
+      const err = await insertJourney(d);
+      if (err) return err;
+      await refresh();
+    });
+
+  /** A brain dump's result: "now" habits start, "next" and "later" wait their turn. */
+  const applyBrainDump = (habits: BrainDumpHabit[]) =>
+    attempt(async () => {
+      for (const h of habits) {
+        const d = { goal: h.wishes.join(", ") || h.title, title: h.title, timeOfDay: h.timeOfDay, steps: h.steps };
+        if (h.group === "now") await insertJourney(d);
+        else await queueJourney(db, { ...d, id: `q${newId()}`, slot: h.group });
+      }
+      await refresh();
+    });
+
+  /** Starts a waiting journey now (or next Monday, late in the week). */
+  const startQueued = (id: string) =>
+    attempt(async () => {
+      const q = journeyQueue.find((x) => x.id === id);
+      if (!q) return;
+      const err = await insertJourney(q);
+      if (err) return err;
+      await deleteQueued(db, id);
+      await refresh();
+    });
+
+  const removeQueued = (id: string) =>
+    attempt(async () => {
+      await deleteQueued(db, id);
       await refresh();
     });
 
@@ -623,6 +665,10 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     journeys,
     journeyStartsNextWeek,
     beginJourney,
+    journeyQueue,
+    applyBrainDump,
+    startQueued,
+    removeQueued,
     easierJourney,
     journeyCheckinRequest,
     acceptCheckin,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Journey } from "../engine";
-import { loadJourneys, saveCheckin, startJourney, stepDown, stopJourney } from "./journeyStore";
+import { deleteQueued, loadJourneys, loadQueue, queueJourney, saveCheckin, startJourney, stepDown, stopJourney } from "./journeyStore";
 import { nodeDb } from "./nodeDb";
 import { deleteItem, loadItems, loadWeek, migrate, savePlacement } from "./weekStore";
 
@@ -61,6 +61,17 @@ describe("journeyStore", () => {
     await stopJourney(db, journey, W2, { timesPerWeek: 2, minutes: 45 });
     expect(await loadJourneys(db, W3)).toEqual([]);
     expect(await gymIn(W3)).toMatchObject({ timesPerWeek: 2, durationMin: 45 });
+  });
+
+  it("keeps waiting journeys, next before later, in the order added", async () => {
+    const q = { goal: "Sew", title: "Sewing", timeOfDay: "any" as const, steps: journey.steps };
+    await queueJourney(db, { ...q, id: "q1", slot: "later" });
+    await queueJourney(db, { ...q, id: "q2", slot: "next" });
+    await queueJourney(db, { ...q, id: "q3", slot: "next" });
+    expect((await loadQueue(db)).map((x) => x.id)).toEqual(["q2", "q3", "q1"]);
+    await deleteQueued(db, "q2");
+    expect((await loadQueue(db)).map((x) => x.id)).toEqual(["q3", "q1"]);
+    expect((await loadQueue(db))[0]).toEqual({ ...q, id: "q3", slot: "next" });
   });
 
   it("deleting the item deletes its journey", async () => {

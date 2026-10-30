@@ -1,5 +1,5 @@
 // Journeys (table journeys, DB v19). The step a week is on isn't stored; see engine/journey.ts.
-import type { Checkin, FlexibleItem, Interval, Journey } from "../engine";
+import type { Checkin, FlexibleItem, Interval, Journey, JourneyStep } from "../engine";
 import { insertItem, type Db } from "./weekStore";
 
 interface JourneyRow {
@@ -111,4 +111,36 @@ export async function loadItemSessions(
     [itemId],
   );
   return rows.map((r) => ({ weekStart: r.week_start, start: r.start_min, state: r.state }));
+}
+
+// ---- Waiting journeys (from a brain dump) ----
+
+export interface QueuedJourney {
+  id: string;
+  goal: string;
+  title: string;
+  timeOfDay: "any" | "morning" | "afternoon" | "evening";
+  steps: JourneyStep[];
+  slot: "next" | "later";
+}
+
+/** Waiting journeys: all "next" ones first, each slot in the order added. */
+export async function loadQueue(db: Db): Promise<QueuedJourney[]> {
+  const rows = await db.getAllAsync<{ id: string; goal: string; title: string; time_of_day: QueuedJourney["timeOfDay"]; steps: string; slot: QueuedJourney["slot"] }>(
+    "SELECT * FROM journey_queue ORDER BY slot = 'later', position",
+    [],
+  );
+  return rows.map((r) => ({ id: r.id, goal: r.goal, title: r.title, timeOfDay: r.time_of_day, steps: JSON.parse(r.steps), slot: r.slot }));
+}
+
+export async function queueJourney(db: Db, q: QueuedJourney): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO journey_queue (id, goal, title, time_of_day, steps, slot, position)
+     VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM journey_queue))`,
+    [q.id, q.goal, q.title, q.timeOfDay, JSON.stringify(q.steps), q.slot],
+  );
+}
+
+export async function deleteQueued(db: Db, id: string): Promise<void> {
+  await db.runAsync("DELETE FROM journey_queue WHERE id = ?", [id]);
 }

@@ -347,6 +347,19 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE journeys ADD COLUMN checkins TEXT NOT NULL DEFAULT '{}';
   `,
+  // Version 21: journeys waiting their turn (from a brain dump): "next" starts
+  // when a running one feels steady, "later" after that. No item yet.
+  `
+  CREATE TABLE journey_queue (
+    id          TEXT PRIMARY KEY,
+    goal        TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    time_of_day TEXT NOT NULL,
+    steps       TEXT NOT NULL, -- JSON [{timesPerWeek, minutes, note}]
+    slot        TEXT NOT NULL CHECK (slot IN ('next', 'later')),
+    position    INTEGER NOT NULL
+  );
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
