@@ -10,6 +10,15 @@ export interface JourneyStep {
   note: string;
 }
 
+/** What the weekly check-in decided for a week: the step it starts on. */
+export type CheckinDecision = "up" | "stay" | "easier";
+
+export interface Checkin {
+  decision: CheckinDecision;
+  /** The coach's few sentences for that week. */
+  note: string;
+}
+
 export interface Journey {
   id: string;
   /** The flexible item the journey sets the weekly amount for. */
@@ -21,6 +30,8 @@ export interface Journey {
   startWeek: string;
   /** Weeks where the user chose "make it easier": one step down from that week on. */
   stepDowns: string[];
+  /** Accepted weekly check-ins by week ("YYYY-MM-DD"); they replace the automatic rule for that week. */
+  checkins: Record<string, Checkin>;
 }
 
 export interface JourneyWeek {
@@ -34,6 +45,10 @@ export interface JourneyWeek {
   finished: boolean;
   /** The step went up at the start of this week. */
   steppedUp: boolean;
+  /** What the automatic rule did at the start of this week (before any check-in). */
+  auto: CheckinDecision;
+  /** This week's accepted check-in, if any. */
+  checkin?: Checkin;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -46,9 +61,10 @@ export function nextMonday(weekStart: string): string {
 }
 
 /**
- * Where the journey is in `weekStart`. A week that hits its step's target
- * moves to the next step; a week that doesn't repeats the step (no going
- * back on its own; the user can choose "easier", see `stepDowns`).
+ * Where the journey is in `weekStart`. At the start of each week the step
+ * changes by the week before: hit its target → next step, missed → the same
+ * step again (no going back on its own). An accepted check-in for a week
+ * replaces that rule, and "make it easier" (`stepDowns`) goes one step down.
  * `doneByWeek`: done sessions of the journey's item per week.
  */
 export function journeyWeek(j: Journey, weekStart: string, doneByWeek: Map<string, number>): JourneyWeek {
@@ -57,27 +73,38 @@ export function journeyWeek(j: Journey, weekStart: string, doneByWeek: Map<strin
   let misses = 0;
   let finished = false;
   let steppedUp = false;
+  let auto: CheckinDecision = "stay";
   let weekNo = 1;
-  // Week numbers stay small (a journey is weeks, not years), but cap the loop anyway.
+  let prev: string | undefined;
+  // A journey is weeks, not years, but cap the loop anyway.
   for (let w = j.startWeek; w <= weekStart && weekNo < 520; w = nextMonday(w)) {
+    if (prev) {
+      weekNo++;
+      const hit = (doneByWeek.get(prev) ?? 0) >= (j.steps[step]?.timesPerWeek ?? 1);
+      misses = hit ? 0 : misses + 1;
+      auto = hit ? "up" : "stay";
+      const before = step;
+      const decision = j.checkins[w]?.decision ?? auto;
+      if (decision === "up") {
+        if (step < last) step++;
+        else if (hit) finished = true;
+      } else if (decision === "easier" && step > 0) {
+        step--;
+        finished = false;
+      }
+      steppedUp = step > before;
+    }
     if (j.stepDowns.includes(w) && step > 0) {
       step--;
       misses = 0;
       finished = false;
+      steppedUp = false;
     }
-    if (w === weekStart) break;
-    weekNo++;
-    steppedUp = false;
-    if ((doneByWeek.get(w) ?? 0) >= (j.steps[step]?.timesPerWeek ?? 1)) {
-      misses = 0;
-      if (step < last) {
-        step++;
-        steppedUp = true;
-      } else finished = true;
-    } else misses++;
+    prev = w;
   }
   if (weekStart < j.startWeek) weekNo = 0;
-  return { step, weekNo, misses, finished, steppedUp };
+  const checkin = j.checkins[weekStart];
+  return { step, weekNo, misses, finished, steppedUp, auto, ...(checkin ? { checkin } : {}) };
 }
 
 /** After two missed weeks in a row, offer one step easier (never below the first). */

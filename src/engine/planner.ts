@@ -51,8 +51,10 @@ export function byScheduleOrder(a: FlexibleItem, b: FlexibleItem): number {
 
 /**
  * Day order for the next occurrence of `item`: days that don't have it yet
- * come first, then the days with the least flexible load, then earliest.
- * This spreads "3x/week" across the week instead of stacking Monday.
+ * come first, then days that aren't right next to one that has it (a rest
+ * day between two gym sessions), then the days with the least flexible load,
+ * then earliest. This spreads "3x/week" across the week instead of stacking
+ * Monday, and "2x/week" becomes Mon + Wed rather than Mon + Tue.
  */
 function candidateDays(item: FlexibleItem, placed: Placement[]): number[] {
   const loadByDay = new Array<number>(7).fill(0);
@@ -62,9 +64,11 @@ function candidateDays(item: FlexibleItem, placed: Placement[]): number[] {
     loadByDay[d] = (loadByDay[d] ?? 0) + length(p);
     if (p.itemId === item.id) hasItem[d] = true;
   }
+  const nextToItem = (d: number) => Boolean(hasItem[d - 1] || hasItem[d + 1]);
   return [0, 1, 2, 3, 4, 5, 6].sort(
     (a, b) =>
       Number(hasItem[a]) - Number(hasItem[b]) ||
+      Number(nextToItem(a)) - Number(nextToItem(b)) ||
       (loadByDay[a] ?? 0) - (loadByDay[b] ?? 0) ||
       a - b,
   );

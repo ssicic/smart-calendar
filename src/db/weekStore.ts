@@ -342,6 +342,11 @@ const MIGRATIONS: string[] = [
     stopped_week TEXT -- the last week it ran, or NULL while it runs
   );
   `,
+  // Version 20: the weekly coach check-in. Accepted check-ins by week, as JSON
+  // {"YYYY-MM-DD": {decision: "up" | "stay" | "easier", note}}.
+  `
+  ALTER TABLE journeys ADD COLUMN checkins TEXT NOT NULL DEFAULT '{}';
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

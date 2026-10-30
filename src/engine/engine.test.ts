@@ -147,6 +147,15 @@ describe("planWeek", () => {
     expect(planWeek(past).placements).toEqual([]);
   });
 
+  it("leaves a rest day between sessions of the same item when it can", () => {
+    const days = (input: WeekInput) => planWeek(input).placements.map((p) => Math.floor(p.start / DAY)).sort();
+    const base = week({ items: [item("gym", 60, 2)] });
+    expect(days(base)).toEqual([0, 2]);
+    const friday = { ...base, settings: { ...base.settings, earliestStart: at(4, 0) } };
+    expect(days(friday)).toEqual([4, 6]);
+    expect(days(week({ items: [item("gym", 60, 4)] }))).toEqual([0, 2, 4, 6]);
+  });
+
   it("treats routines as busy time", () => {
     const routine = { id: "m", title: "Morning routine", start: at(0, 8), end: at(0, 22), routineId: "morning" };
     const { placements } = planWeek({ ...week({ items: [item("gym", 60, 7)] }), routines: [routine] });

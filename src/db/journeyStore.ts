@@ -1,5 +1,5 @@
 // Journeys (table journeys, DB v19). The step a week is on isn't stored; see engine/journey.ts.
-import type { FlexibleItem, Journey } from "../engine";
+import type { Checkin, FlexibleItem, Interval, Journey } from "../engine";
 import { insertItem, type Db } from "./weekStore";
 
 interface JourneyRow {
@@ -9,6 +9,7 @@ interface JourneyRow {
   steps: string;
   start_week: string;
   step_downs: string;
+  checkins: string;
 }
 
 /** Journeys running in `weekStart`: started by then and not stopped before it. */
@@ -24,6 +25,7 @@ export async function loadJourneys(db: Db, weekStart: string): Promise<Journey[]
     steps: JSON.parse(r.steps),
     startWeek: r.start_week,
     stepDowns: JSON.parse(r.step_downs),
+    checkins: JSON.parse(r.checkins),
   }));
 }
 
@@ -44,9 +46,34 @@ export async function startJourney(db: Db, j: Journey, item: FlexibleItem): Prom
   await db.withTransactionAsync(async () => {
     await insertItem(db, item, null, j.startWeek);
     await db.runAsync(
-      "INSERT INTO journeys (id, item_id, goal, steps, start_week, step_downs) VALUES (?, ?, ?, ?, ?, ?)",
-      [j.id, j.itemId, j.goal, JSON.stringify(j.steps), j.startWeek, JSON.stringify(j.stepDowns)],
+      "INSERT INTO journeys (id, item_id, goal, steps, start_week, step_downs, checkins) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [j.id, j.itemId, j.goal, JSON.stringify(j.steps), j.startWeek, JSON.stringify(j.stepDowns), JSON.stringify(j.checkins)],
     );
+  });
+}
+
+/**
+ * Saves an accepted weekly check-in for `weekStart`. `preferredWindows`:
+ * when the coach also moved the sessions to another time of day (null = any
+ * time; undefined = no change).
+ */
+export async function saveCheckin(
+  db: Db,
+  j: Journey,
+  weekStart: string,
+  checkin: Checkin,
+  preferredWindows?: Interval[] | null,
+): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("UPDATE journeys SET checkins = ? WHERE id = ?", [
+      JSON.stringify({ ...j.checkins, [weekStart]: checkin }),
+      j.id,
+    ]);
+    if (preferredWindows !== undefined)
+      await db.runAsync("UPDATE flexible_items SET preferred_windows = ? WHERE id = ?", [
+        preferredWindows ? JSON.stringify(preferredWindows) : null,
+        j.itemId,
+      ]);
   });
 }
 
@@ -72,4 +99,16 @@ export async function stopJourney(db: Db, j: Journey, lastWeek: string, step: { 
       j.itemId,
     ]);
   });
+}
+
+/** An item's done and skipped sessions in every week: what a check-in looks at. */
+export async function loadItemSessions(
+  db: Db,
+  itemId: string,
+): Promise<{ weekStart: string; start: number; state: "done" | "skipped" }[]> {
+  const rows = await db.getAllAsync<{ week_start: string; start_min: number; state: "done" | "skipped" }>(
+    "SELECT week_start, start_min, state FROM placements WHERE item_id = ? AND state IN ('done', 'skipped') ORDER BY start_min",
+    [itemId],
+  );
+  return rows.map((r) => ({ weekStart: r.week_start, start: r.start_min, state: r.state }));
 }

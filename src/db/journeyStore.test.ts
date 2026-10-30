@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Journey } from "../engine";
-import { loadJourneys, startJourney, stepDown, stopJourney } from "./journeyStore";
+import { loadJourneys, saveCheckin, startJourney, stepDown, stopJourney } from "./journeyStore";
 import { nodeDb } from "./nodeDb";
 import { deleteItem, loadItems, loadWeek, migrate, savePlacement } from "./weekStore";
 
@@ -18,6 +18,7 @@ const journey: Journey = {
   ],
   startWeek: W2,
   stepDowns: [],
+  checkins: {},
 };
 const gym = { id: "gym", title: "Gym", durationMin: 30, timesPerWeek: 1, priority: 3 };
 
@@ -47,6 +48,13 @@ describe("journeyStore", () => {
     await savePlacement(db, W2, { id: "p1", itemId: "gym", start: 1080, end: 1110, state: "done" });
     await stepDown(db, journey, W3);
     expect(await gymIn(W3)).toMatchObject({ timesPerWeek: 1, durationMin: 30 });
+  });
+
+  it("saves a check-in, which sets that week's step and can change the time of day", async () => {
+    await saveCheckin(db, journey, W3, { decision: "up", note: "You're ready" }, [{ start: 1020, end: 1320 }]);
+    const [saved] = await loadJourneys(db, W3);
+    expect(saved?.checkins).toEqual({ [W3]: { decision: "up", note: "You're ready" } });
+    expect(await gymIn(W3)).toMatchObject({ timesPerWeek: 2, preferredWindows: [{ start: 1020, end: 1320 }] });
   });
 
   it("stopping keeps the item at the step it was on", async () => {

@@ -3,7 +3,17 @@ import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleShe
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { postJson } from "../ai/aiClient";
 import { offerEasier } from "../engine";
-import { draftFromPlan, journeyHeadline, nudgeStep, stepLabel, weekProgress, type JourneyPlanResponse } from "./journeys";
+import {
+  draftFromPlan,
+  journeyHeadline,
+  nudgeStep,
+  proposalLabel,
+  stepLabel,
+  weekProgress,
+  type CheckinRequest,
+  type CheckinResponse,
+  type JourneyPlanResponse,
+} from "./journeys";
 import type { JourneyDraft, JourneyView } from "./useWeek";
 import { colors, font, radius } from "./theme";
 
@@ -16,8 +26,14 @@ interface Props {
   freeHours: number;
   /** False for a past week: a journey starts in the week on screen. */
   canStart: boolean;
+  /** Late in the week: a new journey starts next Monday. */
+  startsNextWeek: boolean;
   onStart: (draft: JourneyDraft) => Result;
   onEasier: (journeyId: string) => Result;
+  /** True for the current week: the check-in looks back at last week. */
+  canCheckin: boolean;
+  onCheckinRequest: (journeyId: string) => Promise<CheckinRequest | undefined>;
+  onAcceptCheckin: (journeyId: string, checkin: CheckinResponse) => Result;
   onStop: (journeyId: string) => Result;
   onClose: () => void;
 }
@@ -33,6 +49,9 @@ export function JourneySheet(props: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [confirmStop, setConfirmStop] = useState<string>();
+  // The coach's proposal per journey while it waits for an answer, and which one is loading.
+  const [proposals, setProposals] = useState<Record<string, { req: CheckinRequest; res: CheckinResponse }>>({});
+  const [checking, setChecking] = useState<string>();
   // Full screen: swipe the top up (or start typing, so the keyboard covers nothing); down = back, then closed.
   const [full, setFull] = useState(false);
   const insets = useSafeAreaInsets();
@@ -77,6 +96,27 @@ export function JourneySheet(props: Props) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkIn = async (id: string) => {
+    setChecking(id);
+    setError(undefined);
+    try {
+      const req = await props.onCheckinRequest(id);
+      if (!req) return setError("The check-in starts in the journey's second week.");
+      const res = await postJson<CheckinResponse>("/journey-checkin", req);
+      setProposals((p) => ({ ...p, [id]: { req, res } }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't reach the coach. Try again.");
+    } finally {
+      setChecking(undefined);
+    }
+  };
+
+  const answer = async (id: string, checkin: CheckinResponse) => {
+    const err = await props.onAcceptCheckin(id, checkin);
+    if (err) return setError(err);
+    setProposals(({ [id]: _, ...rest }) => rest);
   };
 
   const start = async () => {
@@ -141,7 +181,40 @@ export function JourneySheet(props: Props) {
                     })}
                   </View>
 
-                  <Text style={[styles.progress, progress.done && styles.cheer]}>{progress.text}</Text>
+                  {state.weekNo > 0 && <Text style={[styles.progress, progress.done && styles.cheer]}>{progress.text}</Text>}
+
+                  {state.checkin ? (
+                    <View style={styles.coachBox}>
+                      <Text style={styles.coachLabel}>Coach</Text>
+                      <Text style={styles.coachText}>{state.checkin.note}</Text>
+                    </View>
+                  ) : props.canCheckin && state.weekNo >= 2 && proposals[id] ? (
+                    <View style={styles.coachBox}>
+                      <Text style={styles.coachLabel}>Coach</Text>
+                      <Text style={styles.coachText}>{proposals[id]!.res.message}</Text>
+                      <Text style={styles.coachPlan}>{proposalLabel(v, proposals[id]!.res, proposals[id]!.req.last_week_step - 1)}</Text>
+                      <View style={styles.inline}>
+                        <Pressable onPress={() => answer(id, proposals[id]!.res)} style={styles.smallButton} accessibilityRole="button">
+                          <Text style={styles.smallButtonText}>Sounds good</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => answer(id, { decision: state.auto, time_of_day: "keep", message: "You kept the usual plan this week." })}
+                          style={styles.quietButton}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.plainText}>Keep the usual plan</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : props.canCheckin && state.weekNo >= 2 ? (
+                    <Pressable onPress={() => checkIn(id)} style={styles.checkinButton} accessibilityRole="button" disabled={checking === id}>
+                      {checking === id ? (
+                        <ActivityIndicator color={colors.accentStrong} />
+                      ) : (
+                        <Text style={styles.smallButtonText}>Weekly check-in: how did last week go?</Text>
+                      )}
+                    </Pressable>
+                  ) : null}
 
                   <View style={styles.inline}>
                     {offerEasier(state) && (
@@ -189,7 +262,7 @@ export function JourneySheet(props: Props) {
                 <Text style={styles.meta}>A week that doesn't hit its number just repeats. No streaks to break.</Text>
                 <View style={styles.inline}>
                   <Pressable onPress={start} style={[styles.makeButton, styles.flex]} accessibilityRole="button">
-                    <Text style={styles.makeText}>Start this week</Text>
+                    <Text style={styles.makeText}>{props.startsNextWeek ? "Start on Monday" : "Start this week"}</Text>
                   </Pressable>
                   <Pressable onPress={makePlan} style={styles.quietButton} accessibilityRole="button" disabled={loading}>
                     <Text style={styles.plainText}>{loading ? "Thinking…" : "Ask again"}</Text>
@@ -307,6 +380,11 @@ const styles = StyleSheet.create({
   nudgeButton: { width: 28, height: 28, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceAlt },
   nudgeText: { fontFamily: font.bold, fontSize: 16, color: colors.textSoft },
   count: { minWidth: 36, textAlign: "center", fontFamily: font.bold, fontSize: 14, color: colors.text },
+  coachBox: { gap: 6, padding: 10, borderRadius: radius.sm, backgroundColor: colors.accentSoft },
+  coachLabel: { fontFamily: font.bold, fontSize: 12, color: colors.accentStrong, textTransform: "uppercase", letterSpacing: 0.5 },
+  coachText: { fontFamily: font.medium, fontSize: 14, color: colors.text, lineHeight: 20 },
+  coachPlan: { fontFamily: font.bold, fontSize: 14, color: colors.accentStrong },
+  checkinButton: { alignItems: "center", paddingVertical: 10, borderRadius: radius.sm, backgroundColor: colors.accentSoft },
   smallButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.sm, backgroundColor: colors.accentSoft },
   smallButtonText: { fontFamily: font.bold, fontSize: 13, color: colors.accentStrong },
   quietButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.sm },

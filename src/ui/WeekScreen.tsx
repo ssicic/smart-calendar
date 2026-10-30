@@ -108,7 +108,8 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   };
   const { goals, periods, addGoal, changeGoal, removeGoal, addWeekGoalFor } = data;
   const { goalSessions, checkGoalTime, makeTimeFor, stopGoalTime } = data;
-  const { journeys, beginJourney, easierJourney, endJourney } = data;
+  const { journeys, journeyStartsNextWeek, beginJourney, easierJourney, endJourney } = data;
+  const { journeyCheckinRequest, acceptCheckin } = data;
   const [panelOpen, setPanelOpen] = useState(false);
   // Groups by id, so blocks can look up their colour quickly.
   const groups = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -631,8 +632,12 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
         journeys={journeys}
         freeHours={Math.max(0, awakeMin - plannedMin) / 60}
         canStart={canAddFromLater(earliestStart)}
+        startsNextWeek={journeyStartsNextWeek}
         onStart={beginJourney}
         onEasier={easierJourney}
+        canCheckin={isCurrent}
+        onCheckinRequest={journeyCheckinRequest}
+        onAcceptCheckin={acceptCheckin}
         onStop={endJourney}
         onClose={() => setJourneysOpen(false)}
       />

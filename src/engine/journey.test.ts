@@ -18,6 +18,7 @@ const gym: Journey = {
   ],
   startWeek: W1,
   stepDowns: [],
+  checkins: {},
 };
 const done = (entries: [string, number][]) => new Map(entries);
 
@@ -28,7 +29,7 @@ describe("journeyWeek", () => {
   });
 
   it("starts on the first step", () => {
-    expect(journeyWeek(gym, W1, done([]))).toEqual({ step: 0, weekNo: 1, misses: 0, finished: false, steppedUp: false });
+    expect(journeyWeek(gym, W1, done([]))).toEqual({ step: 0, weekNo: 1, misses: 0, finished: false, steppedUp: false, auto: "stay" });
   });
 
   it("moves up a step after a week that hit the target", () => {
@@ -56,6 +57,21 @@ describe("journeyWeek", () => {
   it("finishes after the last step's target and stays there", () => {
     const state = journeyWeek(gym, W5, done([[W1, 1], [W2, 2], [W3, 2], [W4, 2]]));
     expect(state).toMatchObject({ step: 2, finished: true });
+  });
+
+  it("lets an accepted check-in replace the automatic rule for its week", () => {
+    const hitW1 = done([[W1, 1]]);
+    // Hit the target, but the coach said stay: same step, and the check-in shows for that week.
+    const stay = { ...gym, checkins: { [W2]: { decision: "stay" as const, note: "Once more" } } };
+    expect(journeyWeek(stay, W2, hitW1)).toMatchObject({ step: 0, auto: "up", steppedUp: false, checkin: { note: "Once more" } });
+    // Missed, but the coach said up.
+    const up = { ...gym, checkins: { [W2]: { decision: "up" as const, note: "" } } };
+    expect(journeyWeek(up, W2, done([]))).toMatchObject({ step: 1, auto: "stay", steppedUp: true });
+    // Later weeks build on it.
+    expect(journeyWeek(stay, W3, done([[W1, 1], [W2, 1]]))).toMatchObject({ step: 1, steppedUp: true });
+    // Easier never goes below the first step.
+    const easier = { ...gym, checkins: { [W2]: { decision: "easier" as const, note: "" } } };
+    expect(journeyWeek(easier, W2, hitW1).step).toBe(0);
   });
 
   it("is week 0 before it starts", () => {

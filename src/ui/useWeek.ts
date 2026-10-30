@@ -4,6 +4,7 @@
 // so the screen can never drift out of sync with what's saved.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  DAY,
   WEEK,
   isWeekend,
   journeyWeek,
@@ -14,7 +15,17 @@ import {
   type JourneyStep,
   type JourneyWeek,
 } from "../engine";
-import { doneByWeek, loadJourneys, startJourney, stepDown, stopJourney } from "../db/journeyStore";
+import {
+  doneByWeek,
+  loadItemSessions,
+  loadJourneys,
+  saveCheckin,
+  startJourney,
+  stepDown,
+  stopJourney,
+} from "../db/journeyStore";
+import { timeOfDayOf } from "./aiReview";
+import { buildCheckinRequest, type CheckinResponse } from "./journeys";
 import {
   changeEventForWeek,
   deleteEvent,
@@ -101,6 +112,8 @@ export interface JourneyView {
   title: string;
   state: JourneyWeek;
   doneThisWeek: number;
+  /** When its sessions are planned now. */
+  timeOfDay: TimeOfDay;
 }
 
 /** What the user starts after looking at (and maybe editing) the AI's draft. */
@@ -170,10 +183,21 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setChecks(new Set((await loadChecks(db, weekStart)).map((c) => checkKey(c.eventId, c.stepId))));
     setDoneEvents(await loadDoneEvents(db, weekStart));
     const views: JourneyView[] = [];
-    for (const j of await loadJourneys(db, weekStart)) {
+    // Running this week, plus any that start next Monday (started late in the week).
+    const upcoming = (await loadJourneys(db, nextWeek)).filter((j) => j.startWeek === nextWeek);
+    for (const j of [...(await loadJourneys(db, weekStart)), ...upcoming]) {
       const done = await doneByWeek(db, j.itemId);
-      const row = await db.getFirstAsync<{ title: string }>("SELECT title FROM flexible_items WHERE id = ?", [j.itemId]);
-      views.push({ journey: j, title: row?.title ?? j.goal, state: journeyWeek(j, weekStart, done), doneThisWeek: done.get(weekStart) ?? 0 });
+      const row = await db.getFirstAsync<{ title: string; preferred_windows: string | null }>(
+        "SELECT title, preferred_windows FROM flexible_items WHERE id = ?",
+        [j.itemId],
+      );
+      views.push({
+        journey: j,
+        title: row?.title ?? j.goal,
+        state: journeyWeek(j, weekStart, done),
+        doneThisWeek: done.get(weekStart) ?? 0,
+        timeOfDay: timeOfDayOf(row?.preferred_windows ? JSON.parse(row.preferred_windows) : undefined),
+      });
     }
     setJourneys(views);
   }, [db, weekStart, nextWeek]);
@@ -455,7 +479,13 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       await refresh();
     });
 
-  /** Starts a journey this week: a repeating item at the first step's amount. */
+  /**
+   * From Thursday on there's too little week left for a fair first step, so a
+   * new journey starts next Monday instead.
+   */
+  const journeyStartsNextWeek = earliestStart >= 3 * DAY;
+
+  /** Starts a journey: a repeating item at the first step's amount. */
   const beginJourney = (d: JourneyDraft) =>
     attempt(async () => {
       const first = d.steps[0];
@@ -464,7 +494,15 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       const window = TIME_OF_DAY_WINDOWS[d.timeOfDay];
       await startJourney(
         db,
-        { id: `j${newId()}`, itemId, goal: d.goal, steps: d.steps, startWeek: weekStart, stepDowns: [] },
+        {
+          id: `j${newId()}`,
+          itemId,
+          goal: d.goal,
+          steps: d.steps,
+          startWeek: journeyStartsNextWeek ? nextWeek : weekStart,
+          stepDowns: [],
+          checkins: {},
+        },
         {
           id: itemId,
           title: d.title,
@@ -482,6 +520,24 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     attempt(async () => {
       const view = journeys.find((v) => v.journey.id === id);
       if (view) await stepDown(db, view.journey, weekStart);
+      await refresh();
+    });
+
+  /** The facts the weekly coach check-in needs (undefined in a journey's first week). */
+  const journeyCheckinRequest = async (id: string) => {
+    const view = journeys.find((v) => v.journey.id === id);
+    if (!view) return undefined;
+    return buildCheckinRequest(view, weekStart, view.timeOfDay, await loadItemSessions(db, view.journey.itemId));
+  };
+
+  /** Saves the week's check-in: the coach's proposal (accepted) or the automatic plan (kept). */
+  const acceptCheckin = (id: string, c: CheckinResponse) =>
+    attempt(async () => {
+      const view = journeys.find((v) => v.journey.id === id);
+      if (!view) return;
+      const windows =
+        c.time_of_day === "keep" ? undefined : TIME_OF_DAY_WINDOWS[c.time_of_day] ? [TIME_OF_DAY_WINDOWS[c.time_of_day]!] : null;
+      await saveCheckin(db, view.journey, weekStart, { decision: c.decision, note: c.message }, windows);
       await refresh();
     });
 
@@ -565,8 +621,11 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     makeTimeFor,
     stopGoalTime,
     journeys,
+    journeyStartsNextWeek,
     beginJourney,
     easierJourney,
+    journeyCheckinRequest,
+    acceptCheckin,
     endJourney,
     /** Reloads everything from the database (after changes made elsewhere, e.g. Plan next week). */
     refresh,

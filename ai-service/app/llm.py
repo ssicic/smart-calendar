@@ -44,12 +44,21 @@ class ClaudeLLM:
 class DemoLLM:
     """AI_FAKE=1: no API call, no cost. Weekly review: suggests one fewer session a
     week for the first item with sessions not done, so Accept can be tried.
-    Monthly summary: counts the done sessions. Journey: the same four steps."""
+    Monthly summary: counts the done sessions. Journey: the same four steps. Check-in: the automatic choice."""
 
     def structured(self, system: str, user: str, schema: type[T]) -> T:
         import json
 
         facts = json.loads(user.split("\n", 1)[1])
+        if schema.__name__ == "Checkin":
+            last = facts["weeks"][0]
+            return schema.model_validate(
+                {
+                    "decision": facts["automatic"],
+                    "time_of_day": "keep",
+                    "message": f"(Demo mode, no AI call.) Last week: {len(last['done'])} of {last['target']} done.",
+                }
+            )
         if schema.__name__ == "JourneyPlan":
             return schema.model_validate(
                 {
