@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     boxShadow: shadow.raised,
   },
   halfSheet: { height: "50%" },
-  fullSheet: { height: "92%" },
+  fullSheet: { height: "100%", borderTopLeftRadius: 0, borderTopRightRadius: 0 },
   grabber: { alignItems: "center", paddingTop: 8, paddingBottom: 4 },
   grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
   sheetHeader: {

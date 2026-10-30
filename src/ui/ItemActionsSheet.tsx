@@ -1,5 +1,15 @@
-import { useEffect, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DAY, dayOf } from "../engine";
 import type { Category, Routine, RoutineStep } from "../db/weekStore";
 import { RoutineEditor } from "./RoutineEditor";
@@ -38,7 +48,11 @@ interface Props {
   /** True when the event or flexible item repeats: offers "Stop after this week". */
   canStop?: boolean;
   /** Each handler returns an error message, or undefined when it worked. */
-  onAction: (row: WeekRow, action: ActionId, scope?: EventScope) => Promise<string | undefined>;
+  onAction: (
+    row: WeekRow,
+    action: ActionId,
+    scope?: EventScope,
+  ) => Promise<string | undefined>;
   onMove: (
     row: WeekRow,
     day: number,
@@ -52,36 +66,70 @@ interface Props {
   weekStart: string;
   todayKey: string;
   /** Why the row can't move there (live, no saving), or undefined. */
-  checkMove: (row: WeekRow, day: number, minuteOfDay: number) => string | undefined;
+  checkMove: (
+    row: WeekRow,
+    day: number,
+    minuteOfDay: number,
+  ) => string | undefined;
   onClose: () => void;
   categories: Category[];
   groupActions: GroupActions;
   /** Changes the row's group (for a flexible session: the whole item, every week). */
-  onSetCategory: (row: WeekRow, categoryId: string | null) => Promise<string | undefined>;
+  onSetCategory: (
+    row: WeekRow,
+    categoryId: string | null,
+  ) => Promise<string | undefined>;
   /** New name; `all` = every event of this kind with the same name. */
-  onRename: (row: WeekRow, title: string, all: boolean) => Promise<string | undefined>;
+  onRename: (
+    row: WeekRow,
+    title: string,
+    all: boolean,
+  ) => Promise<string | undefined>;
   /** New length in minutes (`scope` for a repeating event). */
-  onResize: (row: WeekRow, minutes: number, scope: EventScope) => Promise<string | undefined>;
+  onResize: (
+    row: WeekRow,
+    minutes: number,
+    scope: EventScope,
+  ) => Promise<string | undefined>;
   /** Every saved routine (to find this row's checklist, and for the editor's name check). */
   routines: Routine[];
   /** Ticked routine steps this week, as checkKey(eventId, stepId). */
   checks: Set<string>;
-  onToggleStep: (eventId: string, stepId: string) => Promise<string | undefined>;
+  onToggleStep: (
+    eventId: string,
+    stepId: string,
+  ) => Promise<string | undefined>;
   /** Saves a changed routine (name and steps) everywhere it's used. */
   onEditRoutine: (routine: Routine) => Promise<string | undefined>;
   /** Deletes the saved routine; its blocks stay as fixed events. */
   onDeleteRoutine: (id: string) => Promise<string | undefined>;
 }
 
-const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({ value: i, label: name.slice(0, 3) }));
+const DAY_OPTIONS = DAY_NAMES.map((name, i) => ({
+  value: i,
+  label: name.slice(0, 3),
+}));
 const SCOPES: { value: EventScope; label: string }[] = [
   { value: "week", label: "Just this week" },
   { value: "every", label: "Every week" },
 ];
 
 export function ItemActionsSheet(props: Props) {
-  const { row, rows, repeats, onAction, onMove, checkMove, onClose, categories, groupActions, onSetCategory } = props;
-  const [mode, setMode] = useState<"menu" | "move" | "rename" | "steps" | "length">("menu");
+  const {
+    row,
+    rows,
+    repeats,
+    onAction,
+    onMove,
+    checkMove,
+    onClose,
+    categories,
+    groupActions,
+    onSetCategory,
+  } = props;
+  const [mode, setMode] = useState<
+    "menu" | "move" | "rename" | "steps" | "length"
+  >("menu");
   const [newLength, setNewLength] = useState(60);
   const [newTitle, setNewTitle] = useState("");
   const [renameAll, setRenameAll] = useState(false);
@@ -97,10 +145,33 @@ export function ItemActionsSheet(props: Props) {
   const [pickingDate, setPickingDate] = useState(false);
   // After one OK, stop showing warnings until the sheet is opened again.
   const [warningsOff, setWarningsOff] = useState(false);
+  // Full screen: swipe the top up (or start typing a name or steps); down = back, then closed.
+  const [full, setFull] = useState(false);
+  const insets = useSafeAreaInsets();
+  const latest = useRef({ full, onClose });
+  latest.current = { full, onClose };
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderRelease: (_, g) => {
+        if (g.dy < -30) setFull(true);
+        else if (g.dy > 30) {
+          if (latest.current.full) setFull(false);
+          else latest.current.onClose();
+        }
+      },
+    }),
+  ).current;
+
+  useEffect(() => {
+    if (mode === "rename" || mode === "steps") setFull(true);
+  }, [mode]);
 
   // Reset the sheet every time a different row is tapped.
   useEffect(() => {
     setMode("menu");
+    setFull(false);
     setError(undefined);
     setConfirmDelete(false);
     setPickQueue(false);
@@ -121,7 +192,9 @@ export function ItemActionsSheet(props: Props) {
 
   const { checks } = props;
   // A routine's checklist (if this row is one).
-  const routine = row.routineId ? props.routines.find((r) => r.id === row.routineId) : undefined;
+  const routine = row.routineId
+    ? props.routines.find((r) => r.id === row.routineId)
+    : undefined;
 
   // Live check of the picked slot. Flexible sessions push suggestions aside;
   // landing on fixed, rest, placed, locked or done time needs a "Move anyway".
@@ -133,11 +206,21 @@ export function ItemActionsSheet(props: Props) {
       ? []
       : overlapping(
           rows,
-          [{ start: moveDay * DAY + pickedStart, end: moveDay * DAY + pickedStart + (row.end - row.start) }],
+          [
+            {
+              start: moveDay * DAY + pickedStart,
+              end: moveDay * DAY + pickedStart + (row.end - row.start),
+            },
+          ],
           row.id,
         );
-  const problem = pickedStart === undefined || otherWeek ? undefined : checkMove(row, moveDay, pickedStart);
-  const pushedAside = isEvent ? [] : clashes.filter((r) => r.kind === "suggested");
+  const problem =
+    pickedStart === undefined || otherWeek
+      ? undefined
+      : checkMove(row, moveDay, pickedStart);
+  const pushedAside = isEvent
+    ? []
+    : clashes.filter((r) => r.kind === "suggested");
   // Running past Sunday can't be overridden; overlapping can.
   const canForce = !!problem && !isEvent;
 
@@ -167,8 +250,16 @@ export function ItemActionsSheet(props: Props) {
 
   const saveMove = async () => {
     const minute = parseTime(moveTime);
-    if (minute === undefined || minute >= DAY) return setError("Use a time like 18:30.");
-    const err = await onMove(row, moveDay, minute, canForce, scope, otherWeek ? toWeek : undefined);
+    if (minute === undefined || minute >= DAY)
+      return setError("Use a time like 18:30.");
+    const err = await onMove(
+      row,
+      moveDay,
+      minute,
+      canForce,
+      scope,
+      otherWeek ? toWeek : undefined,
+    );
     if (err) setError(err);
     else onClose();
   };
@@ -178,331 +269,482 @@ export function ItemActionsSheet(props: Props) {
       {/* Tapping the dimmed area above the sheet closes it. */}
       <Pressable style={styles.backdrop} onPress={onClose}>
         {/* An inner Pressable with no onPress swallows taps on the sheet itself. */}
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.header}>
-            <View style={styles.headerText}>
-              <Text style={styles.title} numberOfLines={1}>
-                {row.title}
-              </Text>
-              <Text style={styles.sub}>
-                {DAY_NAMES[dayOf(row.start)]} {clock(row.start)}–{clock(row.end)}
-                {repeats ? " · Every week" : ""}
-              </Text>
-            </View>
-            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
-              <Text style={styles.link}>Close</Text>
+        <Pressable
+          style={[
+            styles.sheet,
+            full && [styles.fullSheet, { paddingTop: insets.top + 4 }],
+          ]}
+          onPress={() => {}}
+        >
+          <View {...swipe.panHandlers}>
+            <Pressable
+              onPress={() => setFull(!full)}
+              style={styles.grabber}
+              accessibilityRole="button"
+              accessibilityLabel={
+                full ? "Make the panel smaller" : "Make the panel full screen"
+              }
+            >
+              <View style={styles.grabBar} />
             </Pressable>
+            <View style={styles.header}>
+              <View style={styles.headerText}>
+                <Text style={styles.title} numberOfLines={1}>
+                  {row.title}
+                </Text>
+                <Text style={styles.sub}>
+                  {DAY_NAMES[dayOf(row.start)]} {clock(row.start)}–
+                  {clock(row.end)}
+                  {repeats ? " · Every week" : ""}
+                </Text>
+              </View>
+              <Pressable
+                onPress={onClose}
+                hitSlop={12}
+                accessibilityRole="button"
+              >
+                <Text style={styles.link}>Close</Text>
+              </Pressable>
+            </View>
           </View>
 
-          {mode === "menu" && routine && (
-            <View style={styles.checklist}>
-              <Text style={styles.label}>
-                Checklist · {progressLabel(progress(routine.steps, checks, row.id))}
-              </Text>
-              {routine.steps.map((step) => {
-                const ticked = checks.has(checkKey(row.id, step.id));
-                return (
-                  <Pressable
-                    key={step.id}
-                    onPress={async () => {
-                      const err = await props.onToggleStep(row.id, step.id);
-                      if (err) setError(err);
-                    }}
-                    style={({ pressed }) => [styles.step, pressed && styles.pressed]}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: ticked }}
-                  >
-                    <View style={[styles.box, ticked && styles.boxOn]}>
-                      {ticked && <Ionicons name="checkmark" size={16} color={colors.white} />}
-                    </View>
-                    <Text style={[styles.stepText, ticked && styles.stepDone]}>{step.text}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-
-          {mode === "menu" && row.kind !== "skipped" && (
-            <View style={styles.group}>
-              <Text style={styles.label}>Group</Text>
-              <CategoryPicker
-                categories={categories}
-                selected={row.categoryId ?? null}
-                onSelect={async (id) => {
-                  const err = await onSetCategory(row, id);
-                  if (err) setError(err);
-                  else onClose();
-                }}
-                actions={groupActions}
-              />
-            </View>
-          )}
-
-          {mode === "menu" ? (
-            <View style={styles.list}>
-              {actionsFor(row.kind, row.title, row.done, props.canStop).map((a) => {
-                const confirming = a.id === "delete" && confirmDelete;
-                if (a.id === "queue" && pickQueue) {
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.body}
+            keyboardShouldPersistTaps="handled"
+          >
+            {mode === "menu" && routine && (
+              <View style={styles.checklist}>
+                <Text style={styles.label}>
+                  Checklist ·{" "}
+                  {progressLabel(progress(routine.steps, checks, row.id))}
+                </Text>
+                {routine.steps.map((step) => {
+                  const ticked = checks.has(checkKey(row.id, step.id));
                   return (
-                    <View key={a.id} style={styles.scopeRow}>
-                      {QUEUE_CHOICES.map((c) => (
-                        <Pressable
-                          key={c.id}
-                          onPress={() => run(c.id)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Move to queue: ${c.label}`}
-                          style={({ pressed }) => [styles.action, styles.scopeButton, pressed && styles.pressed]}
-                        >
-                          <Text style={[styles.actionText, styles.center]}>{c.label}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
+                    <Pressable
+                      key={step.id}
+                      onPress={async () => {
+                        const err = await props.onToggleStep(row.id, step.id);
+                        if (err) setError(err);
+                      }}
+                      style={({ pressed }) => [
+                        styles.step,
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: ticked }}
+                    >
+                      <View style={[styles.box, ticked && styles.boxOn]}>
+                        {ticked && (
+                          <Ionicons
+                            name="checkmark"
+                            size={16}
+                            color={colors.white}
+                          />
+                        )}
+                      </View>
+                      <Text
+                        style={[styles.stepText, ticked && styles.stepDone]}
+                      >
+                        {step.text}
+                      </Text>
+                    </Pressable>
                   );
-                }
-                if (confirming && repeats) {
-                  return (
-                    <View key={a.id} style={styles.scopeRow}>
-                      {SCOPES.map((s) => (
-                        <Pressable
-                          key={s.value}
-                          onPress={() => run("delete", s.value)}
-                          accessibilityRole="button"
-                          style={({ pressed }) => [styles.action, styles.confirm, styles.scopeButton, pressed && styles.pressed]}
-                        >
-                          <Text style={[styles.actionText, styles.confirmText, styles.center]}>Delete {s.label.toLowerCase()}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  );
-                }
-                return (
-                  <Pressable
-                    key={a.id}
-                    onPress={() => run(a.id)}
-                    accessibilityRole="button"
-                    style={({ pressed }) => [styles.action, confirming && styles.confirm, pressed && styles.pressed]}
-                  >
-                    <Text style={[styles.actionText, a.destructive && styles.destructive, confirming && styles.confirmText]}>
-                      {confirming ? "Tap again to delete" : a.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : mode === "steps" && routine ? (
-            <View style={styles.move}>
-              <Text style={styles.hint}>Changes this routine everywhere it's used.</Text>
-              <RoutineEditor
-                routine={routine}
-                existing={props.routines}
-                onCancel={() => setMode("menu")}
-                onSave={async (name: string, steps: RoutineStep[]) => {
-                  const err = await props.onEditRoutine({ id: routine.id, name, steps });
-                  if (err) return err;
-                  setMode("menu");
-                  return undefined;
-                }}
-                onDelete={async () => {
-                  const err = await props.onDeleteRoutine(routine.id);
-                  if (err) return err;
-                  onClose();
-                  return undefined;
-                }}
-              />
-            </View>
-          ) : mode === "length" ? (
-            <View style={styles.move}>
-              <Text style={styles.label}>Length  {lengthLabel(newLength)}</Text>
-              <View style={styles.lengthRow}>
-                <Pressable
-                  onPress={() => setNewLength((m) => Math.max(15, m - 15))}
-                  style={styles.stepButton}
-                  accessibilityRole="button"
-                  accessibilityLabel="15 minutes shorter"
-                >
-                  <Text style={styles.stepperText}>−</Text>
-                </Pressable>
-                <Text style={styles.lengthValue}>{lengthLabel(newLength)}</Text>
-                <Pressable
-                  onPress={() => setNewLength((m) => Math.min(12 * 60, m + 15))}
-                  style={styles.stepButton}
-                  accessibilityRole="button"
-                  accessibilityLabel="15 minutes longer"
-                >
-                  <Text style={styles.stepperText}>+</Text>
-                </Pressable>
+                })}
               </View>
-              <Chips
-                options={LENGTH_CHOICES.map((m) => ({ value: m, label: lengthLabel(m) }))}
-                isSelected={(m) => m === newLength}
-                onPress={setNewLength}
-              />
-              {isEvent ? (
-                repeats && (
-                  <>
-                    <Text style={styles.label}>Which weeks</Text>
-                    <Chips options={SCOPES} isSelected={(s) => s === scope} onPress={setScope} />
-                  </>
-                )
-              ) : (
-                <Text style={styles.hint}>Every session of {row.title} gets this length, from this week on.</Text>
-              )}
-              {lengthProblem(row.start, newLength) && (
-                <Text style={styles.error}>{lengthProblem(row.start, newLength)}</Text>
-              )}
-              <View style={styles.moveButtons}>
-                <Pressable onPress={() => setMode("menu")} style={styles.secondary} accessibilityRole="button">
-                  <Text style={styles.secondaryText}>Back</Text>
-                </Pressable>
-                <Pressable
-                  onPress={async () => {
-                    const err = await props.onResize(row, newLength, scope);
+            )}
+
+            {mode === "menu" && row.kind !== "skipped" && (
+              <View style={styles.group}>
+                <Text style={styles.label}>Group</Text>
+                <CategoryPicker
+                  categories={categories}
+                  selected={row.categoryId ?? null}
+                  onSelect={async (id) => {
+                    const err = await onSetCategory(row, id);
                     if (err) setError(err);
                     else onClose();
                   }}
-                  disabled={!!lengthProblem(row.start, newLength)}
-                  style={[styles.primary, !!lengthProblem(row.start, newLength) && styles.disabled]}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.primaryText}>Save length</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : mode === "rename" ? (
-            <View style={styles.move}>
-              <Text style={styles.label}>New name</Text>
-              <TextInput
-                style={styles.input}
-                value={newTitle}
-                onChangeText={(t) => {
-                  setNewTitle(t);
-                  setError(undefined);
-                }}
-                autoFocus
-                selectTextOnFocus
-                returnKeyType="done"
-                onSubmitEditing={saveRename}
-              />
-              {!isEvent && <Text style={styles.hint}>Renames every session of {row.title}, every week.</Text>}
-              {sameName.length > 0 && (
-                <Chips
-                  options={[
-                    { value: "one", label: "Just this one" },
-                    { value: "all", label: `All ${sameName.length + 1} called ${row.title}` },
-                  ]}
-                  isSelected={(v) => (v === "all") === renameAll}
-                  onPress={(v) => setRenameAll(v === "all")}
+                  actions={groupActions}
                 />
-              )}
-              <View style={styles.moveButtons}>
-                <Pressable onPress={() => setMode("menu")} style={styles.secondary} accessibilityRole="button">
-                  <Text style={styles.secondaryText}>Back</Text>
-                </Pressable>
-                <Pressable onPress={saveRename} style={styles.primary} accessibilityRole="button">
-                  <Text style={styles.primaryText}>Save name</Text>
-                </Pressable>
               </View>
-            </View>
-          ) : (
-            <View style={styles.move}>
-              <Text style={styles.label}>Week</Text>
-              <Chips
-                options={[
-                  { value: "this", label: "This week" },
-                  { value: "next", label: "Next week" },
-                  {
-                    value: "pick",
-                    label:
-                      otherWeek && toWeek !== addWeeks(props.weekStart, 1)
-                        ? `${DAY_NAMES[moveDay]?.slice(0, 3)} ${dayDate(toWeek, moveDay)}`
-                        : "Pick a date…",
+            )}
+
+            {mode === "menu" ? (
+              <View style={styles.list}>
+                {actionsFor(row.kind, row.title, row.done, props.canStop).map(
+                  (a) => {
+                    const confirming = a.id === "delete" && confirmDelete;
+                    if (a.id === "queue" && pickQueue) {
+                      return (
+                        <View key={a.id} style={styles.scopeRow}>
+                          {QUEUE_CHOICES.map((c) => (
+                            <Pressable
+                              key={c.id}
+                              onPress={() => run(c.id)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Move to queue: ${c.label}`}
+                              style={({ pressed }) => [
+                                styles.action,
+                                styles.scopeButton,
+                                pressed && styles.pressed,
+                              ]}
+                            >
+                              <Text style={[styles.actionText, styles.center]}>
+                                {c.label}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      );
+                    }
+                    if (confirming && repeats) {
+                      return (
+                        <View key={a.id} style={styles.scopeRow}>
+                          {SCOPES.map((s) => (
+                            <Pressable
+                              key={s.value}
+                              onPress={() => run("delete", s.value)}
+                              accessibilityRole="button"
+                              style={({ pressed }) => [
+                                styles.action,
+                                styles.confirm,
+                                styles.scopeButton,
+                                pressed && styles.pressed,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.actionText,
+                                  styles.confirmText,
+                                  styles.center,
+                                ]}
+                              >
+                                Delete {s.label.toLowerCase()}
+                              </Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      );
+                    }
+                    return (
+                      <Pressable
+                        key={a.id}
+                        onPress={() => run(a.id)}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [
+                          styles.action,
+                          confirming && styles.confirm,
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.actionText,
+                            a.destructive && styles.destructive,
+                            confirming && styles.confirmText,
+                          ]}
+                        >
+                          {confirming ? "Tap again to delete" : a.label}
+                        </Text>
+                      </Pressable>
+                    );
                   },
-                ]}
-                isSelected={(v) =>
-                  v === "pick"
-                    ? pickingDate || (otherWeek && toWeek !== addWeeks(props.weekStart, 1))
-                    : !pickingDate && (v === "this" ? !otherWeek : toWeek === addWeeks(props.weekStart, 1))
-                }
-                onPress={(v) => {
-                  setError(undefined);
-                  if (v === "pick") return setPickingDate(true);
-                  setPickingDate(false);
-                  setToWeek(v === "this" ? props.weekStart : addWeeks(props.weekStart, 1));
-                }}
-              />
-              {pickingDate && (
-                <DatePickerGrid
-                  start={monthOfWeek(toWeek)}
-                  selected={dayKey(toWeek, moveDay)}
-                  minKey={props.todayKey}
-                  onPick={(week, day) => {
-                    setToWeek(week);
-                    setMoveDay(day);
-                    setPickingDate(false);
+                )}
+              </View>
+            ) : mode === "steps" && routine ? (
+              <View style={styles.move}>
+                <Text style={styles.hint}>
+                  Changes this routine everywhere it's used.
+                </Text>
+                <RoutineEditor
+                  routine={routine}
+                  existing={props.routines}
+                  onCancel={() => setMode("menu")}
+                  onSave={async (name: string, steps: RoutineStep[]) => {
+                    const err = await props.onEditRoutine({
+                      id: routine.id,
+                      name,
+                      steps,
+                    });
+                    if (err) return err;
+                    setMode("menu");
+                    return undefined;
+                  }}
+                  onDelete={async () => {
+                    const err = await props.onDeleteRoutine(routine.id);
+                    if (err) return err;
+                    onClose();
+                    return undefined;
                   }}
                 />
-              )}
-              <Text style={styles.label}>Day</Text>
-              <Chips
-                // Another week: show the dates too ("Thu 12."), so it's clear which days these are.
-                options={
-                  otherWeek
-                    ? DAY_OPTIONS.map((o) => ({ ...o, label: `${o.label} ${dayDate(toWeek, o.value).split(".")[0]}` }))
-                    : DAY_OPTIONS
-                }
-                isSelected={(d) => d === moveDay}
-                onPress={setMoveDay}
-              />
-              <Text style={styles.label}>Start  {moveTime}</Text>
-              <TimePicker
-                value={moveTime}
-                onChange={(t) => {
-                  setMoveTime(t);
-                  setError(undefined);
-                }}
-              />
-              {!warningsOff && isEvent && !problem && clashes.length > 0 && (
-                <Notice text={`Overlaps ${summarize(clashes)}.`} onDismiss={() => setWarningsOff(true)} />
-              )}
-              {!warningsOff && problem && (
-                <Notice
-                  tone="block"
-                  text={problem}
-                  onDismiss={() => setWarningsOff(true)}
-                />
-              )}
-              {!warningsOff && !problem && pushedAside.length > 0 && (
-                <Notice text={`${summarize(pushedAside)} will move to make room.`} onDismiss={() => setWarningsOff(true)} />
-              )}
-              {otherWeek && (
-                <Text style={styles.hint}>
-                  Moves just this one to {DAY_NAMES[moveDay]} {dayDate(toWeek, moveDay)} Open that week to check it fits.
-                </Text>
-              )}
-              {repeats && !otherWeek && (
-                <>
-                  <Text style={styles.label}>Which weeks</Text>
-                  <Chips options={SCOPES} isSelected={(s) => s === scope} onPress={setScope} />
-                </>
-              )}
-              <View style={styles.moveButtons}>
-                <Pressable onPress={() => setMode("menu")} style={styles.secondary} accessibilityRole="button">
-                  <Text style={styles.secondaryText}>Back</Text>
-                </Pressable>
-                <Pressable
-                  onPress={saveMove}
-                  disabled={!!problem && !canForce}
-                  style={[styles.primary, !!problem && !canForce && styles.disabled]}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: !!problem && !canForce }}
-                >
-                  <Text style={styles.primaryText}>{canForce ? "Move anyway" : "Move here"}</Text>
-                </Pressable>
               </View>
-            </View>
-          )}
+            ) : mode === "length" ? (
+              <View style={styles.move}>
+                <Text style={styles.label}>
+                  Length {lengthLabel(newLength)}
+                </Text>
+                <View style={styles.lengthRow}>
+                  <Pressable
+                    onPress={() => setNewLength((m) => Math.max(15, m - 15))}
+                    style={styles.stepButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="15 minutes shorter"
+                  >
+                    <Text style={styles.stepperText}>−</Text>
+                  </Pressable>
+                  <Text style={styles.lengthValue}>
+                    {lengthLabel(newLength)}
+                  </Text>
+                  <Pressable
+                    onPress={() =>
+                      setNewLength((m) => Math.min(12 * 60, m + 15))
+                    }
+                    style={styles.stepButton}
+                    accessibilityRole="button"
+                    accessibilityLabel="15 minutes longer"
+                  >
+                    <Text style={styles.stepperText}>+</Text>
+                  </Pressable>
+                </View>
+                <Chips
+                  options={LENGTH_CHOICES.map((m) => ({
+                    value: m,
+                    label: lengthLabel(m),
+                  }))}
+                  isSelected={(m) => m === newLength}
+                  onPress={setNewLength}
+                />
+                {isEvent ? (
+                  repeats && (
+                    <>
+                      <Text style={styles.label}>Which weeks</Text>
+                      <Chips
+                        options={SCOPES}
+                        isSelected={(s) => s === scope}
+                        onPress={setScope}
+                      />
+                    </>
+                  )
+                ) : (
+                  <Text style={styles.hint}>
+                    Every session of {row.title} gets this length, from this
+                    week on.
+                  </Text>
+                )}
+                {lengthProblem(row.start, newLength) && (
+                  <Text style={styles.error}>
+                    {lengthProblem(row.start, newLength)}
+                  </Text>
+                )}
+                <View style={styles.moveButtons}>
+                  <Pressable
+                    onPress={() => setMode("menu")}
+                    style={styles.secondary}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.secondaryText}>Back</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={async () => {
+                      const err = await props.onResize(row, newLength, scope);
+                      if (err) setError(err);
+                      else onClose();
+                    }}
+                    disabled={!!lengthProblem(row.start, newLength)}
+                    style={[
+                      styles.primary,
+                      !!lengthProblem(row.start, newLength) && styles.disabled,
+                    ]}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.primaryText}>Save length</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : mode === "rename" ? (
+              <View style={styles.move}>
+                <Text style={styles.label}>New name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newTitle}
+                  onChangeText={(t) => {
+                    setNewTitle(t);
+                    setError(undefined);
+                  }}
+                  autoFocus
+                  selectTextOnFocus
+                  returnKeyType="done"
+                  onSubmitEditing={saveRename}
+                />
+                {!isEvent && (
+                  <Text style={styles.hint}>
+                    Renames every session of {row.title}, every week.
+                  </Text>
+                )}
+                {sameName.length > 0 && (
+                  <Chips
+                    options={[
+                      { value: "one", label: "Just this one" },
+                      {
+                        value: "all",
+                        label: `All ${sameName.length + 1} called ${row.title}`,
+                      },
+                    ]}
+                    isSelected={(v) => (v === "all") === renameAll}
+                    onPress={(v) => setRenameAll(v === "all")}
+                  />
+                )}
+                <View style={styles.moveButtons}>
+                  <Pressable
+                    onPress={() => setMode("menu")}
+                    style={styles.secondary}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.secondaryText}>Back</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={saveRename}
+                    style={styles.primary}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.primaryText}>Save name</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.move}>
+                <Text style={styles.label}>Week</Text>
+                <Chips
+                  options={[
+                    { value: "this", label: "This week" },
+                    { value: "next", label: "Next week" },
+                    {
+                      value: "pick",
+                      label:
+                        otherWeek && toWeek !== addWeeks(props.weekStart, 1)
+                          ? `${DAY_NAMES[moveDay]?.slice(0, 3)} ${dayDate(toWeek, moveDay)}`
+                          : "Pick a date…",
+                    },
+                  ]}
+                  isSelected={(v) =>
+                    v === "pick"
+                      ? pickingDate ||
+                        (otherWeek && toWeek !== addWeeks(props.weekStart, 1))
+                      : !pickingDate &&
+                        (v === "this"
+                          ? !otherWeek
+                          : toWeek === addWeeks(props.weekStart, 1))
+                  }
+                  onPress={(v) => {
+                    setError(undefined);
+                    if (v === "pick") return setPickingDate(true);
+                    setPickingDate(false);
+                    setToWeek(
+                      v === "this"
+                        ? props.weekStart
+                        : addWeeks(props.weekStart, 1),
+                    );
+                  }}
+                />
+                {pickingDate && (
+                  <DatePickerGrid
+                    start={monthOfWeek(toWeek)}
+                    selected={dayKey(toWeek, moveDay)}
+                    minKey={props.todayKey}
+                    onPick={(week, day) => {
+                      setToWeek(week);
+                      setMoveDay(day);
+                      setPickingDate(false);
+                    }}
+                  />
+                )}
+                <Text style={styles.label}>Day</Text>
+                <Chips
+                  // Another week: show the dates too ("Thu 12."), so it's clear which days these are.
+                  options={
+                    otherWeek
+                      ? DAY_OPTIONS.map((o) => ({
+                          ...o,
+                          label: `${o.label} ${dayDate(toWeek, o.value).split(".")[0]}`,
+                        }))
+                      : DAY_OPTIONS
+                  }
+                  isSelected={(d) => d === moveDay}
+                  onPress={setMoveDay}
+                />
+                <Text style={styles.label}>Start {moveTime}</Text>
+                <TimePicker
+                  value={moveTime}
+                  onChange={(t) => {
+                    setMoveTime(t);
+                    setError(undefined);
+                  }}
+                />
+                {!warningsOff && isEvent && !problem && clashes.length > 0 && (
+                  <Notice
+                    text={`Overlaps ${summarize(clashes)}.`}
+                    onDismiss={() => setWarningsOff(true)}
+                  />
+                )}
+                {!warningsOff && problem && (
+                  <Notice
+                    tone="block"
+                    text={problem}
+                    onDismiss={() => setWarningsOff(true)}
+                  />
+                )}
+                {!warningsOff && !problem && pushedAside.length > 0 && (
+                  <Notice
+                    text={`${summarize(pushedAside)} will move to make room.`}
+                    onDismiss={() => setWarningsOff(true)}
+                  />
+                )}
+                {otherWeek && (
+                  <Text style={styles.hint}>
+                    Moves just this one to {DAY_NAMES[moveDay]}{" "}
+                    {dayDate(toWeek, moveDay)} Open that week to check it fits.
+                  </Text>
+                )}
+                {repeats && !otherWeek && (
+                  <>
+                    <Text style={styles.label}>Which weeks</Text>
+                    <Chips
+                      options={SCOPES}
+                      isSelected={(s) => s === scope}
+                      onPress={setScope}
+                    />
+                  </>
+                )}
+                <View style={styles.moveButtons}>
+                  <Pressable
+                    onPress={() => setMode("menu")}
+                    style={styles.secondary}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.secondaryText}>Back</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={saveMove}
+                    disabled={!!problem && !canForce}
+                    style={[
+                      styles.primary,
+                      !!problem && !canForce && styles.disabled,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !!problem && !canForce }}
+                  >
+                    <Text style={styles.primaryText}>
+                      {canForce ? "Move anyway" : "Move here"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
 
-          {error && <Text style={styles.error}>{error}</Text>}
+            {error && <Text style={styles.error}>{error}</Text>}
+          </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -510,18 +752,39 @@ export function ItemActionsSheet(props: Props) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: colors.backdrop },
+  backdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: colors.backdrop,
+  },
   sheet: {
     backgroundColor: colors.white,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 0,
     paddingBottom: 32,
-    gap: 12,
+    gap: 4,
     width: "100%",
     maxWidth: 560,
+    maxHeight: "92%",
     alignSelf: "center",
   },
+  fullSheet: {
+    height: "100%",
+    maxHeight: "100%",
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+  },
+  grabber: { alignItems: "center", paddingTop: 8, paddingBottom: 8 },
+  grabBar: {
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.borderStrong,
+  },
+  scroll: { flexShrink: 1 },
+  body: { gap: 12, paddingTop: 8 },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   headerText: { flex: 1 },
   title: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
@@ -548,9 +811,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   stepperText: { fontFamily: font.bold, fontSize: 20, color: colors.textSoft },
-  lengthValue: { fontFamily: font.heavy, fontSize: 22, color: colors.text, minWidth: 90, textAlign: "center" },
-  checklist: { gap: 2, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: colors.surfaceAlt },
-  step: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9, paddingHorizontal: 4, borderRadius: 8 },
+  lengthValue: {
+    fontFamily: font.heavy,
+    fontSize: 22,
+    color: colors.text,
+    minWidth: 90,
+    textAlign: "center",
+  },
+  checklist: {
+    gap: 2,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceAlt,
+  },
+  step: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+  },
   box: {
     width: 24,
     height: 24,
@@ -561,8 +842,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   boxOn: { backgroundColor: colors.routine },
-  tick: { color: colors.white, fontFamily: font.heavy, fontSize: 14, lineHeight: 16 },
-  stepText: { fontFamily: font.regular, flex: 1, fontSize: 16, color: colors.text },
+  tick: {
+    color: colors.white,
+    fontFamily: font.heavy,
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  stepText: {
+    fontFamily: font.regular,
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+  },
   stepDone: { color: colors.textFaint, textDecorationLine: "line-through" },
   input: {
     borderWidth: 1,
@@ -575,12 +866,33 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   hint: { fontFamily: font.regular, fontSize: 13, color: colors.textMuted },
-  group: { gap: 8, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.surfaceAlt },
+  group: {
+    gap: 8,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceAlt,
+  },
   label: { fontSize: 13, fontFamily: font.semibold, color: colors.textMuted },
   moveButtons: { flexDirection: "row", gap: 12, marginTop: 6 },
-  secondary: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: colors.surfaceAlt },
-  secondaryText: { fontSize: 16, fontFamily: font.bold, color: colors.textSoft },
-  primary: { flex: 2, borderRadius: 12, paddingVertical: 14, alignItems: "center", backgroundColor: colors.accent },
+  secondary: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: colors.surfaceAlt,
+  },
+  secondaryText: {
+    fontSize: 16,
+    fontFamily: font.bold,
+    color: colors.textSoft,
+  },
+  primary: {
+    flex: 2,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    backgroundColor: colors.accent,
+  },
   disabled: { opacity: 0.4 },
   primaryText: { fontSize: 16, fontFamily: font.bold, color: colors.white },
   error: { color: colors.danger, fontFamily: font.semibold },
