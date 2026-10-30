@@ -5,3 +5,5 @@ __pycache__/
 .pytest_cache/
 .env.local
 .vercel
+evals/
+mcp_server.py

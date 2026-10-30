@@ -14,6 +14,8 @@ import { reviewStats } from "./weekReview";
 import { ReviewSheet } from "./ReviewSheet";
 import { AiSuggestions } from "./AiSuggestions";
 import { useAiReview } from "./useAiReview";
+import { buildPlanRequest, findSession, type Proposal } from "./planAgent";
+import { PlanAgentSheet } from "./PlanAgentSheet";
 import { MonthSummarySheet } from "./MonthSummarySheet";
 import { BackupSheet } from "./BackupSheet";
 import { HabitsRow } from "./HabitsRow";
@@ -87,6 +89,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   const weeklyItems = useMemo(() => weekItems.filter((i) => i.day === null), [weekItems]);
   const dayTodos = useMemo(() => weekItems.filter((i) => i.day === day && i.kind === "todo"), [weekItems, day]);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
@@ -154,6 +157,16 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   // the early return below. It copes with `week` being undefined.
   const days = useMemo(() => (week && plan ? rowsByDay(week, plan, doneEvents) : []), [week, plan, doneEvents]);
   const allRows = useMemo(() => days.flat(), [days]);
+
+  // "Plan my week": the agent proposes, and each accepted proposal goes
+  // through the same move / queue as a tap, with the same checks.
+  const acceptProposal = async (p: Proposal): Promise<string | undefined> => {
+    const row = findSession(allRows, p);
+    if (!row) return "That session has changed since. Ask again for fresh ideas.";
+    if (p.type === "skip") return act(row, "queue");
+    if (p.start === null) return "This proposal has no new time.";
+    return move(row, Math.floor(p.start / (24 * 60)), p.start % (24 * 60));
+  };
   // Progress on each routine block ("2/5", or ✓ when every step is ticked).
   const badges = useMemo(() => {
     const byId = new Map(routines.map((r) => [r.id, r]));
@@ -327,6 +340,11 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
             {view === "day" && (
               <Pressable onPress={() => setView("calendar")} style={styles.todayButton} accessibilityRole="button">
                 <Text style={styles.todayButtonText}>See week ›</Text>
+              </Pressable>
+            )}
+            {(view === "calendar" || view === "list") && (
+              <Pressable onPress={() => setAgentOpen(true)} style={styles.todayButton} accessibilityRole="button">
+                <Text style={styles.todayButtonText}>Plan</Text>
               </Pressable>
             )}
             {(view === "calendar" || view === "list") && (
@@ -504,6 +522,12 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
           <Text style={styles.fabText}>+</Text>
         </Pressable>
       )}
+      <PlanAgentSheet
+        visible={agentOpen}
+        buildRequest={(wish) => (week ? buildPlanRequest(week, allRows, weekStart, wish) : undefined)}
+        onAccept={acceptProposal}
+        onClose={() => setAgentOpen(false)}
+      />
       {review && (
         <ReviewSheet
           visible={reviewOpen}

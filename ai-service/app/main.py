@@ -9,13 +9,14 @@ Run:  .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8787 --env-file .env
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 
 import anthropic
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .llm import LLM, ClaudeLLM, DemoLLM, LLMRefused
-from . import monthly
+from . import agent, monthly, tracing
 from .review import SYSTEM_PROMPT, ReviewRequest, WeeklyReview, build_user_message, clean
 
 app = FastAPI(title="Smart Calendar AI")
@@ -50,10 +51,11 @@ def health() -> dict:
     return {"ok": True}
 
 
-def ask(llm: LLM, system: str, user: str, schema):
-    """Call the model and turn API problems into messages the app can show."""
+@contextmanager
+def claude_errors():
+    """Turn API problems into messages the app can show."""
     try:
-        return llm.structured(system, user, schema)
+        yield
     except LLMRefused:
         raise HTTPException(502, "The assistant couldn't answer this time. Try again later.")
     except anthropic.AuthenticationError:
@@ -66,6 +68,11 @@ def ask(llm: LLM, system: str, user: str, schema):
         raise HTTPException(502, f"Claude returned an error ({e.status_code}).")
 
 
+def ask(llm: LLM, system: str, user: str, schema):
+    with claude_errors():
+        return llm.structured(system, user, schema)
+
+
 @app.post("/weekly-review", response_model=WeeklyReview)
 def weekly_review(req: ReviewRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)) -> WeeklyReview:
     return clean(ask(llm, SYSTEM_PROMPT, build_user_message(req), WeeklyReview), req)
@@ -76,3 +83,19 @@ def monthly_summary(
     req: monthly.MonthRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)
 ) -> monthly.MonthlySummary:
     return monthly.clean(ask(llm, monthly.SYSTEM_PROMPT, monthly.build_user_message(req), monthly.MonthlySummary))
+
+
+def get_plan_model():
+    """Dependency: None = Claude (or the demo model with AI_FAKE=1); tests swap in a script."""
+    return None
+
+
+@app.post("/plan-week", response_model=agent.PlanResult)
+def plan_week(
+    req: agent.PlanRequest, model=Depends(get_plan_model), _: None = Depends(check_token)
+) -> agent.PlanResult:
+    try:
+        with claude_errors():
+            return agent.plan_week(req, model, tracing.callbacks())
+    finally:
+        tracing.flush()
