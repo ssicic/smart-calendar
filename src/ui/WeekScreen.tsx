@@ -111,7 +111,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
     close();
     setTimeout(open, 350);
   };
-  const { goals, periods, addGoal, changeGoal, removeGoal, addWeekGoalFor } = data;
+  const { goals, planGoals, periods, addGoal, changeGoal, removeGoal, addWeekGoalFor } = data;
   const { goalSessions, checkGoalTime, makeTimeFor, stopGoalTime } = data;
   const { journeys, journeyStartsNextWeek, beginJourney, easierJourney, endJourney } = data;
   const { journeyCheckinRequest, acceptCheckin } = data;
@@ -698,6 +698,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
         visible={goalsOpen}
         periods={periods}
         goals={goals}
+        planGoals={planGoals}
         weekGoals={weeklyItems.filter((i) => i.kind === "goal")}
         onAddGoal={addGoal}
         onChangeGoal={changeGoal}

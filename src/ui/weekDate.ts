@@ -166,6 +166,22 @@ export function periodsOfWeek(weekStart: string): { year: string; month: string 
   return { year: String(m.year), month: `${m.year}-${pad(m.month + 1)}` };
 }
 
+/** `n` month periods starting with `month`: "2026-11", "2026-12", "2027-01"... */
+export function monthsFrom(month: string, n: number): string[] {
+  const [y, m] = month.split("-").map(Number);
+  return Array.from({ length: n }, (_, i) => {
+    const next = addMonths({ year: y ?? 1970, month: (m ?? 1) - 1 }, i);
+    return `${next.year}-${pad(next.month + 1)}`;
+  });
+}
+
+/** "2026-11" → "Nov"; with the year when it isn't `thisYear`: "Jan 2027". */
+export function monthChipLabel(period: string, thisYear: string): string {
+  const [y, m] = period.split("-");
+  const name = monthShort(Number(m) - 1);
+  return y === thisYear ? name : `${name} ${y}`;
+}
+
 /** "2026" stays "2026"; "2026-10" becomes "October 2026". */
 export function periodLabel(period: string): string {
   const [y, m] = period.split("-").map(Number);

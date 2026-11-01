@@ -108,7 +108,7 @@ import { checkKey } from "./routines";
 import type { QuickAddResult } from "./QuickAddSheet";
 import type { SleepScope } from "./SleepSheet";
 import { IMPORTANCE_PRIORITY, TIME_OF_DAY_WINDOWS, type TimeOfDay } from "./quickAdd";
-import { addWeeks, monthGrid, monthOfWeek, periodsOfWeek, weeksOfYear } from "./weekDate";
+import { addWeeks, monthGrid, monthOfWeek, monthsFrom, periodsOfWeek, weeksOfYear } from "./weekDate";
 import { isEventKind, type WeekRow } from "./weekRows";
 
 /** A journey as the screen shows it: where it is this week and what's done. */
@@ -153,6 +153,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
   const [weekItems, setWeekItems] = useState<WeekItem[]>([]);
   // Goals for the year and month this week belongs to.
   const [goals, setGoals] = useState<Goal[]>([]);
+  // Goals for the coming year: this month and the next 11, and the years they're in.
+  const [planGoals, setPlanGoals] = useState<Goal[]>([]);
   const periods = periodsOfWeek(weekStart);
   // Done sessions per goal ("Make time for it" items) this month and this year.
   const [goalSessions, setGoalSessions] = useState<{ month: Map<string, number>; year: Map<string, number> }>({
@@ -181,6 +183,8 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     setWeekItems(await loadWeekItems(db, weekStart));
     const p = periodsOfWeek(weekStart);
     setGoals(await loadGoals(db, [p.year, p.month]));
+    const planMonths = monthsFrom(p.month, 12);
+    setPlanGoals(await loadGoals(db, [...new Set(planMonths.map((m) => m.slice(0, 4))), ...planMonths]));
     const month = monthOfWeek(weekStart);
     setGoalSessions({
       month: await countGoalSessions(db, monthGrid(month).map((r) => r.weekStart)),
@@ -445,10 +449,13 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
       await refresh();
     });
 
-  /** Adds a goal for this week's year or month, optionally part of a year goal. */
-  const addGoal = (horizon: GoalHorizon, title: string, parentId: string | null = null) =>
+  /**
+   * Adds a goal for this week's year or month (or `period`, e.g. a later
+   * month), optionally part of a year goal.
+   */
+  const addGoal = (horizon: GoalHorizon, title: string, parentId: string | null = null, period?: string) =>
     attempt(async () => {
-      const period = horizon === "year" ? periods.year : periods.month;
+      period ??= horizon === "year" ? periods.year : periods.month;
       await insertGoal(db, { id: `g${newId()}`, title, horizon, period, parentId, done: false });
       await refresh();
     });
@@ -659,6 +666,7 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     doneEvents,
     resize,
     goals,
+    planGoals,
     periods,
     addGoal,
     changeGoal,

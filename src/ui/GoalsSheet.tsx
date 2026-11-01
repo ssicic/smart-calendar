@@ -7,7 +7,7 @@ import type { FlexibleItem } from "../engine";
 import { goalProgress, tooManyGoalsNote, type TimeCheck } from "./goals";
 import { lengthLabel } from "./itemActions";
 import { colors, font, radius } from "./theme";
-import { periodLabel } from "./weekDate";
+import { monthChipLabel, monthsFrom, periodLabel } from "./weekDate";
 import { isFinished, weekItemProblem } from "./weekItems";
 
 type Result = Promise<string | undefined>;
@@ -17,9 +17,12 @@ interface Props {
   /** The year and month of the week on screen: "2026", "2026-10". */
   periods: { year: string; month: string };
   goals: Goal[];
+  /** Goals for this month and the next 11, and the years they're in. */
+  planGoals: Goal[];
   /** This week's goals (to link them to a month or year goal). */
   weekGoals: WeekItem[];
-  onAddGoal: (horizon: GoalHorizon, title: string, parentId: string | null) => Result;
+  /** `period`: a later month to add the goal to; otherwise this week's year or month. */
+  onAddGoal: (horizon: GoalHorizon, title: string, parentId: string | null, period?: string) => Result;
   onChangeGoal: (goal: Goal) => Result;
   onDeleteGoal: (id: string) => Result;
   onAddToWeek: (goal: Goal) => Result;
@@ -34,21 +37,31 @@ interface Props {
   onClose: () => void;
 }
 
-/** Year → month → week goals: what you're working towards, and what's part of what. */
+/**
+ * Year → month → week goals: what you're working towards, and what's part of
+ * what. Month goals can be planned for any of the next 12 months.
+ */
 export function GoalsSheet(props: Props) {
-  const { visible, periods, goals, weekGoals, onClose } = props;
+  const { visible, periods, goals, planGoals, weekGoals, onClose } = props;
   const [error, setError] = useState<string>();
   const [open, setOpen] = useState<string>(); // the row being edited
+  const [month, setMonth] = useState(periods.month); // the month whose goals are shown
   useEffect(() => {
     if (!visible) {
       setError(undefined);
       setOpen(undefined);
+      setMonth(periods.month);
     }
-  }, [visible]);
+  }, [visible, periods.month]);
 
   const run = async (work: Result) => setError(await work);
   const yearGoals = goals.filter((g) => g.horizon === "year");
   const monthGoals = goals.filter((g) => g.horizon === "month");
+  // The month picked: this month works as before; a later one is just for planning.
+  const isNow = month === periods.month;
+  const goalsIn = (period: string) => planGoals.filter((g) => g.horizon === "month" && g.period === period);
+  const shownMonthGoals = isNow ? monthGoals : goalsIn(month);
+  const monthParents = isNow ? yearGoals : planGoals.filter((g) => g.horizon === "year" && g.period === month.slice(0, 4));
   const titleOf = (id: string | null | undefined) => goals.find((g) => g.id === id)?.title;
 
   // Done sessions for a goal: its own items, plus (for a year goal) its month goals' items.
@@ -58,9 +71,10 @@ export function GoalsSheet(props: Props) {
     return (map.get(goal.id) ?? 0) + children.reduce((sum, c) => sum + (map.get(c.id) ?? 0), 0);
   };
 
-  const goalRow = (goal: Goal, parents: Goal[]) => (
+  const goalRow = (goal: Goal, parents: Goal[], later = false) => (
     <GoalRow
       key={goal.id}
+      later={later}
       sessions={sessionsOf(goal)}
       sessionsPeriod={goal.horizon === "month" ? "this month" : "this year"}
       makeTime={
@@ -105,13 +119,40 @@ export function GoalsSheet(props: Props) {
             {tooManyGoalsNote(goals, "year") && <Text style={styles.note}>{tooManyGoalsNote(goals, "year")}</Text>}
             <AddGoal placeholder="A goal for this year…" parents={[]} onAdd={(t) => props.onAddGoal("year", t, null)} onError={setError} />
 
-            <Text style={[styles.section, styles.gap]}>This month · {periodLabel(periods.month)}</Text>
-            {monthGoals.map((g) => goalRow(g, yearGoals))}
-            {tooManyGoalsNote(goals, "month") && <Text style={styles.note}>{tooManyGoalsNote(goals, "month")}</Text>}
+            <Text style={[styles.section, styles.gap]}>
+              {isNow ? `This month · ${periodLabel(month)}` : periodLabel(month)}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.months}>
+              {monthsFrom(periods.month, 12).map((m) => {
+                const on = m === month;
+                const count = (m === periods.month ? monthGoals : goalsIn(m)).length;
+                return (
+                  <Pressable
+                    key={m}
+                    onPress={() => {
+                      setMonth(m);
+                      setOpen(undefined);
+                    }}
+                    style={[styles.chip, on && styles.chipOn]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${periodLabel(m)}, ${count} ${count === 1 ? "goal" : "goals"}`}
+                    accessibilityState={{ selected: on }}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                      {monthChipLabel(m, periods.year)}
+                      {count > 0 ? ` · ${count}` : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {shownMonthGoals.map((g) => goalRow(g, monthParents, !isNow))}
+            {tooManyGoalsNote(shownMonthGoals, "month") && <Text style={styles.note}>{tooManyGoalsNote(shownMonthGoals, "month")}</Text>}
             <AddGoal
-              placeholder="A goal for this month…"
-              parents={yearGoals}
-              onAdd={(t, parentId) => props.onAddGoal("month", t, parentId)}
+              key={month}
+              placeholder={isNow ? "A goal for this month…" : `A goal for ${periodLabel(month)}…`}
+              parents={monthParents}
+              onAdd={(t, parentId) => props.onAddGoal("month", t, parentId, isNow ? undefined : month)}
               onError={setError}
             />
 
@@ -143,6 +184,8 @@ export function GoalsSheet(props: Props) {
 }
 
 function GoalRow(props: {
+  /** A later month's goal: no time-making or adding to this week yet. */
+  later: boolean;
   sessions: number;
   sessionsPeriod: string;
   makeTime: React.ReactNode;
@@ -225,11 +268,13 @@ function GoalRow(props: {
             </Pressable>
           </View>
           {props.parents.length > 0 && <ParentChips parents={props.parents} selected={props.parentId} onSelect={props.onParent} />}
-          {props.makeTime}
+          {!props.later && props.makeTime}
           <View style={styles.inline}>
-            <Pressable onPress={props.onAddToWeek} style={styles.smallButton} accessibilityRole="button">
-              <Text style={styles.smallButtonText}>Add to this week</Text>
-            </Pressable>
+            {!props.later && (
+              <Pressable onPress={props.onAddToWeek} style={styles.smallButton} accessibilityRole="button">
+                <Text style={styles.smallButtonText}>Add to this week</Text>
+              </Pressable>
+            )}
             <Pressable
               onPress={() => (confirmDelete ? props.onDelete() : setConfirmDelete(true))}
               style={[styles.deleteButton, confirmDelete && styles.deleteConfirm]}
@@ -499,6 +544,7 @@ const styles = StyleSheet.create({
   chipText: { fontFamily: font.semibold, fontSize: 12, color: colors.textSoft },
   chipTextOn: { color: colors.white },
   addBox: { gap: 4 },
+  months: { gap: 6, paddingVertical: 2 },
   timeBox: { gap: 8, padding: 10, borderRadius: radius.sm, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border },
   timeTitle: { fontFamily: font.bold, fontSize: 13, color: colors.textSoft },
   step: { width: 32, height: 32, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceAlt },

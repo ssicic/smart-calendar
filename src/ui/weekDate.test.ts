@@ -7,6 +7,8 @@ import {
   monthGrid,
   monthOfWeek,
   monthTitle,
+  monthChipLabel,
+  monthsFrom,
   periodLabel,
   periodsOfWeek,
   plannableFrom,
@@ -105,6 +107,9 @@ describe("weekDate", () => {
 
   it("names goal periods for a week", () => {
     expect(periodsOfWeek("2026-10-19")).toEqual({ year: "2026", month: "2026-10" });
+    expect(monthsFrom("2026-11", 4)).toEqual(["2026-11", "2026-12", "2027-01", "2027-02"]);
+    expect(monthChipLabel("2026-12", "2026")).toBe("Dec");
+    expect(monthChipLabel("2027-01", "2026")).toBe("Jan 2027");
     expect(periodsOfWeek("2026-12-28")).toEqual({ year: "2026", month: "2026-12" }); // Thu 31 Dec
     expect(periodsOfWeek("2025-12-29")).toEqual({ year: "2026", month: "2026-01" }); // Thu 1 Jan
     expect(periodLabel("2026-10")).toBe("October 2026");
