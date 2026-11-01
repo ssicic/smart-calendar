@@ -59,9 +59,9 @@ describe("earningsFrom", () => {
       {
         ...none,
         todos: [{ id: "t1", weekStart: W1, title: "Buy milk" }],
-        sessions: [{ id: "s1", weekStart: W1, title: "Gym", double: "Health" }],
-        events: [{ id: "work", weekStart: W1, title: "Work", minutes: 240, double: "Work" }],
-        targets: [{ itemId: "gym", weekStart: W1, title: "Gym", done: 3, target: 3, double: "Health" }],
+        sessions: [{ id: "s1", weekStart: W1, title: "Gym", rate: { mode: "double", group: "Health" } }],
+        events: [{ id: "work", weekStart: W1, title: "Work", minutes: 240, rate: { mode: "double", group: "Work" } }],
+        targets: [{ itemId: "gym", weekStart: W1, title: "Gym", done: 3, target: 3, rate: { mode: "double", group: "Health" } }],
       },
       W2,
     );
@@ -72,6 +72,24 @@ describe("earningsFrom", () => {
       ["target:gym:2026-10-26", 60],
     ]);
     expect(kindLine(e[1]!)).toMatch(/^Double for Health\. /);
+    expect(kindLine(e[0]!)).not.toMatch(/Double/);
+  });
+
+  it("gives a flat group a set 5 per block, however long, and no target bonus", () => {
+    const flat = { mode: "flat" as const, group: "Rest" };
+    const e = earningsFrom(
+      {
+        ...none,
+        sessions: [{ id: "s1", weekStart: W1, title: "Walk", rate: flat }],
+        events: [{ id: "trip", weekStart: W1, title: "Trip", minutes: 600, rate: flat }],
+        targets: [{ itemId: "walk", weekStart: W1, title: "Walk", done: 2, target: 2, rate: flat }],
+      },
+      W2,
+    );
+    expect(e.map((x) => [x.key, base(x.points, x.bonus)])).toEqual([
+      ["session:s1:2026-10-26", 5],
+      ["event:trip:2026-10-26", 5],
+    ]);
     expect(kindLine(e[0]!)).not.toMatch(/Double/);
   });
 

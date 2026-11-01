@@ -1,7 +1,8 @@
 // Points and rewards (tables points, rewards, reward_spends; DB v22). What
 // earns points is worked out in ui/points.ts from the stored facts below.
 import { journeyWeek, nextMonday, type Journey } from "../engine";
-import { earningsFrom, reconcile, type Earning, type PointFacts } from "../ui/points";
+import { earningsFrom, reconcile, type Earning, type PointFacts, type Rate } from "../ui/points";
+import type { PointsMode } from "./weekStore";
 import type { Db } from "./weekStore";
 
 interface JourneyRow {
@@ -15,6 +16,15 @@ interface JourneyRow {
   stopped_week: string | null;
   title: string | null;
 }
+
+interface GroupRate {
+  mode: PointsMode | null;
+  grp: string | null;
+}
+
+/** `{ rate }` for a row in a double or flat group, else nothing. */
+const rate = (r: GroupRate): { rate?: Rate } =>
+  r.mode === "double" || r.mode === "flat" ? { rate: { mode: r.mode, group: r.grp ?? "" } } : {};
 
 /** Everything stored that can earn points, up to `currentWeek`. */
 export async function loadPointFacts(db: Db, currentWeek: string): Promise<PointFacts> {
@@ -30,19 +40,19 @@ export async function loadPointFacts(db: Db, currentWeek: string): Promise<Point
     "SELECT id, horizon, title FROM goals WHERE done = 1",
     [],
   );
-  // `double`: the group's name when it earns double points.
-  const sessions = await db.getAllAsync<{ id: string; week_start: string; item_id: string; title: string; double: string | null }>(
-    `SELECT p.id, p.week_start, p.item_id, f.title, CASE WHEN c.double_points = 1 THEN c.name END AS double
+  // `mode` and `grp`: the group's points mode and name (rate() turns them into a Rate).
+  const sessions = await db.getAllAsync<{ id: string; week_start: string; item_id: string; title: string } & GroupRate>(
+    `SELECT p.id, p.week_start, p.item_id, f.title, c.points_mode AS mode, c.name AS grp
      FROM placements p JOIN flexible_items f ON f.id = p.item_id
      LEFT JOIN categories c ON c.id = f.category_id
      WHERE p.state = 'done' AND p.week_start <= ?`,
     [currentWeek],
   );
   // A done event's length that week: a "just this week" change wins over the usual times.
-  const events = await db.getAllAsync<{ id: string; week_start: string; title: string; minutes: number; double: string | null }>(
+  const events = await db.getAllAsync<{ id: string; week_start: string; title: string; minutes: number } & GroupRate>(
     `SELECT d.event_id AS id, d.week_start, e.title,
             COALESCE(x.end_min - x.start_min, e.end_min - e.start_min) AS minutes,
-            CASE WHEN c.double_points = 1 THEN c.name END AS double
+            c.points_mode AS mode, c.name AS grp
      FROM event_done d JOIN events e ON e.id = d.event_id
      LEFT JOIN event_exceptions x ON x.event_id = d.event_id AND x.week_start = d.week_start
      LEFT JOIN categories c ON c.id = e.category_id
@@ -82,8 +92,8 @@ export async function loadPointFacts(db: Db, currentWeek: string): Promise<Point
     }
   }
 
-  const items = await db.getAllAsync<{ id: string; title: string; times_per_week: number; double: string | null }>(
-    `SELECT f.id, f.title, f.times_per_week, CASE WHEN c.double_points = 1 THEN c.name END AS double
+  const items = await db.getAllAsync<{ id: string; title: string; times_per_week: number } & GroupRate>(
+    `SELECT f.id, f.title, f.times_per_week, c.points_mode AS mode, c.name AS grp
      FROM flexible_items f LEFT JOIN categories c ON c.id = f.category_id`,
     [],
   );
@@ -96,20 +106,20 @@ export async function loadPointFacts(db: Db, currentWeek: string): Promise<Point
         title: item.title,
         done: n,
         target: journeyTarget.get(`${item.id}@${weekStart}`) ?? item.times_per_week,
-        ...(item.double ? { double: item.double } : {}),
+        ...rate(item),
       });
 
   return {
     todos: todos.map((t) => ({ id: t.id, weekStart: t.week_start, title: t.title })),
     weekGoals: weekGoals.map((g) => ({ id: g.id, weekStart: g.week_start, title: g.title })),
     goals,
-    sessions: sessions.map((s) => ({ id: s.id, weekStart: s.week_start, title: s.title, ...(s.double ? { double: s.double } : {}) })),
+    sessions: sessions.map((s) => ({ id: s.id, weekStart: s.week_start, title: s.title, ...rate(s) })),
     events: events.map((e) => ({
       id: e.id,
       weekStart: e.week_start,
       title: e.title,
       minutes: e.minutes,
-      ...(e.double ? { double: e.double } : {}),
+      ...rate(e),
     })),
     targets,
     stepUps,

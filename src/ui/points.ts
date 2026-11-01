@@ -18,7 +18,15 @@ export const POINTS = {
   minutesPerPoint: 15,
   weeklyTarget: 30,
   stepUp: 50,
+  /** A done block in a flat-points group (rest, social...), however long. */
+  flat: 5,
 };
+
+/** A group that changes how its time earns points. */
+export interface Rate {
+  mode: "double" | "flat";
+  group: string;
+}
 
 /** What's stored that can earn points. */
 export interface PointFacts {
@@ -27,12 +35,12 @@ export interface PointFacts {
   weekGoals: { id: string; weekStart: string; title: string }[];
   /** Year and month goals marked done. */
   goals: { id: string; horizon: "year" | "month"; title: string }[];
-  /** Done flexible sessions. `double`: the name of its double-points group, if any. */
-  sessions: { id: string; weekStart: string; title: string; double?: string }[];
+  /** Done flexible sessions. `rate`: its group's points mode, when not normal. */
+  sessions: { id: string; weekStart: string; title: string; rate?: Rate }[];
   /** Done fixed events and routines, with their length that week. */
-  events: { id: string; weekStart: string; title: string; minutes: number; double?: string }[];
+  events: { id: string; weekStart: string; title: string; minutes: number; rate?: Rate }[];
   /** Done sessions of one item in one week against what it asked for. */
-  targets: { itemId: string; weekStart: string; title: string; done: number; target: number; double?: string }[];
+  targets: { itemId: string; weekStart: string; title: string; done: number; target: number; rate?: Rate }[];
   /** Weeks a journey went up a step. */
   stepUps: { journeyId: string; weekStart: string; title: string }[];
 }
@@ -46,7 +54,7 @@ export interface Earning {
   /** Surprise extra on top (already included in `points`). */
   bonus: number;
   label: string;
-  /** The double-points group it was doubled for, if any. */
+  /** The group it was doubled for, if any. */
   double?: string;
 }
 
@@ -69,10 +77,13 @@ export function surprise(key: string): number {
 /** Everything the facts earn. Goals have no week of their own: they count for `currentWeek`. */
 export function earningsFrom(f: PointFacts, currentWeek: string): Earning[] {
   const out: Earning[] = [];
-  // Time in a double-points group earns twice; the surprise isn't doubled.
-  const earn = (key: string, weekStart: string, base: number, label: string, lucky = true, double?: string) => {
+  // Time in a double-points group earns twice (the surprise isn't doubled);
+  // in a flat one, a set amount however long.
+  const earn = (key: string, weekStart: string, base: number, label: string, lucky = true, rate?: Rate) => {
     const bonus = lucky ? surprise(key) : 0;
-    out.push({ key, weekStart, points: base * (double ? 2 : 1) + bonus, bonus, label, ...(double ? { double } : {}) });
+    const double = rate?.mode === "double" ? rate.group : undefined;
+    const points = rate?.mode === "flat" ? POINTS.flat : base * (double ? 2 : 1);
+    out.push({ key, weekStart, points: points + bonus, bonus, label, ...(double ? { double } : {}) });
   };
   for (const t of f.todos) earn(`todo:${t.id}`, t.weekStart, POINTS.todo, t.title);
   for (const g of f.weekGoals) earn(`weekgoal:${g.id}`, g.weekStart, POINTS.weekGoal, `Week goal: ${g.title}`);
@@ -83,20 +94,21 @@ export function earningsFrom(f: PointFacts, currentWeek: string): Earning[] {
       g.horizon === "year" ? POINTS.yearGoal : POINTS.monthGoal,
       `${g.horizon === "year" ? "Year" : "Month"} goal: ${g.title}`,
     );
-  for (const s of f.sessions) earn(`session:${s.id}:${s.weekStart}`, s.weekStart, POINTS.session, s.title, true, s.double);
+  for (const s of f.sessions) earn(`session:${s.id}:${s.weekStart}`, s.weekStart, POINTS.session, s.title, true, s.rate);
   for (const e of f.events) {
     const base = Math.max(1, Math.floor(e.minutes / POINTS.minutesPerPoint));
-    earn(`event:${e.id}:${e.weekStart}`, e.weekStart, base, e.title, true, e.double);
+    earn(`event:${e.id}:${e.weekStart}`, e.weekStart, base, e.title, true, e.rate);
   }
+  // No weekly-target bonus for flat groups: there's no effort to reward.
   for (const t of f.targets)
-    if (t.done >= t.target)
+    if (t.done >= t.target && t.rate?.mode !== "flat")
       earn(
         `target:${t.itemId}:${t.weekStart}`,
         t.weekStart,
         POINTS.weeklyTarget,
         `${t.title}: ${t.target} of ${t.target} this week`,
         false,
-        t.double,
+        t.rate,
       );
   for (const s of f.stepUps) earn(`stepup:${s.journeyId}:${s.weekStart}`, s.weekStart, POINTS.stepUp, `${s.title}: a step up`, false);
   return out;

@@ -392,6 +392,15 @@ const MIGRATIONS: string[] = [
   UPDATE categories SET double_points = 1
     WHERE id IN ('work', 'learning', 'health') OR lower(name) IN ('work', 'learning', 'health', 'exercise', 'sport');
   `,
+  // Version 24: how a group earns points (replaces double_points, now unused):
+  // 'normal', 'double', or 'flat' (a set 5 per done block, however long, for
+  // easy things). Social, rest and travel start flat.
+  `
+  ALTER TABLE categories ADD COLUMN points_mode TEXT NOT NULL DEFAULT 'normal'
+    CHECK (points_mode IN ('normal', 'double', 'flat'));
+  UPDATE categories SET points_mode = 'double' WHERE double_points = 1;
+  UPDATE categories SET points_mode = 'flat' WHERE lower(name) IN ('social', 'rest', 'travel');
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -456,9 +465,12 @@ export interface Category {
   id: string;
   name: string;
   color: string; // "#RRGGBB"
-  /** Earns double points for its time. */
-  double?: boolean;
+  /** How its time earns points; see PointsMode. */
+  points?: PointsMode;
 }
+
+/** "double": twice the points for its time; "flat": a set amount per done block, however long. */
+export type PointsMode = "normal" | "double" | "flat";
 
 export interface PlacementRow {
   id: string;
@@ -819,11 +831,11 @@ export async function firstWeekPerItem(db: Db): Promise<Map<string, string>> {
 // ---- Activity groups (categories) ----
 
 export async function loadCategories(db: Db): Promise<Category[]> {
-  const rows = await db.getAllAsync<{ id: string; name: string; color: string; double_points: number }>(
-    "SELECT id, name, color, double_points FROM categories ORDER BY position, rowid",
+  const rows = await db.getAllAsync<{ id: string; name: string; color: string; points_mode: PointsMode }>(
+    "SELECT id, name, color, points_mode FROM categories ORDER BY position, rowid",
     [],
   );
-  return rows.map((r) => ({ id: r.id, name: r.name, color: r.color, double: r.double_points === 1 }));
+  return rows.map((r) => ({ id: r.id, name: r.name, color: r.color, points: r.points_mode }));
 }
 
 /** Adds a group at the end of the list. */
@@ -839,9 +851,9 @@ export async function updateCategory(db: Db, c: Category): Promise<void> {
   await db.runAsync("UPDATE categories SET name = ?, color = ? WHERE id = ?", [c.name, c.color, c.id]);
 }
 
-/** Turns double points on or off for a group. */
-export async function setCategoryDouble(db: Db, id: string, on: boolean): Promise<void> {
-  await db.runAsync("UPDATE categories SET double_points = ? WHERE id = ?", [on ? 1 : 0, id]);
+/** Sets how a group's time earns points. */
+export async function setCategoryPoints(db: Db, id: string, mode: PointsMode): Promise<void> {
+  await db.runAsync("UPDATE categories SET points_mode = ? WHERE id = ?", [mode, id]);
 }
 
 /** Deletes a group. Its events and items stay, with no group. One transaction. */

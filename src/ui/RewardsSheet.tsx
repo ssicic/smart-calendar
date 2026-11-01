@@ -229,8 +229,9 @@ export function RewardsSheet({ visible, summary, onAdd, onRemove, onSpend, onUnd
                   </View>
                 ))}
                 <Text style={styles.muted}>
-                  Groups marked ×2 in Manage groups (Work, Learning, Health to start) earn double for their sessions,
-                  blocks and weekly targets. Now and then something gives a surprise bonus. Missing things never costs points. A good week is about
+                  In Manage groups, a group can be ×2 (Work, Learning, Health to start): double for its sessions, blocks
+                  and weekly targets. Or Flat (Social, Rest, Travel): {POINTS.flat} per done block, however long. Now
+                  and then something gives a surprise bonus. Missing things never costs points. A good week is about
                   300-400 points.
                 </Text>
               </View>

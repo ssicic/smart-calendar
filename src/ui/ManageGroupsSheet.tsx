@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import type { Category } from "../db/weekStore";
+import type { Category, PointsMode } from "../db/weekStore";
 import { PALETTE, categoryNameProblem, moveInList } from "./categories";
 import { colors, font } from "./theme";
 
@@ -10,9 +10,14 @@ export interface GroupActions {
   edit: (c: Category) => Promise<string | undefined>;
   remove: (id: string) => Promise<string | undefined>;
   reorder: (ids: string[]) => Promise<string | undefined>;
-  /** Double points for time in the group. */
-  setDouble: (id: string, on: boolean) => Promise<string | undefined>;
+  /** How time in the group earns points. */
+  setPoints: (id: string, mode: PointsMode) => Promise<string | undefined>;
 }
+
+/** Tapping the points button goes round these. */
+const NEXT_MODE: Record<PointsMode, PointsMode> = { normal: "double", double: "flat", flat: "normal" };
+const MODE_LABEL: Record<PointsMode, string> = { normal: "×1", double: "×2", flat: "Flat" };
+const MODE_SAID: Record<PointsMode, string> = { normal: "normal points", double: "double points", flat: "flat points" };
 
 interface Props {
   visible: boolean;
@@ -22,8 +27,8 @@ interface Props {
 }
 
 /**
- * Manage groups: ↑ ↓ to reorder, ×2 for double points, tap a group to rename
- * it, change its colour or delete it. Deleting needs a second tap; its events and items stay, with no group.
+ * Manage groups: ↑ ↓ to reorder, ×1 / ×2 / Flat for how it earns points, tap
+ * a group to rename it, change its colour or delete it. Deleting needs a second tap; its events and items stay, with no group.
  */
 export function ManageGroupsSheet({ visible, categories, actions, onClose }: Props) {
   // The group being edited (one at a time), with its draft name and colour.
@@ -61,8 +66,8 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
     setEditing(undefined);
   };
 
-  const toggleDouble = async (c: Category) => {
-    const err = await actions.setDouble(c.id, !c.double);
+  const cyclePoints = async (c: Category) => {
+    const err = await actions.setPoints(c.id, NEXT_MODE[c.points ?? "normal"]);
     if (err) setError(err);
   };
 
@@ -83,7 +88,7 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
             </Pressable>
           </View>
           {categories.length === 0 && <Text style={styles.hint}>No groups yet. Add one with “+ New group”.</Text>}
-          {categories.length > 0 && <Text style={styles.hint}>×2: time in that group earns double points.</Text>}
+          {categories.length > 0 && <Text style={styles.hint}>Points: ×2 doubles a group's time; Flat gives a set 5 per done block, for easy things.</Text>}
           {!editing && error && <Text style={styles.error}>{error}</Text>}
 
           <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
@@ -103,13 +108,14 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
                     <Text style={styles.edit}>{editing === c.id ? "Close" : "Edit"}</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => toggleDouble(c)}
-                    style={[styles.double, c.double && styles.doubleOn]}
-                    accessibilityRole="switch"
-                    accessibilityLabel={`Double points for ${c.name}`}
-                    accessibilityState={{ checked: !!c.double }}
+                    onPress={() => cyclePoints(c)}
+                    style={[styles.mode, c.points === "double" && styles.modeDouble, c.points === "flat" && styles.modeFlat]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${c.name}: ${MODE_SAID[c.points ?? "normal"]}. Tap to change`}
                   >
-                    <Text style={[styles.doubleText, c.double && styles.doubleTextOn]}>×2</Text>
+                    <Text style={[styles.modeText, c.points === "double" && styles.modeTextOn, c.points === "flat" && styles.modeTextFlat]}>
+                      {MODE_LABEL[c.points ?? "normal"]}
+                    </Text>
                   </Pressable>
                   <Pressable
                     onPress={() => move(i, -1)}
@@ -211,10 +217,12 @@ const styles = StyleSheet.create({
   edit: { fontSize: 14, fontFamily: font.semibold, color: colors.accent, marginRight: 6 },
   arrow: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.border },
   arrowOff: { opacity: 0.35 },
-  double: { width: 44, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.border },
-  doubleOn: { backgroundColor: colors.accentStrong },
-  doubleText: { fontSize: 15, fontFamily: font.heavy, color: colors.textMuted },
-  doubleTextOn: { color: colors.white },
+  mode: { width: 50, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.border },
+  modeDouble: { backgroundColor: colors.accentStrong },
+  modeFlat: { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.textFaint },
+  modeText: { fontSize: 14, fontFamily: font.heavy, color: colors.textMuted },
+  modeTextOn: { color: colors.white },
+  modeTextFlat: { color: colors.textSoft },
   arrowText: { fontSize: 18, fontFamily: font.bold, color: colors.textSoft },
   form: { gap: 10, paddingHorizontal: 12, paddingBottom: 12 },
   input: {
