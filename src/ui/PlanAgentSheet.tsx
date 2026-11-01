@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { postJson } from "../ai/aiClient";
 import type { PlanRequest, PlanResult, Proposal } from "./planAgent";
 import { colors, font, radius } from "./theme";
+import { Backdrop } from "./keyboard";
 
 interface Props {
   visible: boolean;
@@ -71,7 +72,7 @@ export function PlanAgentSheet({ visible, buildRequest, onAccept, onClose }: Pro
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Backdrop style={styles.backdrop} onPress={onClose}>
         <Pressable style={[styles.sheet, full && [styles.fullSheet, { paddingTop: insets.top + 4 }]]} onPress={() => {}}>
           <View {...swipe.panHandlers}>
             <Pressable
@@ -167,7 +168,7 @@ export function PlanAgentSheet({ visible, buildRequest, onAccept, onClose }: Pro
             )}
           </ScrollView>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

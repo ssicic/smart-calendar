@@ -37,6 +37,7 @@ import { addWeeks, dayDate, dayKey, monthOfWeek } from "./weekDate";
 import { DAY_NAMES, clock, isEventKind, type WeekRow } from "./weekRows";
 import { colors, font, radius } from "./theme";
 import { Ionicons } from "@expo/vector-icons";
+import { Backdrop } from "./keyboard";
 
 interface Props {
   /** The tapped row; undefined hides the sheet. */
@@ -267,7 +268,7 @@ export function ItemActionsSheet(props: Props) {
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
       {/* Tapping the dimmed area above the sheet closes it. */}
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Backdrop style={styles.backdrop} onPress={onClose}>
         {/* An inner Pressable with no onPress swallows taps on the sheet itself. */}
         <Pressable
           style={[
@@ -746,7 +747,7 @@ export function ItemActionsSheet(props: Props) {
             {error && <Text style={styles.error}>{error}</Text>}
           </ScrollView>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

@@ -9,6 +9,7 @@ import { lengthLabel } from "./itemActions";
 import { colors, font, radius } from "./theme";
 import { monthChipLabel, monthsFrom, periodLabel } from "./weekDate";
 import { isFinished, weekItemProblem } from "./weekItems";
+import { Backdrop } from "./keyboard";
 
 type Result = Promise<string | undefined>;
 
@@ -104,7 +105,7 @@ export function GoalsSheet(props: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Backdrop style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.header}>
             <Text style={[styles.heading, styles.flex]}>Goals</Text>
@@ -178,7 +179,7 @@ export function GoalsSheet(props: Props) {
             {error && <Text style={styles.error}>{error}</Text>}
           </ScrollView>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

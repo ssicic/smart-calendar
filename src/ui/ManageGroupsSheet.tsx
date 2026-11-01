@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import type { Category, PointsMode } from "../db/weekStore";
 import { PALETTE, categoryNameProblem, moveInList } from "./categories";
 import { colors, font } from "./theme";
+import { Backdrop } from "./keyboard";
 
 /** What the group picker and this sheet can do with groups. Errors come back as messages. */
 export interface GroupActions {
@@ -79,7 +80,7 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-      <Pressable style={styles.backdrop} onPress={close}>
+      <Backdrop style={styles.backdrop} onPress={close}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.header}>
             <Text style={styles.title}>Manage groups</Text>
@@ -184,7 +185,7 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
             ))}
           </ScrollView>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

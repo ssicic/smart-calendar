@@ -19,6 +19,7 @@ import {
 } from "./journeys";
 import type { JourneyDraft, JourneyView } from "./useWeek";
 import { colors, font, radius } from "./theme";
+import { Backdrop } from "./keyboard";
 
 type Result = Promise<string | undefined>;
 
@@ -147,7 +148,7 @@ export function JourneySheet(props: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Backdrop style={styles.backdrop} onPress={onClose}>
         <Pressable style={[styles.sheet, full && [styles.fullSheet, { paddingTop: insets.top + 4 }]]} onPress={() => {}}>
           <View {...swipe.panHandlers}>
             <Pressable
@@ -367,7 +368,7 @@ export function JourneySheet(props: Props) {
             {error && <Text style={styles.error}>{error}</Text>}
           </ScrollView>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

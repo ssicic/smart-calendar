@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { PointsSummary, Reward } from "../db/pointsStore";
 import { POINTS, SIZE_LABELS, SIZE_PRICES, priceLabel, type RewardSize } from "./points";
 import { colors, font, radius } from "./theme";
+import { Backdrop } from "./keyboard";
 
 type Result = Promise<string | undefined>;
 
@@ -101,7 +102,7 @@ export function RewardsSheet({ visible, summary, onAdd, onRemove, onSpend, onUnd
   const priceNumber = Number(price);
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Backdrop style={styles.backdrop} onPress={onClose}>
         <Pressable style={[styles.sheet, full && [styles.fullSheet, { paddingTop: insets.top + 4 }]]} onPress={() => {}}>
           <View {...swipe.panHandlers}>
             <Pressable
@@ -238,7 +239,7 @@ export function RewardsSheet({ visible, summary, onAdd, onRemove, onSpend, onUnd
             )}
           </ScrollView>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

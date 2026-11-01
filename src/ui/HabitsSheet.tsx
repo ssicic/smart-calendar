@@ -17,6 +17,7 @@ import {
 import { Notice } from "./Notice";
 import { colors, font, radius } from "./theme";
 import { dayDate, dayKey } from "./weekDate";
+import { Backdrop } from "./keyboard";
 
 interface Props {
   visible: boolean;
@@ -85,7 +86,7 @@ export function HabitsSheet(props: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Backdrop style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.header}>
             <View>
@@ -221,7 +222,7 @@ export function HabitsSheet(props: Props) {
             )}
           </ScrollView>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

@@ -32,6 +32,7 @@ import { overlapping, summarize } from "./overlaps";
 import { TimePicker } from "./TimePicker";
 import { shortDate, weekRange } from "./weekDate";
 import { DAY_NAMES, clock, type WeekRow } from "./weekRows";
+import { useKeyboardLift } from "./keyboard";
 import { colors, font, radius, shadow } from "./theme";
 
 /** What the sheet hands back to App when the user saves. */
@@ -150,6 +151,10 @@ export function QuickAddSheet(props: Props) {
 
   const isFlexible = form.kind === "flexible";
 
+  // Sits above the keyboard, so what's typed near the bottom stays visible.
+  const sheetRef = useRef<View>(null);
+  const lift = useKeyboardLift(sheetRef);
+
   // Swipe the top of the sheet: up = full screen, down = smaller, then closed.
   // The ref lets the gesture (made once) see the current size.
   const latest = useRef({ size, close, onSizeChange });
@@ -210,7 +215,7 @@ export function QuickAddSheet(props: Props) {
           accessibilityLabel="Make the form smaller"
         />
       )}
-      <View style={[styles.sheet, size === "half" ? styles.halfSheet : styles.fullSheet]}>
+      <View ref={sheetRef} style={[styles.sheet, size === "half" ? styles.halfSheet : styles.fullSheet, lift > 0 && { bottom: lift }]}>
         <View {...swipe.panHandlers}>
           <Pressable
             onPress={() => onSizeChange(size === "half" ? "full" : "half")}
@@ -462,7 +467,7 @@ const styles = StyleSheet.create({
     boxShadow: shadow.raised,
   },
   halfSheet: { height: "50%" },
-  fullSheet: { height: "100%", borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  fullSheet: { top: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
   grabber: { alignItems: "center", paddingTop: 8, paddingBottom: 4 },
   grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
   sheetHeader: {

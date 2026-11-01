@@ -6,6 +6,7 @@ import { laterHeading } from "./later";
 import { isFinished, stepProgress, weekItemProblem, weekSummary } from "./weekItems";
 import { colors, font } from "./theme";
 import { Ionicons } from "@expo/vector-icons";
+import { Backdrop } from "./keyboard";
 
 interface Props {
   visible: boolean;
@@ -109,7 +110,7 @@ export function WeekPanelSheet(props: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Backdrop style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.header}>
             <View style={styles.flex}>
@@ -246,7 +247,7 @@ export function WeekPanelSheet(props: Props) {
             {error && <Text style={styles.error}>{error}</Text>}
           </ScrollView>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

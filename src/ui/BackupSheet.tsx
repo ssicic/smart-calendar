@@ -6,6 +6,7 @@ import type { Db } from "../db/weekStore";
 import { versionLabel } from "./UpdateBanner";
 import { pickBackupText, saveBackupToFolder, shareBackupFile } from "./backupFiles";
 import { colors, font } from "./theme";
+import { Backdrop } from "./keyboard";
 
 interface Props {
   visible: boolean;
@@ -84,7 +85,7 @@ export function BackupSheet({ visible, db, onImported, onClose }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Backdrop style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.header}>
             <Text style={styles.heading}>Backup</Text>
@@ -132,7 +133,7 @@ export function BackupSheet({ visible, db, onImported, onClose }: Props) {
           {message && <Text style={message.ok ? styles.ok : styles.error}>{message.text}</Text>}
           <Text style={styles.version}>{versionLabel()}</Text>
         </Pressable>
-      </Pressable>
+      </Backdrop>
     </Modal>
   );
 }

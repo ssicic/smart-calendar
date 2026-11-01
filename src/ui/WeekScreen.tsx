@@ -59,6 +59,7 @@ import { PointsNote } from "./PointsNote";
 import { RewardsSheet } from "./RewardsSheet";
 import { usePoints } from "./usePoints";
 import { colors, font, radius, shadow } from "./theme";
+import { useKeyboardLift } from "./keyboard";
 
 type ViewMode = "day" | "calendar" | "list" | "month" | "year";
 const VIEW_LABELS: Record<ViewMode, string> = {
@@ -154,6 +155,9 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   const thisWeek = weekStartOf(now);
   // Points sync whenever the week reloads (anything ticked or done changes it).
   const points = usePoints(db, data.week, weekStart, thisWeek, dateKey(now));
+  // Room for the keyboard, so a to-do typed near the bottom stays visible.
+  const screenRef = useRef<View>(null);
+  const keyboardLift = useKeyboardLift(screenRef);
   const ai = useAiReview(db, weekStart, dateKey(now), groups, () => data.refresh());
   // Suggestions belong to the week on screen: start fresh when it changes.
   useEffect(() => ai.reset(), [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -333,7 +337,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
     ) : undefined;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top"]}>
+    <SafeAreaView ref={screenRef} style={[styles.screen, keyboardLift > 0 && { paddingBottom: keyboardLift }]} edges={["top"]}>
       <View style={styles.header}>
         <View style={styles.toggle}>
           {(Object.keys(VIEW_LABELS) as ViewMode[]).map((v) => (
