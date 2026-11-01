@@ -54,6 +54,27 @@ describe("earningsFrom", () => {
     expect(surprise("todo:t1")).toBe(surprise("todo:t1"));
   });
 
+  it("doubles time in a double-points group, not the surprise or to-dos", () => {
+    const e = earningsFrom(
+      {
+        ...none,
+        todos: [{ id: "t1", weekStart: W1, title: "Buy milk" }],
+        sessions: [{ id: "s1", weekStart: W1, title: "Gym", double: "Health" }],
+        events: [{ id: "work", weekStart: W1, title: "Work", minutes: 240, double: "Work" }],
+        targets: [{ itemId: "gym", weekStart: W1, title: "Gym", done: 3, target: 3, double: "Health" }],
+      },
+      W2,
+    );
+    expect(e.map((x) => [x.key, base(x.points, x.bonus)])).toEqual([
+      ["todo:t1", 5],
+      ["session:s1:2026-10-26", 20],
+      ["event:work:2026-10-26", 32],
+      ["target:gym:2026-10-26", 60],
+    ]);
+    expect(kindLine(e[1]!)).toMatch(/^Double for Health\. /);
+    expect(kindLine(e[0]!)).not.toMatch(/Double/);
+  });
+
   it("earns nothing from nothing", () => {
     expect(earningsFrom(none, W2)).toEqual([]);
   });
@@ -71,6 +92,20 @@ describe("reconcile", () => {
     const r = reconcile(stored, [todo("kept", W2), todo("new", W2)], W2);
     expect(r.add.map((a) => a.key)).toEqual(["todo:new"]);
     expect(r.remove).toEqual(["todo:now"]); // the past week's to-do stays
+  });
+
+  it("updates this week's points when they change, not past weeks'", () => {
+    const now = todo("now", W2);
+    const old = todo("old", W1);
+    const r = reconcile(
+      [
+        { key: now.key, weekStart: W2, points: now.points - 1 },
+        { key: old.key, weekStart: W1, points: old.points - 1 },
+      ],
+      [now, old],
+      W2,
+    );
+    expect(r.update.map((u) => u.key)).toEqual(["todo:now"]);
   });
 });
 

@@ -385,6 +385,13 @@ const MIGRATIONS: string[] = [
     spent_on TEXT NOT NULL -- "YYYY-MM-DD"
   );
   `,
+  // Version 23: groups that earn double points for their time (sessions, done
+  // events, weekly targets). Work, learning and exercise start on.
+  `
+  ALTER TABLE categories ADD COLUMN double_points INTEGER NOT NULL DEFAULT 0;
+  UPDATE categories SET double_points = 1
+    WHERE id IN ('work', 'learning', 'health') OR lower(name) IN ('work', 'learning', 'health', 'exercise', 'sport');
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */
@@ -449,6 +456,8 @@ export interface Category {
   id: string;
   name: string;
   color: string; // "#RRGGBB"
+  /** Earns double points for its time. */
+  double?: boolean;
 }
 
 export interface PlacementRow {
@@ -810,7 +819,11 @@ export async function firstWeekPerItem(db: Db): Promise<Map<string, string>> {
 // ---- Activity groups (categories) ----
 
 export async function loadCategories(db: Db): Promise<Category[]> {
-  return db.getAllAsync<Category>("SELECT id, name, color FROM categories ORDER BY position, rowid", []);
+  const rows = await db.getAllAsync<{ id: string; name: string; color: string; double_points: number }>(
+    "SELECT id, name, color, double_points FROM categories ORDER BY position, rowid",
+    [],
+  );
+  return rows.map((r) => ({ id: r.id, name: r.name, color: r.color, double: r.double_points === 1 }));
 }
 
 /** Adds a group at the end of the list. */
@@ -824,6 +837,11 @@ export async function insertCategory(db: Db, c: Category): Promise<void> {
 /** Renames a group and/or changes its colour. */
 export async function updateCategory(db: Db, c: Category): Promise<void> {
   await db.runAsync("UPDATE categories SET name = ?, color = ? WHERE id = ?", [c.name, c.color, c.id]);
+}
+
+/** Turns double points on or off for a group. */
+export async function setCategoryDouble(db: Db, id: string, on: boolean): Promise<void> {
+  await db.runAsync("UPDATE categories SET double_points = ? WHERE id = ?", [on ? 1 : 0, id]);
 }
 
 /** Deletes a group. Its events and items stay, with no group. One transaction. */

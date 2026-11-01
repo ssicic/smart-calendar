@@ -30,17 +30,22 @@ export async function loadPointFacts(db: Db, currentWeek: string): Promise<Point
     "SELECT id, horizon, title FROM goals WHERE done = 1",
     [],
   );
-  const sessions = await db.getAllAsync<{ id: string; week_start: string; item_id: string; title: string }>(
-    `SELECT p.id, p.week_start, p.item_id, f.title FROM placements p JOIN flexible_items f ON f.id = p.item_id
+  // `double`: the group's name when it earns double points.
+  const sessions = await db.getAllAsync<{ id: string; week_start: string; item_id: string; title: string; double: string | null }>(
+    `SELECT p.id, p.week_start, p.item_id, f.title, CASE WHEN c.double_points = 1 THEN c.name END AS double
+     FROM placements p JOIN flexible_items f ON f.id = p.item_id
+     LEFT JOIN categories c ON c.id = f.category_id
      WHERE p.state = 'done' AND p.week_start <= ?`,
     [currentWeek],
   );
   // A done event's length that week: a "just this week" change wins over the usual times.
-  const events = await db.getAllAsync<{ id: string; week_start: string; title: string; minutes: number }>(
+  const events = await db.getAllAsync<{ id: string; week_start: string; title: string; minutes: number; double: string | null }>(
     `SELECT d.event_id AS id, d.week_start, e.title,
-            COALESCE(x.end_min - x.start_min, e.end_min - e.start_min) AS minutes
+            COALESCE(x.end_min - x.start_min, e.end_min - e.start_min) AS minutes,
+            CASE WHEN c.double_points = 1 THEN c.name END AS double
      FROM event_done d JOIN events e ON e.id = d.event_id
      LEFT JOIN event_exceptions x ON x.event_id = d.event_id AND x.week_start = d.week_start
+     LEFT JOIN categories c ON c.id = e.category_id
      WHERE d.week_start <= ?`,
     [currentWeek],
   );
@@ -77,8 +82,9 @@ export async function loadPointFacts(db: Db, currentWeek: string): Promise<Point
     }
   }
 
-  const items = await db.getAllAsync<{ id: string; title: string; times_per_week: number }>(
-    "SELECT id, title, times_per_week FROM flexible_items",
+  const items = await db.getAllAsync<{ id: string; title: string; times_per_week: number; double: string | null }>(
+    `SELECT f.id, f.title, f.times_per_week, CASE WHEN c.double_points = 1 THEN c.name END AS double
+     FROM flexible_items f LEFT JOIN categories c ON c.id = f.category_id`,
     [],
   );
   const targets: PointFacts["targets"] = [];
@@ -90,14 +96,21 @@ export async function loadPointFacts(db: Db, currentWeek: string): Promise<Point
         title: item.title,
         done: n,
         target: journeyTarget.get(`${item.id}@${weekStart}`) ?? item.times_per_week,
+        ...(item.double ? { double: item.double } : {}),
       });
 
   return {
     todos: todos.map((t) => ({ id: t.id, weekStart: t.week_start, title: t.title })),
     weekGoals: weekGoals.map((g) => ({ id: g.id, weekStart: g.week_start, title: g.title })),
     goals,
-    sessions: sessions.map((s) => ({ id: s.id, weekStart: s.week_start, title: s.title })),
-    events: events.map((e) => ({ id: e.id, weekStart: e.week_start, title: e.title, minutes: e.minutes })),
+    sessions: sessions.map((s) => ({ id: s.id, weekStart: s.week_start, title: s.title, ...(s.double ? { double: s.double } : {}) })),
+    events: events.map((e) => ({
+      id: e.id,
+      weekStart: e.week_start,
+      title: e.title,
+      minutes: e.minutes,
+      ...(e.double ? { double: e.double } : {}),
+    })),
     targets,
     stepUps,
   };
@@ -110,13 +123,16 @@ export async function loadPointFacts(db: Db, currentWeek: string): Promise<Point
  */
 export async function syncPoints(db: Db, currentWeek: string): Promise<Earning[]> {
   const derived = earningsFrom(await loadPointFacts(db, currentWeek), currentWeek);
-  const stored = await db.getAllAsync<{ key: string; week_start: string }>("SELECT key, week_start FROM points", []);
-  const { add, remove } = reconcile(
-    stored.map((s) => ({ key: s.key, weekStart: s.week_start })),
+  const stored = await db.getAllAsync<{ key: string; week_start: string; points: number }>(
+    "SELECT key, week_start, points FROM points",
+    [],
+  );
+  const { add, remove, update } = reconcile(
+    stored.map((s) => ({ key: s.key, weekStart: s.week_start, points: s.points })),
     derived,
     currentWeek,
   );
-  if (add.length || remove.length)
+  if (add.length || remove.length || update.length)
     await db.withTransactionAsync(async () => {
       for (const e of add)
         await db.runAsync("INSERT INTO points (key, week_start, points, bonus, label) VALUES (?, ?, ?, ?, ?)", [
@@ -127,6 +143,7 @@ export async function syncPoints(db: Db, currentWeek: string): Promise<Earning[]
           e.label,
         ]);
       for (const key of remove) await db.runAsync("DELETE FROM points WHERE key = ?", [key]);
+      for (const e of update) await db.runAsync("UPDATE points SET points = ?, bonus = ? WHERE key = ?", [e.points, e.bonus, e.key]);
     });
   return add;
 }

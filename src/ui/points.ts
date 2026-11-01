@@ -27,12 +27,12 @@ export interface PointFacts {
   weekGoals: { id: string; weekStart: string; title: string }[];
   /** Year and month goals marked done. */
   goals: { id: string; horizon: "year" | "month"; title: string }[];
-  /** Done flexible sessions. */
-  sessions: { id: string; weekStart: string; title: string }[];
+  /** Done flexible sessions. `double`: the name of its double-points group, if any. */
+  sessions: { id: string; weekStart: string; title: string; double?: string }[];
   /** Done fixed events and routines, with their length that week. */
-  events: { id: string; weekStart: string; title: string; minutes: number }[];
+  events: { id: string; weekStart: string; title: string; minutes: number; double?: string }[];
   /** Done sessions of one item in one week against what it asked for. */
-  targets: { itemId: string; weekStart: string; title: string; done: number; target: number }[];
+  targets: { itemId: string; weekStart: string; title: string; done: number; target: number; double?: string }[];
   /** Weeks a journey went up a step. */
   stepUps: { journeyId: string; weekStart: string; title: string }[];
 }
@@ -46,6 +46,8 @@ export interface Earning {
   /** Surprise extra on top (already included in `points`). */
   bonus: number;
   label: string;
+  /** The double-points group it was doubled for, if any. */
+  double?: string;
 }
 
 /** FNV-1a: a small, stable hash, so the same thing always gets the same surprise. */
@@ -67,9 +69,10 @@ export function surprise(key: string): number {
 /** Everything the facts earn. Goals have no week of their own: they count for `currentWeek`. */
 export function earningsFrom(f: PointFacts, currentWeek: string): Earning[] {
   const out: Earning[] = [];
-  const earn = (key: string, weekStart: string, base: number, label: string, lucky = true) => {
+  // Time in a double-points group earns twice; the surprise isn't doubled.
+  const earn = (key: string, weekStart: string, base: number, label: string, lucky = true, double?: string) => {
     const bonus = lucky ? surprise(key) : 0;
-    out.push({ key, weekStart, points: base + bonus, bonus, label });
+    out.push({ key, weekStart, points: base * (double ? 2 : 1) + bonus, bonus, label, ...(double ? { double } : {}) });
   };
   for (const t of f.todos) earn(`todo:${t.id}`, t.weekStart, POINTS.todo, t.title);
   for (const g of f.weekGoals) earn(`weekgoal:${g.id}`, g.weekStart, POINTS.weekGoal, `Week goal: ${g.title}`);
@@ -80,33 +83,45 @@ export function earningsFrom(f: PointFacts, currentWeek: string): Earning[] {
       g.horizon === "year" ? POINTS.yearGoal : POINTS.monthGoal,
       `${g.horizon === "year" ? "Year" : "Month"} goal: ${g.title}`,
     );
-  for (const s of f.sessions) earn(`session:${s.id}:${s.weekStart}`, s.weekStart, POINTS.session, s.title);
+  for (const s of f.sessions) earn(`session:${s.id}:${s.weekStart}`, s.weekStart, POINTS.session, s.title, true, s.double);
   for (const e of f.events) {
     const base = Math.max(1, Math.floor(e.minutes / POINTS.minutesPerPoint));
-    earn(`event:${e.id}:${e.weekStart}`, e.weekStart, base, e.title);
+    earn(`event:${e.id}:${e.weekStart}`, e.weekStart, base, e.title, true, e.double);
   }
   for (const t of f.targets)
     if (t.done >= t.target)
-      earn(`target:${t.itemId}:${t.weekStart}`, t.weekStart, POINTS.weeklyTarget, `${t.title}: ${t.target} of ${t.target} this week`, false);
+      earn(
+        `target:${t.itemId}:${t.weekStart}`,
+        t.weekStart,
+        POINTS.weeklyTarget,
+        `${t.title}: ${t.target} of ${t.target} this week`,
+        false,
+        t.double,
+      );
   for (const s of f.stepUps) earn(`stepup:${s.journeyId}:${s.weekStart}`, s.weekStart, POINTS.stepUp, `${s.title}: a step up`, false);
   return out;
 }
 
 /**
  * What to change in the stored ledger. New earnings are added; an earning
- * that's gone (a to-do unticked) is removed only while its week is still on,
- * so a past week's points stay.
+ * that's gone (a to-do unticked) is removed, and one now worth something else
+ * (double points turned on) is updated, only while its week is still on, so a
+ * past week's points stay.
  */
 export function reconcile(
-  stored: { key: string; weekStart: string }[],
+  stored: { key: string; weekStart: string; points?: number }[],
   derived: Earning[],
   currentWeek: string,
-): { add: Earning[]; remove: string[] } {
-  const have = new Set(stored.map((s) => s.key));
+): { add: Earning[]; remove: string[]; update: Earning[] } {
+  const have = new Map(stored.map((s) => [s.key, s]));
   const want = new Set(derived.map((d) => d.key));
   return {
     add: derived.filter((d) => !have.has(d.key)),
     remove: stored.filter((s) => !want.has(s.key) && s.weekStart >= currentWeek).map((s) => s.key),
+    update: derived.filter((d) => {
+      const s = have.get(d.key);
+      return s?.points !== undefined && s.points !== d.points && s.weekStart >= currentWeek;
+    }),
   };
 }
 
@@ -135,7 +150,8 @@ const BONUS_LINES = [
 /** A kind line for an earning, the same one each time for the same thing. */
 export function kindLine(e: Earning): string {
   const lines = e.bonus > 0 ? BONUS_LINES : KIND_LINES;
-  return lines[hash(`line:${e.key}`) % lines.length] ?? lines[0]!;
+  const line = lines[hash(`line:${e.key}`) % lines.length] ?? lines[0]!;
+  return e.double ? `Double for ${e.double}. ${line}` : line;
 }
 
 export type RewardSize = "small" | "medium" | "big" | "huge";

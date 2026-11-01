@@ -12,7 +12,7 @@ import {
   undoSpend,
 } from "./pointsStore";
 import { insertWeekItem, updateWeekItem } from "./weekItemsStore";
-import { deleteItem, insertEvents, insertItem, migrate, savePlacement, setEventDone } from "./weekStore";
+import { deleteItem, insertEvents, insertItem, migrate, savePlacement, setCategoryDouble, setEventDone } from "./weekStore";
 
 const W1 = "2026-10-26";
 const W2 = "2026-11-02";
@@ -70,6 +70,24 @@ describe("points", () => {
     expect(await plain()).toEqual([
       ["session:p1:2026-10-26", 10],
       ["target:gym:2026-10-26", 30],
+    ]);
+  });
+
+  it("doubles a double-points group's sessions, also once turned on mid-week", async () => {
+    await insertItem(db, { id: "gym", title: "Gym", durationMin: 60, timesPerWeek: 1, priority: 3 }, null, W2);
+    await db.runAsync("UPDATE flexible_items SET category_id = 'health' WHERE id = 'gym'", []);
+    await savePlacement(db, W2, { id: "p1", itemId: "gym", start: 1080, end: 1140, state: "done" });
+    await setCategoryDouble(db, "health", false);
+    await syncPoints(db, W2);
+    expect(await plain()).toEqual([
+      ["session:p1:2026-11-02", 10],
+      ["target:gym:2026-11-02", 30],
+    ]);
+    await setCategoryDouble(db, "health", true);
+    await syncPoints(db, W2);
+    expect(await plain()).toEqual([
+      ["session:p1:2026-11-02", 20],
+      ["target:gym:2026-11-02", 60],
     ]);
   });
 

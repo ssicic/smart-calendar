@@ -112,7 +112,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 22 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 23 });
   });
 
   it("round-trips and moves fixed events and routines", async () => {
@@ -169,7 +169,9 @@ describe("weekStore", () => {
     const names = (await loadCategories(db)).map((c) => c.name);
     expect(names).toEqual(["Work", "Health", "Creativity", "Learning", "Social", "Home", "Fun", "Rest"]);
     await insertCategory(db, { id: "c1", name: "Music", color: "#EF4444" });
-    expect((await loadCategories(db)).at(-1)).toEqual({ id: "c1", name: "Music", color: "#EF4444" });
+    expect((await loadCategories(db)).at(-1)).toEqual({ id: "c1", name: "Music", color: "#EF4444", double: false });
+    const doubled = (await loadCategories(db)).filter((c) => c.double).map((c) => c.name);
+    expect(doubled).toEqual(["Work", "Health", "Learning"]);
   });
 
   it("stores an optional group on events and flexible items, and can change it", async () => {
@@ -189,7 +191,7 @@ describe("weekStore", () => {
 
   it("renames a group and changes its colour", async () => {
     await updateCategory(db, { id: "work", name: "Job", color: "#64748B" });
-    expect((await loadCategories(db))[0]).toEqual({ id: "work", name: "Job", color: "#64748B" });
+    expect((await loadCategories(db))[0]).toEqual({ id: "work", name: "Job", color: "#64748B", double: true });
   });
 
   it("deletes a group; its events and items stay, with no group", async () => {
@@ -282,7 +284,7 @@ describe("weekStore", () => {
       ["r2", "fun"], // already had a group: kept
       ["r1", "rest"],
     ]);
-    expect((await loadCategories(old)).at(-1)).toEqual({ id: "rest", name: "Rest", color: "#C2B59B" }); // softened by v13
+    expect((await loadCategories(old)).at(-1)).toEqual({ id: "rest", name: "Rest", color: "#C2B59B", double: false }); // softened by v13
   });
 
   it("softens the starting groups' colours, but keeps colours the user changed", async () => {

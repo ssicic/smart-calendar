@@ -10,6 +10,8 @@ export interface GroupActions {
   edit: (c: Category) => Promise<string | undefined>;
   remove: (id: string) => Promise<string | undefined>;
   reorder: (ids: string[]) => Promise<string | undefined>;
+  /** Double points for time in the group. */
+  setDouble: (id: string, on: boolean) => Promise<string | undefined>;
 }
 
 interface Props {
@@ -20,8 +22,8 @@ interface Props {
 }
 
 /**
- * Manage groups: ↑ ↓ to reorder, tap a group to rename it, change its colour
- * or delete it. Deleting needs a second tap; its events and items stay, with no group.
+ * Manage groups: ↑ ↓ to reorder, ×2 for double points, tap a group to rename
+ * it, change its colour or delete it. Deleting needs a second tap; its events and items stay, with no group.
  */
 export function ManageGroupsSheet({ visible, categories, actions, onClose }: Props) {
   // The group being edited (one at a time), with its draft name and colour.
@@ -59,6 +61,11 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
     setEditing(undefined);
   };
 
+  const toggleDouble = async (c: Category) => {
+    const err = await actions.setDouble(c.id, !c.double);
+    if (err) setError(err);
+  };
+
   const move = async (index: number, delta: number) => {
     const ids = moveInList(categories.map((c) => c.id), index, delta);
     const err = await actions.reorder(ids);
@@ -76,6 +83,7 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
             </Pressable>
           </View>
           {categories.length === 0 && <Text style={styles.hint}>No groups yet. Add one with “+ New group”.</Text>}
+          {categories.length > 0 && <Text style={styles.hint}>×2: time in that group earns double points.</Text>}
           {!editing && error && <Text style={styles.error}>{error}</Text>}
 
           <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
@@ -93,6 +101,15 @@ export function ManageGroupsSheet({ visible, categories, actions, onClose }: Pro
                       {c.name}
                     </Text>
                     <Text style={styles.edit}>{editing === c.id ? "Close" : "Edit"}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => toggleDouble(c)}
+                    style={[styles.double, c.double && styles.doubleOn]}
+                    accessibilityRole="switch"
+                    accessibilityLabel={`Double points for ${c.name}`}
+                    accessibilityState={{ checked: !!c.double }}
+                  >
+                    <Text style={[styles.doubleText, c.double && styles.doubleTextOn]}>×2</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => move(i, -1)}
@@ -194,6 +211,10 @@ const styles = StyleSheet.create({
   edit: { fontSize: 14, fontFamily: font.semibold, color: colors.accent, marginRight: 6 },
   arrow: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.border },
   arrowOff: { opacity: 0.35 },
+  double: { width: 44, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.border },
+  doubleOn: { backgroundColor: colors.accentStrong },
+  doubleText: { fontSize: 15, fontFamily: font.heavy, color: colors.textMuted },
+  doubleTextOn: { color: colors.white },
   arrowText: { fontSize: 18, fontFamily: font.bold, color: colors.textSoft },
   form: { gap: 10, paddingHorizontal: 12, paddingBottom: 12 },
   input: {

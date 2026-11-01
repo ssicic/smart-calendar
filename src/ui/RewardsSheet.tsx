@@ -229,7 +229,8 @@ export function RewardsSheet({ visible, summary, onAdd, onRemove, onSpend, onUnd
                   </View>
                 ))}
                 <Text style={styles.muted}>
-                  Now and then something gives a surprise bonus. Missing things never costs points. A good week is about
+                  Groups marked ×2 in Manage groups (Work, Learning, Health to start) earn double for their sessions,
+                  blocks and weekly targets. Now and then something gives a surprise bonus. Missing things never costs points. A good week is about
                   300-400 points.
                 </Text>
               </View>

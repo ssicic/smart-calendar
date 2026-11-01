@@ -64,6 +64,7 @@ import {
   savePlacement,
   saveSleep,
   reorderCategories,
+  setCategoryDouble,
   setCategory,
   updateCategory,
   setOverride,
@@ -366,6 +367,11 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     reorder: (ids) =>
       attempt(async () => {
         await reorderCategories(db, ids);
+        await refresh();
+      }),
+    setDouble: (id, on) =>
+      attempt(async () => {
+        await setCategoryDouble(db, id, on);
         await refresh();
       }),
   };
