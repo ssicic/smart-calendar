@@ -54,6 +54,10 @@ import {
 import { WeekView } from "./WeekView";
 import { DAY_NAMES, clock, rowsByDay, type WeekRow } from "./weekRows";
 import { YearView } from "./YearView";
+import { Ionicons } from "@expo/vector-icons";
+import { PointsNote } from "./PointsNote";
+import { RewardsSheet } from "./RewardsSheet";
+import { usePoints } from "./usePoints";
 import { colors, font, radius, shadow } from "./theme";
 
 type ViewMode = "day" | "calendar" | "list" | "month" | "year";
@@ -92,6 +96,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   const dayTodos = useMemo(() => weekItems.filter((i) => i.day === day && i.kind === "todo"), [weekItems, day]);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
+  const [rewardsOpen, setRewardsOpen] = useState(false);
   const [journeysOpen, setJourneysOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -147,6 +152,8 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
     return () => clearInterval(timer); // cleanup: stop the timer when the screen goes away
   }, []);
   const thisWeek = weekStartOf(now);
+  // Points sync whenever the week reloads (anything ticked or done changes it).
+  const points = usePoints(db, data.week, weekStart, thisWeek, dateKey(now));
   const ai = useAiReview(db, weekStart, dateKey(now), groups, () => data.refresh());
   // Suggestions belong to the week on screen: start fresh when it changes.
   useEffect(() => ai.reset(), [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -346,6 +353,15 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
             {title}
           </Text>
           <View style={styles.titleButtons}>
+            <Pressable
+              onPress={() => setRewardsOpen(true)}
+              style={[styles.todayButton, styles.pointsButton]}
+              accessibilityRole="button"
+              accessibilityLabel={`${points.summary.balance} points. Open rewards`}
+            >
+              <Ionicons name="star" size={13} color={colors.accentStrong} />
+              <Text style={styles.todayButtonText}>{points.summary.balance}</Text>
+            </Pressable>
             {!isCurrent && (
               <Pressable onPress={goToToday} style={styles.todayButton} accessibilityRole="button">
                 <Text style={styles.todayButtonText}>Today</Text>
@@ -536,6 +552,25 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
           <Text style={styles.fabText}>+</Text>
         </Pressable>
       )}
+      {/* Sheets are modals that would cover the note: it waits until they close. */}
+      <PointsNote
+        note={
+          reviewOpen || agentOpen || rewardsOpen || journeysOpen || planOpen || historyOpen || goalsOpen ||
+          summaryOpen || backupOpen || habitsOpen || panelOpen || tapped
+            ? undefined
+            : points.note
+        }
+        onDone={points.clearNote}
+      />
+      <RewardsSheet
+        visible={rewardsOpen}
+        summary={points.summary}
+        onAdd={points.addReward}
+        onRemove={points.removeReward}
+        onSpend={points.spend}
+        onUndoSpend={points.undoSpend}
+        onClose={() => setRewardsOpen(false)}
+      />
       <PlanAgentSheet
         visible={agentOpen}
         buildRequest={(wish) =>
@@ -558,6 +593,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
           onPastWeeks={() => switchSheet(() => setReviewOpen(false), () => setHistoryOpen(true))}
           aiSection={<AiSuggestions state={ai.state} onAsk={ai.ask} onAccept={ai.accept} />}
           habitLines={habitReviewLines(habits.habits, habits.checks, weekStart)}
+          pointsLine={points.summary.week > 0 ? `You earned ${points.summary.week} points this week.` : undefined}
           onClose={() => setReviewOpen(false)}
         />
       )}
@@ -770,6 +806,7 @@ const styles = StyleSheet.create({
   stripToday: { color: colors.now },
   stripTextOn: { color: colors.white },
   todayButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.accentSoft },
+  pointsButton: { flexDirection: "row", alignItems: "center", gap: 4 },
   todayButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.accent },
   toggle: { flexDirection: "row", backgroundColor: colors.surfaceAlt, borderRadius: 10, padding: 3 },
   toggleItem: { flex: 1, alignItems: "center", paddingVertical: 6, borderRadius: 8 },

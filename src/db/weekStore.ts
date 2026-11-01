@@ -360,6 +360,31 @@ const MIGRATIONS: string[] = [
     position    INTEGER NOT NULL
   );
   `,
+  // Version 22: points and rewards. \`points\` is a ledger of what earned
+  // points (worked out from done things, see ui/points.ts), kept so a past
+  // week's points stay; \`rewards\` are the user's own, \`reward_spends\` what was spent.
+  `
+  CREATE TABLE points (
+    key        TEXT PRIMARY KEY,
+    week_start TEXT NOT NULL,
+    points     INTEGER NOT NULL,
+    bonus      INTEGER NOT NULL DEFAULT 0,
+    label      TEXT NOT NULL
+  );
+  CREATE INDEX points_by_week ON points (week_start);
+  CREATE TABLE rewards (
+    id       TEXT PRIMARY KEY,
+    title    TEXT NOT NULL,
+    price    INTEGER NOT NULL CHECK (price > 0),
+    position INTEGER NOT NULL
+  );
+  CREATE TABLE reward_spends (
+    id       TEXT PRIMARY KEY,
+    title    TEXT NOT NULL,
+    price    INTEGER NOT NULL,
+    spent_on TEXT NOT NULL -- "YYYY-MM-DD"
+  );
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

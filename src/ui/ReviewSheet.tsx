@@ -29,6 +29,8 @@ interface Props {
   aiSection?: React.ReactNode;
   /** "No alcohol: 5 of 7 days", one per habit (left out when there are none). */
   habitLines?: string[];
+  /** "You earned 240 points this week." */
+  pointsLine?: string;
   onClose: () => void;
 }
 
@@ -37,7 +39,7 @@ const hours = (minutes: number) => `${Math.round(minutes / 6) / 10}h`;
 /** Looking back at a week: what got done, where the time went, what moved on. */
 export function ReviewSheet(props: Props) {
   const { visible, weekLabel, nextWeekStart, stats, routines, items, movedOn, later, onPlanNext, onClose } = props;
-  const { onPastWeeks, aiSection, habitLines = [] } = props;
+  const { onPastWeeks, aiSection, habitLines = [], pointsLine } = props;
   const finished = items.filter(isFinished);
   const { sessions } = stats;
 
@@ -97,6 +99,12 @@ export function ReviewSheet(props: Props) {
                     {line}
                   </Text>
                 ))}
+              </Section>
+            )}
+
+            {pointsLine && (
+              <Section title="Points">
+                <Text style={styles.line}>{pointsLine}</Text>
               </Section>
             )}
 
