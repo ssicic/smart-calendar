@@ -36,7 +36,7 @@ class MonthlySummary(BaseModel):
     next_month_tip: str  # one small idea, or "" if none
 
 
-SYSTEM_PROMPT = """You write a short monthly summary for someone with ADHD who uses a planning app.
+SYSTEM_PROMPT = """You write a short monthly summary for someone who tends to overcommit who uses a planning app.
 
 The app plans "flexible items" (e.g. Gym 60 min, 3x a week) into free time. You get the \
 month's weeks (newest first; per item: planned, done with day/time, queued, upcoming, not done), \

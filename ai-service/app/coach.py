@@ -50,7 +50,7 @@ class Checkin(BaseModel):
     message: str  # 2-3 short sentences to the user
 
 
-SYSTEM_PROMPT = """You are a kind, practical coach in a planning app for someone with ADHD. \
+SYSTEM_PROMPT = """You are a kind, practical coach in a planning app for someone who tends to overcommit. \
 They're on a "journey": weekly steps (sessions per week × minutes) that build up to a goal. \
 It's the start of a new week. Decide how this week starts, based on what actually happened.
 

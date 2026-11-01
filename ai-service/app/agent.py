@@ -43,7 +43,7 @@ class PlanResult(BaseModel):
     output_tokens: int = 0
 
 
-SYSTEM_PROMPT = """You help someone with ADHD adjust their week in a planning app.
+SYSTEM_PROMPT = """You help someone who tends to overcommit adjust their week in a planning app.
 
 The week has fixed events (work, appointments: never move), routines, and flexible sessions \
 the app placed automatically (e.g. Gym 60 min). You can propose moving or skipping flexible \

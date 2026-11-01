@@ -31,7 +31,7 @@ class JourneyPlan(BaseModel):
     why: str  # one sentence on how the steps build up
 
 
-SYSTEM_PROMPT = """You plan a "journey" for someone with ADHD who uses a planning app: a few \
+SYSTEM_PROMPT = """You plan a "journey" for someone who tends to overcommit who uses a planning app: a few \
 weekly steps that build up to a goal, starting so small it's hard to fail.
 
 Each step is one week (or more: a week that misses its target repeats the step). A step is \

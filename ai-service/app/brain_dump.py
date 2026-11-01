@@ -45,7 +45,7 @@ class BrainDumpPlan(BaseModel):
     note: str  # one or two sentences about the whole picture
 
 
-SYSTEM_PROMPT = """You help someone with ADHD turn a brain dump of wishes into a realistic plan \
+SYSTEM_PROMPT = """You help someone turn a brain dump of wishes into a realistic plan \
 in a planning app. They tend to start everything at once and then drop it all.
 
 For each wish, make one concrete habit done in sessions (e.g. "learn to sew" → "Sewing"). \

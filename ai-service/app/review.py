@@ -83,7 +83,7 @@ class WeeklyReview(BaseModel):
     suggestions: list[Suggestion]
 
 
-SYSTEM_PROMPT = """You help someone with ADHD review their week in a planning app.
+SYSTEM_PROMPT = """You help someone who tends to overcommit review their week in a planning app.
 
 The app plans "flexible items" (e.g. Gym 60 min, 3x a week) into free time. You get facts \
 for the reviewed week and up to 7 earlier weeks (newest first), and how each item is set up now. \
