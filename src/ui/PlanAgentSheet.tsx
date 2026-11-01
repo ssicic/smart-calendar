@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { postJson } from "../ai/aiClient";
 import type { PlanRequest, PlanResult, Proposal } from "./planAgent";
 import { colors, font, radius } from "./theme";
@@ -25,11 +26,29 @@ export function PlanAgentSheet({ visible, buildRequest, onAccept, onClose }: Pro
   const [state, setState] = useState<State>({ status: "idle" });
   // Per proposal (by index): "accepted", "dismissed" or an error message.
   const [outcome, setOutcome] = useState<Record<number, string>>({});
+  // Full screen: swipe the top up (or start typing, so the keyboard covers nothing); down = back, then closed.
+  const [full, setFull] = useState(false);
+  const insets = useSafeAreaInsets();
+  const latest = useRef({ full, onClose });
+  latest.current = { full, onClose };
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderRelease: (_, g) => {
+        if (g.dy < -30) setFull(true);
+        else if (g.dy > 30) {
+          if (latest.current.full) setFull(false);
+          else latest.current.onClose();
+        }
+      },
+    }),
+  ).current;
 
   useEffect(() => {
     if (!visible) {
       setState({ status: "idle" });
       setOutcome({});
+      setFull(false);
     }
   }, [visible]);
 
@@ -53,12 +72,22 @@ export function PlanAgentSheet({ visible, buildRequest, onAccept, onClose }: Pro
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.header}>
-            <Text style={styles.heading}>Plan my week</Text>
-            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
-              <Text style={styles.link}>Close</Text>
+        <Pressable style={[styles.sheet, full && [styles.fullSheet, { paddingTop: insets.top + 4 }]]} onPress={() => {}}>
+          <View {...swipe.panHandlers}>
+            <Pressable
+              onPress={() => setFull(!full)}
+              style={styles.grabber}
+              accessibilityRole="button"
+              accessibilityLabel={full ? "Make the panel smaller" : "Make the panel full screen"}
+            >
+              <View style={styles.grabBar} />
             </Pressable>
+            <View style={styles.header}>
+              <Text style={styles.heading}>Plan my week</Text>
+              <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button">
+                <Text style={styles.link}>Close</Text>
+              </Pressable>
+            </View>
           </View>
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
@@ -70,6 +99,7 @@ export function PlanAgentSheet({ visible, buildRequest, onAccept, onClose }: Pro
               style={styles.input}
               value={wish}
               onChangeText={setWish}
+              onFocus={() => setFull(true)}
               placeholder="Optional: Keep Friday evening free…"
               maxLength={300}
               multiline
@@ -154,6 +184,9 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     gap: 8,
   },
+  fullSheet: { height: "100%", maxHeight: "100%", borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  grabber: { alignItems: "center", paddingBottom: 8 },
+  grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   heading: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
