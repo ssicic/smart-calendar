@@ -4,7 +4,7 @@ import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Text, useWindow
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ItemActionsSheet } from "./ItemActionsSheet";
 import { moveProblem } from "./itemActions";
-import { EMPTY_FORM, formForSlot, parseTime, type QuickAddForm } from "./quickAdd";
+import { EMPTY_FORM, formForSlot, parseQuickAdd, parseTime, type QuickAddForm } from "./quickAdd";
 import { QuickAddSheet, type SheetSize } from "./QuickAddSheet";
 import { SleepSheet } from "./SleepSheet";
 import { dayLoads, totalMinutes, weekTotals } from "./dayLoad";
@@ -14,7 +14,7 @@ import { reviewStats } from "./weekReview";
 import { ReviewSheet } from "./ReviewSheet";
 import { AiSuggestions } from "./AiSuggestions";
 import { useAiReview } from "./useAiReview";
-import { buildPlanRequest, findSession, type Proposal } from "./planAgent";
+import { buildPlanRequest, findSession, formFromAdd, type Proposal } from "./planAgent";
 import { PlanAgentSheet } from "./PlanAgentSheet";
 import { MonthSummarySheet } from "./MonthSummarySheet";
 import { BackupSheet } from "./BackupSheet";
@@ -167,6 +167,13 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   // "Plan my week": the agent proposes, and each accepted proposal goes
   // through the same move / queue as a tap, with the same checks.
   const acceptProposal = async (p: Proposal): Promise<string | undefined> => {
+    if (p.type === "add") {
+      // Same parsing and saving as the quick-add form.
+      const form = formFromAdd(p, categories);
+      const parsed = form && parseQuickAdd(form, () => `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`);
+      if (!parsed?.ok) return parsed?.error ?? "This proposal is missing its days or times.";
+      return add(parsed);
+    }
     const row = findSession(allRows, p);
     if (!row) return "That session has changed since. Ask again for fresh ideas.";
     if (p.type === "skip") return act(row, "queue");
@@ -531,7 +538,9 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
       )}
       <PlanAgentSheet
         visible={agentOpen}
-        buildRequest={(wish) => (week ? buildPlanRequest(week, allRows, weekStart, wish) : undefined)}
+        buildRequest={(wish) =>
+          week ? buildPlanRequest(week, allRows, weekStart, wish, categories.map((c) => c.name)) : undefined
+        }
         onAccept={acceptProposal}
         onClose={() => setAgentOpen(false)}
       />

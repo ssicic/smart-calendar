@@ -92,8 +92,8 @@ export function PlanAgentSheet({ visible, buildRequest, onAccept, onClose }: Pro
 
           <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
             <Text style={styles.note}>
-              The assistant looks at this week and proposes moving or skipping flexible sessions. Fixed events never
-              move, and nothing changes until you accept.
+              The assistant looks at this week and proposes moving or skipping flexible sessions, or adds what you ask
+              for ("Add Study Mon-Fri 9-13"). Fixed events never move, and nothing changes until you accept.
             </Text>
             <TextInput
               style={styles.input}
@@ -130,13 +130,15 @@ export function PlanAgentSheet({ visible, buildRequest, onAccept, onClose }: Pro
                   return (
                     <View key={i} style={[styles.card, done === "dismissed" && styles.cardOff]}>
                       <Text style={styles.cardTitle}>
-                        {p.type === "move" ? `Move ${p.title}` : `Skip ${p.title} this week`}
+                        {p.type === "add" ? `Add ${p.title}` : p.type === "move" ? `Move ${p.title}` : `Skip ${p.title} this week`}
                       </Text>
                       <Text style={styles.when}>
-                        {p.from_label}
-                        {p.to_label ? `  →  ${p.to_label}` : "  →  next week"}
+                        {p.type === "add"
+                          ? `${p.to_label ?? ""}${p.group ? ` · ${p.group}` : ""}`
+                          : `${p.from_label}${p.to_label ? `  →  ${p.to_label}` : "  →  next week"}`}
                       </Text>
                       <Text style={styles.reason}>{p.reason}</Text>
+                      {p.warning ? <Text style={styles.warning}>{p.warning}</Text> : null}
                       {done === "accepted" ? (
                         <Text style={styles.ok}>Done</Text>
                       ) : done === "dismissed" ? (
@@ -227,4 +229,5 @@ const styles = StyleSheet.create({
   ok: { fontFamily: font.semibold, fontSize: 14, color: colors.successStrong },
   muted: { fontFamily: font.regular, fontSize: 14, color: colors.textMuted },
   error: { fontFamily: font.semibold, fontSize: 14, color: colors.danger },
+  warning: { fontFamily: font.medium, fontSize: 13, color: colors.textMuted },
 });

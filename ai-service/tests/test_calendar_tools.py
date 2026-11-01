@@ -68,3 +68,27 @@ def test_skip():
     assert "skip Gym" in plan.propose_skip("gym1", "Busy week")
     assert "No session" in plan.propose_skip("gym1", "again")
     assert [p.type for p in plan.proposals] == ["skip"]
+
+
+def test_add_event_on_work_days():
+    plan = WeekPlan(week(groups=["Work", "Health"]))
+    out = plan.propose_add_event("Prijave/učenje", ["Mon", "Tue", "Wed", "Thu", "Fri"], "09:00", "13:00", True, "x", "work")
+    assert out.startswith("Proposed: add Prijave/učenje, Mon–Fri 09:00–13:00 every week.")
+    assert "overlaps Work Mon 09:00–17:00" in out
+    p = plan.proposals[0]
+    assert (p.type, p.days, p.day_start, p.day_end, p.repeat_weekly, p.group) == ("add", [0, 1, 2, 3, 4], 540, 780, True, "Work")
+    assert p.to_label == "Mon–Fri 09:00–13:00, every week"
+    assert p.warning == "Overlaps Work Mon 09:00–17:00"
+    # The new time counts as taken for later tool calls.
+    assert "Tue 07:00–08:45" in plan.find_free_slots("Tue", 30)
+    assert "09:" not in plan.find_free_slots("Tue", 30).split("\n")[1][:9]
+
+
+def test_add_event_is_checked():
+    plan = WeekPlan(week(now=5 * D))  # Saturday
+    assert "end time must be after" in plan.propose_add_event("X", ["Mon"], "13:00", "09:00", True, "x")
+    assert "use days like" in plan.propose_add_event("X", ["Someday"], "09:00", "10:00", True, "x")
+    assert "already over" in plan.propose_add_event("X", ["Mon", "Fri"], "09:00", "10:00", False, "x")
+    assert plan.propose_add_event("X", ["Mon"], "09:00", "10:00", True, "x", "Nope").startswith("Proposed")
+    assert plan.proposals[0].group is None
+    assert plan.propose_add_event("X", ["Mon", "Wed"], "22:00", "24:00", True, "x").startswith("Proposed: add X, Mon, Wed 22:00–24:00")

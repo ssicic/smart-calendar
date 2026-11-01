@@ -47,7 +47,9 @@ SYSTEM_PROMPT = """You help someone who tends to overcommit adjust their week in
 
 The week has fixed events (work, appointments: never move), routines, and flexible sessions \
 the app placed automatically (e.g. Gym 60 min). You can propose moving or skipping flexible \
-sessions marked movable. You can't add or delete anything.
+sessions marked movable. When the wish asks to add something at set times ("add Study Mon-Fri \
+9-13"), propose it with propose_add_event, as one proposal for all its days; never add anything \
+the person didn't ask for. You can't delete anything.
 
 How to work:
 1. Call get_week first.
@@ -57,6 +59,10 @@ look for real problems only: sessions outside the item's preferred time of day, 
 sessions of the same item on one day (get_week notes these). A week that looks fine needs no changes.
    Sessions marked past can't change; if the wish is only about the past, say so and change nothing.
 3. Use find_free_slots before proposing a move, and prefer the item's preferred time of day.
+   For an added event, use the days and times the person gave; repeat_weekly only if they say \
+"every week" or it's clearly ongoing (like work or study slots on every work day). Pick a group \
+from the list in get_week if one fits (e.g. Work). Flexible sessions in the way move by \
+themselves once it's added, so don't move them for it.
 4. If a proposal comes back "Not proposed", read why and try another slot or stop.
 5. At most 5 changes. Skip only when there's truly no room.
 
@@ -87,7 +93,14 @@ def make_tools(plan: WeekPlan) -> list:
         """Propose skipping a movable session this week (it moves to next week). reason: one short sentence for the user."""
         return plan.propose_skip(session_id, reason)
 
-    return [get_week, find_free_slots, propose_move, propose_skip]
+    @tool
+    def propose_add_event(
+        title: str, days: list[str], start_time: str, end_time: str, repeat_weekly: bool, reason: str, group: str = ""
+    ) -> str:
+        """Propose adding a fixed event on some days (e.g. ["Mon","Tue","Wed","Thu","Fri"]) from start_time to end_time ("HH:MM"). repeat_weekly: every week, or just this week. group: one of the groups from get_week, or "". reason: one short sentence for the user."""
+        return plan.propose_add_event(title, days, start_time, end_time, repeat_weekly, reason, group)
+
+    return [get_week, find_free_slots, propose_move, propose_skip, propose_add_event]
 
 
 def build_graph(model: Any, tools: list):

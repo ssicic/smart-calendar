@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DAY, type WeekInput } from "../engine";
-import { buildPlanRequest, findSession, type Proposal } from "./planAgent";
+import { buildPlanRequest, findSession, formFromAdd, type Proposal } from "./planAgent";
+import { parseQuickAdd } from "./quickAdd";
 import type { WeekRow } from "./weekRows";
 
 const week = {
@@ -49,5 +50,48 @@ describe("planAgent", () => {
     const replanned = rows.map((r) => (r.id === "gym@1080" ? { ...r, id: "gym@1080b" } : r));
     expect(findSession(replanned, proposal("gym@1080", 1080))?.id).toBe("gym@1080b");
     expect(findSession(rows, proposal("p1", DAY + 1080))).toBeUndefined(); // locked: not movable
+  });
+});
+
+describe("formFromAdd", () => {
+  const add: Proposal = {
+    type: "add",
+    session_id: "",
+    title: "Prijave/učenje",
+    from_start: 0,
+    from_label: "",
+    to_label: "Mon–Fri 09:00–13:00, every week",
+    start: null,
+    end: null,
+    reason: "You asked for it.",
+    days: [0, 1, 2, 3, 4],
+    day_start: 540,
+    day_end: 780,
+    repeat_weekly: true,
+    group: "work",
+  };
+  const groups = [
+    { id: "g-work", name: "Work" },
+    { id: "g-fun", name: "Fun" },
+  ];
+
+  it("becomes the quick-add form, so it saves like adding by hand", () => {
+    const form = formFromAdd(add, groups);
+    expect(form).toMatchObject({ kind: "fixed", title: "Prijave/učenje", days: [0, 1, 2, 3, 4], startTime: "09:00", endTime: "13:00", repeat: true, categoryId: "g-work" });
+    let n = 0;
+    const parsed = parseQuickAdd(form!, () => `id${n++}`);
+    expect(parsed.ok && parsed.kind === "fixed" && parsed.events.map((e) => [e.start, e.end])).toEqual(
+      [0, 1, 2, 3, 4].map((d) => [d * DAY + 540, d * DAY + 780]),
+    );
+  });
+
+  it("keeps an unknown group empty, caps midnight, and refuses a proposal without days", () => {
+    expect(formFromAdd({ ...add, group: "Nope", day_end: 1440 }, groups)).toMatchObject({ categoryId: null, endTime: "23:59" });
+    expect(formFromAdd({ ...add, days: [] }, groups)).toBeUndefined();
+    expect(formFromAdd({ ...add, type: "move" }, groups)).toBeUndefined();
+  });
+
+  it("sends the group names with the week", () => {
+    expect(buildPlanRequest(week, [], "2026-11-02", "", ["Work"]).week.groups).toEqual(["Work"]);
   });
 });

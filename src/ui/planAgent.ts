@@ -2,7 +2,8 @@
 // proposal's session again. Pure, no React.
 import type { WeekInput } from "../engine";
 import { importanceOf, timeOfDayOf } from "./aiReview";
-import type { Importance, TimeOfDay } from "./quickAdd";
+import { EMPTY_FORM, type Importance, type QuickAddForm, type TimeOfDay } from "./quickAdd";
+import { clock } from "./weekRows";
 import type { WeekRow } from "./weekRows";
 
 export interface PlanBlock {
@@ -30,12 +31,13 @@ export interface PlanRequest {
       time_of_day: TimeOfDay;
     }[];
     buffer_min: number;
+    groups: string[];
   };
   wish: string;
 }
 
 export interface Proposal {
-  type: "move" | "skip";
+  type: "move" | "skip" | "add";
   session_id: string;
   title: string;
   from_start: number;
@@ -44,6 +46,13 @@ export interface Proposal {
   start: number | null;
   end: number | null;
   reason: string;
+  // Adds only: a fixed event on these days (0 = Monday) at these minutes of the day.
+  days?: number[];
+  day_start?: number | null;
+  day_end?: number | null;
+  repeat_weekly?: boolean;
+  group?: string | null;
+  warning?: string | null;
 }
 
 export interface PlanResult {
@@ -55,7 +64,13 @@ export interface PlanResult {
 /** Sessions the agent may move: flexible ones not locked, done or queued. */
 const isMovable = (row: WeekRow) => row.kind === "suggested" || row.kind === "kept";
 
-export function buildPlanRequest(week: WeekInput, rows: WeekRow[], weekStart: string, wish: string): PlanRequest {
+export function buildPlanRequest(
+  week: WeekInput,
+  rows: WeekRow[],
+  weekStart: string,
+  wish: string,
+  groups: string[] = [],
+): PlanRequest {
   const s = week.settings;
   return {
     week: {
@@ -82,6 +97,7 @@ export function buildPlanRequest(week: WeekInput, rows: WeekRow[], weekStart: st
         time_of_day: timeOfDayOf(i.preferredWindows),
       })),
       buffer_min: s.bufferMin,
+      groups,
     },
     wish: wish.trim().slice(0, 300),
   };
@@ -95,4 +111,25 @@ export function buildPlanRequest(week: WeekInput, rows: WeekRow[], weekStart: st
 export function findSession(rows: WeekRow[], p: Proposal): WeekRow | undefined {
   const movable = rows.filter(isMovable);
   return movable.find((r) => r.id === p.session_id) ?? movable.find((r) => r.title === p.title && r.start === p.from_start);
+}
+
+/**
+ * An "add" proposal as the quick-add form would have it, so accepting it goes
+ * through the same parsing and saving as adding by hand. Undefined if it's
+ * missing its days or times.
+ */
+export function formFromAdd(p: Proposal, groups: { id: string; name: string }[]): QuickAddForm | undefined {
+  if (p.type !== "add" || !p.days?.length || p.day_start == null || p.day_end == null) return undefined;
+  const group = p.group ? groups.find((g) => g.name.toLowerCase() === p.group?.toLowerCase()) : undefined;
+  return {
+    ...EMPTY_FORM,
+    kind: "fixed",
+    title: p.title,
+    days: p.days,
+    startTime: clock(p.day_start),
+    // The form can't say 24:00; the time pickers stop at 23:45 too.
+    endTime: clock(Math.min(p.day_end, 24 * 60 - 1)),
+    repeat: Boolean(p.repeat_weekly),
+    categoryId: group?.id ?? null,
+  };
 }

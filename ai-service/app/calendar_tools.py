@@ -55,18 +55,26 @@ class WeekSnapshot(BaseModel):
     windows: list[Window] = Field(min_length=7, max_length=7)
     items: list[Item] = Field(default_factory=list, max_length=60)
     buffer_min: int = 15
+    groups: list[str] = Field(default_factory=list, max_length=40)  # activity group names (Work, Health…)
 
 
 class Proposal(BaseModel):
-    type: Literal["move", "skip"]
-    session_id: str
+    type: Literal["move", "skip", "add"]
+    session_id: str = ""  # move and skip
     title: str
-    from_start: int  # where it was (week-minute), to find it again if ids change
-    from_label: str  # "Fri 18:00–19:00"
-    to_label: Optional[str] = None  # moves only
+    from_start: int = 0  # where it was (week-minute), to find it again if ids change
+    from_label: str = ""  # "Fri 18:00–19:00"
+    to_label: Optional[str] = None  # moves: "Sat 10:00–11:00"; adds: "Mon–Fri 09:00–13:00"
     start: Optional[int] = None  # new week-minutes, moves only
     end: Optional[int] = None
     reason: str
+    # Adds only: a fixed event on these days (0 = Mon) at these minutes of the day.
+    days: list[int] = Field(default_factory=list)
+    day_start: Optional[int] = None
+    day_end: Optional[int] = None
+    repeat_weekly: bool = False
+    group: Optional[str] = None
+    warning: Optional[str] = None  # e.g. what it overlaps; shown on the card
 
 
 # ---- Formatting ----
@@ -84,6 +92,13 @@ def span(start: int, end: int) -> str:
 def parse_day(day: str) -> Optional[int]:
     d = day.strip()[:3].title()
     return DAYS.index(d) if d in DAYS else None
+
+
+def days_label(days: list[int]) -> str:
+    """[0, 1, 2, 3, 4] → "Mon–Fri", [0, 2] → "Mon, Wed"."""
+    if len(days) > 2 and days == list(range(days[0], days[-1] + 1)):
+        return f"{DAYS[days[0]]}–{DAYS[days[-1]]}"
+    return ", ".join(DAYS[d] for d in days)
 
 
 def parse_time(text: str) -> Optional[int]:
@@ -167,6 +182,8 @@ class WeekPlan:
                     f"  {i.title}: {i.duration_min} min, {i.times_per_week}x a week, "
                     f"{i.importance} importance, prefers {i.time_of_day}"
                 )
+        if self.snap.groups:
+            lines.append(f"\nGroups: {', '.join(self.snap.groups)}")
         return "\n".join(lines)
 
     def find_free_slots(self, day: str, min_minutes: int = 30, part_of_day: str = "any") -> str:
@@ -261,3 +278,63 @@ class WeekPlan:
         )
         self.skipped.add(b.id)
         return f"Proposed: skip {b.title} this week (it goes to next week)."
+
+    def propose_add_event(
+        self,
+        title: str,
+        days: list[str],
+        start_time: str,
+        end_time: str,
+        repeat_weekly: bool,
+        reason: str,
+        group: str = "",
+    ) -> str:
+        if full := self._full():
+            return full
+        title = title.strip()[:60]
+        if not title:
+            return "Not proposed: the event needs a title."
+        parsed = [parse_day(d) for d in days]
+        if not parsed or None in parsed:
+            return f"Not proposed: use days like {', '.join(DAYS)}."
+        day_list = sorted(set(d for d in parsed if d is not None))
+        start = parse_time(start_time)
+        end = DAY if end_time.strip() == "24:00" else parse_time(end_time)
+        if start is None or end is None:
+            return "Not proposed: use times like '09:00'."
+        if end <= start:
+            return "Not proposed: the end time must be after the start time."
+        if not repeat_weekly and all(d * DAY + end <= self.snap.now for d in day_list):
+            return "Not proposed: those days are already over this week. Set repeat_weekly, or the person can add it next week."
+        names = {g.lower(): g for g in self.snap.groups}
+        group_name = names.get(group.strip().lower()) if group.strip() else None
+
+        # Fixed events don't have to fit around anything, but say what they overlap.
+        clashes = []
+        for d in day_list:
+            s0, e0 = d * DAY + start, d * DAY + end
+            for o in self._active():
+                if o.kind != "flexible" and s0 < o.end and o.start < e0:
+                    clashes.append(f"{o.title} {span(o.start, o.end)}")
+        label = f"{days_label(day_list)} {clock(start)}–{clock(end) if end < DAY else '24:00'}"
+        self.proposals.append(
+            Proposal(
+                type="add",
+                title=title,
+                to_label=label + (", every week" if repeat_weekly else ", this week"),
+                reason=reason.strip()[:200],
+                days=day_list,
+                day_start=start,
+                day_end=end,
+                repeat_weekly=repeat_weekly,
+                group=group_name,
+                warning=f"Overlaps {', '.join(clashes[:3])}" + (" and more" if len(clashes) > 3 else "") if clashes else None,
+            )
+        )
+        # Later tool calls see the new time as taken.
+        n = len(self.proposals)
+        for d in day_list:
+            bid = f"new{n}-{d}"
+            self.blocks[bid] = Block(id=bid, title=title, kind="fixed", start=d * DAY + start, end=d * DAY + end)
+        note = f" Note: it overlaps {', '.join(clashes[:3])}." if clashes else ""
+        return f"Proposed: add {title}, {label}{' every week' if repeat_weekly else ''}.{note}"
