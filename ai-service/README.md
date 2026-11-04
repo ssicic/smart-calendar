@@ -29,7 +29,7 @@ saves each month's summary, so it's only written again when asked.
 `POST /plan-week` takes a snapshot of one week (blocks in week-minutes, which
 flexible sessions may move, awake hours per day, the flexible items) and an
 optional wish. `app/agent.py` runs a LangGraph graph (agent node ⇄ tools node)
-with Claude Haiku and four tools from `app/calendar_tools.py`:
+with Claude Haiku and five tools from `app/calendar_tools.py`:
 
 | Tool | Does |
 |---|---|
@@ -37,6 +37,7 @@ with Claude Haiku and four tools from `app/calendar_tools.py`:
 | `find_free_slots(day, min_minutes, part_of_day)` | Free gaps with the 15-minute buffer, from now on |
 | `propose_move(session_id, day, start_time, reason)` | Checked: movable, not past, awake hours, no clash. Else returns why |
 | `propose_skip(session_id, reason)` | Sends a session to next week |
+| `propose_add_event(title, days, start_time, end_time, repeat_weekly, reason)` | A new event on one or more days, this week or every week. Says what it overlaps |
 
 It returns a summary, the checked proposals, tool-call count and tokens. The
 model never writes anything; the app applies accepted proposals itself.

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 import pytest
 
@@ -57,6 +58,8 @@ def test_mcp_tools(tmp_path, monkeypatch):
     path = tmp_path / "backup.json"
     path.write_text(json.dumps(BACKUP))
     monkeypatch.setenv("SMART_CALENDAR_BACKUP", str(path))
+    # The server hides time already past; pin "now" to the Sunday before, so the result doesn't depend on today.
+    monkeypatch.setattr(mcp_server, "datetime", type("Now", (datetime,), {"now": staticmethod(lambda: datetime(2026, 11, 1, 12))}))
     assert "10:00–11:00 Dentist" in mcp_server.get_week(W)
     assert mcp_server.find_free_slots("Wed", 60, "morning", W) == "Wed 06:30–12:00 (330 min)"
     assert mcp_server.check_slot("Tue", "10:30", 30, W).startswith("Overlaps Dentist")
