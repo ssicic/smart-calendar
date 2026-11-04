@@ -6,8 +6,8 @@ app won't quietly overbook a week.
 
 ## AI features
 
-- **Plan my week**: an agent reads the week and an optional wish ("keep Friday
-  evening free") and proposes moves and skips. You accept or reject each one.
+- **Plan my week**: an agent reads the week and an optional wish ("study Mon–Fri
+  9–13") and proposes moves, skips and new events. You accept or reject each one.
 - **Weekly review and monthly summary**: small suggestions and a recap, based on
   what actually got done.
 - **Journeys**: a goal becomes small weekly steps. A missed week repeats the step.
@@ -19,6 +19,13 @@ saved, so the model can't double-book or overfill the week.
 
 An MCP server also lets Claude Desktop / Claude Code read the calendar and find
 free time.
+
+## Points and rewards
+
+Done sessions and events earn points, more for longer ones. Each group can count
+double (work, learning) or give a flat 5 (rest, social), so a lazy afternoon
+doesn't outscore an hour of hard work. You spend points on rewards you set
+yourself. Past weeks are frozen; changing a group only re-counts the current week.
 
 ## Evaluation
 
