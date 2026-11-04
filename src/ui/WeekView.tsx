@@ -22,10 +22,11 @@ export type Groups = Map<string, Category>;
 
 /** A row's colours: its group's colour if it has one, otherwise the colours for its kind. */
 export function rowColors(row: WeekRow, groups: Groups): { bg: string; bar: string } {
-  // Anything done (a done session, or an event marked done) looks done.
-  if (isDone(row)) return KIND_STYLE.done;
+  // Anything done (a done session, or an event marked done) looks done:
+  // its group colour faded, or grey without a group.
   const group = row.categoryId ? groups.get(row.categoryId) : undefined;
-  return categoryStyle(row.kind, group?.color) ?? KIND_STYLE[row.kind];
+  const kind = isDone(row) ? "done" : row.kind;
+  return categoryStyle(kind, group?.color) ?? KIND_STYLE[kind];
 }
 
 function Block(props: { row: WeekRow; groups: Groups; badge?: string; onPress: (row: WeekRow) => void }) {

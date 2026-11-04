@@ -401,6 +401,25 @@ const MIGRATIONS: string[] = [
   UPDATE categories SET points_mode = 'double' WHERE double_points = 1;
   UPDATE categories SET points_mode = 'flat' WHERE lower(name) IN ('social', 'rest', 'travel');
   `,
+  // Version 25: clearer group colours (the soft ones read as grey). A group
+  // still on one of the old palette colours gets its clearer twin; any other
+  // colour the user picked stays.
+  `
+  UPDATE categories SET color = CASE upper(color)
+    WHEN '#7C9CB8' THEN '#4F84D6'
+    WHEN '#86AE8F' THEN '#3FA663'
+    WHEN '#A393C4' THEN '#8E6BD8'
+    WHEN '#D4AE6A' THEN '#E39B2D'
+    WHEN '#D59AAB' THEN '#E06C93'
+    WHEN '#D9A27A' THEN '#E5824A'
+    WHEN '#7DB5AC' THEN '#26A89A'
+    WHEN '#C2B59B' THEN '#5DB4D6'
+    WHEN '#C98B7E' THEN '#D8664F'
+    WHEN '#8E9BCB' THEN '#6B7FD7'
+    WHEN '#A9B97A' THEN '#8DB83A'
+    WHEN '#9A938C' THEN '#8A8178'
+    ELSE color END;
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

@@ -6,10 +6,11 @@ describe("categories", () => {
     expect(tint("#3B82F6", 0.5)).toBe("rgba(59,130,246,0.5)");
   });
 
-  it("colours blocks by group, stronger for fixed time, grey when done", () => {
+  it("colours blocks by group, stronger for fixed time, faded when done", () => {
     expect(categoryStyle("fixed", "#3B82F6")).toEqual({ bar: "#3B82F6", bg: "rgba(59,130,246,0.3)" });
-    expect(categoryStyle("suggested", "#3B82F6")).toEqual({ bar: "#3B82F6", bg: "rgba(59,130,246,0.2)" });
-    expect(categoryStyle("done", "#3B82F6")).toBeUndefined();
+    expect(categoryStyle("suggested", "#3B82F6")).toEqual({ bar: "#3B82F6", bg: "rgba(59,130,246,0.22)" });
+    expect(categoryStyle("done", "#3B82F6")).toEqual({ bar: "rgba(59,130,246,0.55)", bg: "rgba(59,130,246,0.1)" });
+    expect(categoryStyle("skipped", "#3B82F6")).toBeUndefined();
     expect(categoryStyle("fixed", undefined)).toBeUndefined();
   });
 

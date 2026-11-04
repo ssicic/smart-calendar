@@ -112,7 +112,7 @@ describe("weekStore", () => {
 
   it("migrating twice is a no-op", async () => {
     await migrate(db);
-    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 24 });
+    expect(db.raw.prepare("PRAGMA user_version").get()).toEqual({ user_version: 25 });
   });
 
   it("round-trips and moves fixed events and routines", async () => {
@@ -286,18 +286,29 @@ describe("weekStore", () => {
       ["r2", "fun"], // already had a group: kept
       ["r1", "rest"],
     ]);
-    expect((await loadCategories(old)).at(-1)).toEqual({ id: "rest", name: "Rest", color: "#C2B59B", points: "flat" }); // softened by v13
+    expect((await loadCategories(old)).at(-1)).toEqual({ id: "rest", name: "Rest", color: "#5DB4D6", points: "flat" }); // softened by v13, clearer in v25
   });
 
-  it("softens the starting groups' colours, but keeps colours the user changed", async () => {
+  it("updates the starting groups' colours, but keeps colours the user changed", async () => {
     const old = nodeDb();
     await migrate(old, 12);
     old.raw.exec(`UPDATE categories SET color = '#123456' WHERE id = 'fun'`);
     await migrate(old);
     const colors = Object.fromEntries((await loadCategories(old)).map((c) => [c.id, c.color]));
-    expect(colors.work).toBe("#7C9CB8");
-    expect(colors.rest).toBe("#C2B59B");
+    expect(colors.work).toBe("#4F84D6");
+    expect(colors.rest).toBe("#5DB4D6");
     expect(colors.fun).toBe("#123456");
+  });
+
+  it("gives groups on an old palette colour its clearer twin", async () => {
+    const old = nodeDb();
+    await migrate(old, 24);
+    old.raw.exec(`INSERT INTO categories (id, name, color, position) VALUES ('m', 'Music', '#a9b97a', 9), ('x', 'Mine', '#123456', 10)`);
+    await migrate(old);
+    const colors = Object.fromEntries((await loadCategories(old)).map((c) => [c.id, c.color]));
+    expect(colors.m).toBe("#8DB83A");
+    expect(colors.x).toBe("#123456");
+    expect(colors.health).toBe("#3FA663");
   });
 
   it("reuses a group the user already called Rest", async () => {

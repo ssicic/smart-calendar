@@ -5,8 +5,8 @@ import type { RowKind } from "./weekRows";
 
 /** Colours to pick from for a new group: soft tones. The first eight are the starting groups' (DB v13). */
 export const PALETTE = [
-  "#7C9CB8", "#86AE8F", "#A393C4", "#D4AE6A", "#D59AAB", "#D9A27A",
-  "#7DB5AC", "#C2B59B", "#C98B7E", "#8E9BCB", "#A9B97A", "#9A938C",
+  "#4F84D6", "#3FA663", "#8E6BD8", "#E39B2D", "#E06C93", "#E5824A",
+  "#26A89A", "#5DB4D6", "#D8664F", "#6B7FD7", "#8DB83A", "#8A8178",
 ];
 
 /** "#RRGGBB" at `alpha` (0-1) as "rgba(…)", for light backgrounds. */
@@ -18,12 +18,14 @@ export function tint(hex: string, alpha: number): string {
 /**
  * Block colours for a row in a group: the group's colour as the side bar,
  * a light tint behind (stronger for fixed events and routines, which can't move).
- * Done and queued sessions keep their grey look, so "finished" stays obvious.
- * Undefined = use the default colours for that kind.
+ * Done keeps a faded version of the group colour (plus its ✓), so a busy week
+ * stays colourful; queued sessions stay grey. Undefined = use the default
+ * colours for that kind.
  */
 export function categoryStyle(kind: RowKind, color: string | undefined): { bg: string; bar: string } | undefined {
-  if (!color || kind === "done" || kind === "skipped") return undefined;
-  return { bar: color, bg: tint(color, kind === "fixed" || kind === "routine" ? 0.3 : 0.2) };
+  if (!color || kind === "skipped") return undefined;
+  if (kind === "done") return { bar: tint(color, 0.55), bg: tint(color, 0.1) };
+  return { bar: color, bg: tint(color, kind === "fixed" || kind === "routine" ? 0.3 : 0.22) };
 }
 
 /**
