@@ -168,7 +168,10 @@ NOTES = [
     "  docs had only clock times, so no search could tell 07:00 is before work.",
     "- Week docs now say \"before Work\" when a fixed event starts within 3h after a session:",
     "  keyword recall@5 0.60 → 0.67, hybrid 0.73 → 0.80, and that question is answered.",
-    "- Open: meaning questions (vacation/holiday, jog/run, sober/no alcohol) need real embeddings.",
+    "- Real embeddings (Voyage voyage-3.5-lite): meaning questions 0/5 → 5/5, hybrid recall@5 0.80 → 1.00.",
+    "  Vector alone ranks a bit better (MRR 0.88 vs hybrid 0.78): keyword search pulls month summaries",
+    "  up for words they share. Hybrid stays the default, because it still works when /embed is down.",
+    "- Open: citation precision 0.60. The model often adds a second, related week; first citation is right 14/15.",
     "",
 ]
 
