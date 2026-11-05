@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   grabber: { alignItems: "center", paddingBottom: 8 },
   grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  heading: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  heading: { fontSize: 20, fontFamily: font.display, color: colors.text },
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   body: { gap: 12, paddingBottom: 16 },
   note: { fontFamily: font.regular, fontSize: 14, color: colors.textMuted, lineHeight: 20 },

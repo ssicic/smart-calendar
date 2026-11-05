@@ -364,7 +364,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
               accessibilityLabel={`${points.summary.balance} points. Open rewards`}
             >
               <Ionicons name="star" size={13} color={colors.accentStrong} />
-              <Text style={styles.todayButtonText}>{points.summary.balance}</Text>
+              <Text style={styles.pointsText}>{points.summary.balance}</Text>
             </Pressable>
             {!isCurrent && (
               <Pressable onPress={goToToday} style={styles.todayButton} accessibilityRole="button">
@@ -377,8 +377,8 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
               </Pressable>
             )}
             {(view === "calendar" || view === "list") && (
-              <Pressable onPress={() => setAgentOpen(true)} style={styles.todayButton} accessibilityRole="button">
-                <Text style={styles.todayButtonText}>Plan</Text>
+              <Pressable onPress={() => setAgentOpen(true)} style={styles.primaryButton} accessibilityRole="button">
+                <Text style={styles.primaryButtonText}>Plan</Text>
               </Pressable>
             )}
             {(view === "calendar" || view === "list") && (
@@ -790,11 +790,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: radius.md,
-    backgroundColor: colors.successSoft,
+    backgroundColor: colors.accentSoft,
     borderWidth: 1,
-    borderColor: colors.successBorder,
+    borderColor: colors.accentSoft,
   },
-  panelButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.successStrong },
+  panelButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.accentStrong },
   titleButtons: { marginLeft: "auto", flexDirection: "row", gap: 6 },
   strip: {
     flexDirection: "row",
@@ -810,15 +810,19 @@ const styles = StyleSheet.create({
   stripDate: { fontSize: 15, fontFamily: font.bold, color: colors.text },
   stripToday: { color: colors.now },
   stripTextOn: { color: colors.white },
-  todayButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.accentSoft },
-  pointsButton: { flexDirection: "row", alignItems: "center", gap: 4 },
-  todayButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.accent },
+  // Header buttons: the main action solid, the rest outlined, points a badge.
+  primaryButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: colors.accent, borderWidth: 1, borderColor: colors.accent },
+  primaryButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.white },
+  todayButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.borderStrong },
+  todayButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.text },
+  pointsButton: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 99, borderColor: colors.accentSoft, backgroundColor: colors.accentSoft },
+  pointsText: { fontSize: 13, fontFamily: font.bold, color: colors.accentStrong },
   toggle: { flexDirection: "row", backgroundColor: colors.surfaceAlt, borderRadius: 10, padding: 3 },
   toggleItem: { flex: 1, alignItems: "center", paddingVertical: 6, borderRadius: 8 },
   toggleOn: { backgroundColor: colors.white, boxShadow: shadow.subtle },
   toggleText: { fontSize: 13, fontFamily: font.semibold, color: colors.textMuted },
   toggleTextOn: { color: colors.text },
-  heading: { flexShrink: 1, fontSize: 22, fontFamily: font.heavy, color: colors.text, paddingHorizontal: 4 },
+  heading: { flexShrink: 1, fontSize: 22, fontFamily: font.display, color: colors.text, paddingHorizontal: 4 },
   sub: { marginTop: 4, color: colors.textMuted },
   warn: { marginTop: 4, color: colors.warnText, fontFamily: font.semibold },
   queue: { padding: 12, borderRadius: 10, backgroundColor: colors.warnSoft, gap: 2 },

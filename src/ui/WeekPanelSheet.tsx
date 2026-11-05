@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  heading: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  heading: { fontSize: 20, fontFamily: font.display, color: colors.text },
   sub: { marginTop: 2, color: colors.textMuted },
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   body: { gap: 8, paddingBottom: 16 },

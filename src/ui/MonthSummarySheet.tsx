@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   flex: { flex: 1 },
-  heading: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  heading: { fontSize: 20, fontFamily: font.display, color: colors.text },
   sub: { marginTop: 2, color: colors.textMuted },
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   body: { gap: 16, paddingBottom: 16 },

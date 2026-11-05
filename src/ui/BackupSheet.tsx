@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  heading: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  heading: { fontSize: 20, fontFamily: font.display, color: colors.text },
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   note: { fontFamily: font.regular, fontSize: 14, color: colors.textMuted, lineHeight: 20 },
   primary: { ...button, backgroundColor: colors.accent },

@@ -477,7 +477,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 8,
   },
-  sheetTitle: { fontSize: 17, fontFamily: font.heavy, color: colors.text },
+  sheetTitle: { fontSize: 17, fontFamily: font.display, color: colors.text },
   messages: { paddingHorizontal: 16, gap: 8 },
   routineChips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   routineChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.md, backgroundColor: colors.routineSoft },

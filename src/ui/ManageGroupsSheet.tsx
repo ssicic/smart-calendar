@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  title: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  title: { fontSize: 20, fontFamily: font.display, color: colors.text },
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   hint: { fontFamily: font.regular, color: colors.textMuted, fontSize: 13 },
   error: { color: colors.danger, fontFamily: font.semibold },

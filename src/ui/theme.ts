@@ -1,35 +1,36 @@
 // The app's look in one place: colours, fonts and corner shapes.
-// "Calm & soft": warm linen background, warm charcoal text, sage green as the
-// main colour, muted tones for everything else. Screens use these names, never
+// Warm off-white background, warm charcoal text, one deep teal green as the
+// main colour (solid for the main action, today and the now-line), clear
+// group colours, neutral everything else. Screens use these names, never
 // raw hex values, so the whole look can change here.
 
 export const colors = {
   // Surfaces
-  bg: "#F6F3EE", // the screen behind everything
+  bg: "#FBF8F3", // the screen behind everything
   white: "#FFFFFF", // sheets, cards, text on coloured buttons
-  panel: "#F9F7F3", // light boxes inside a sheet
-  surfaceAlt: "#EFEBE5", // chips, tracks, quiet buttons, hour lines
-  border: "#E6E0D7",
-  borderStrong: "#D6CEC3",
-  backdrop: "rgba(52,48,43,0.35)", // behind a sheet
+  panel: "#F7F3EC", // light boxes inside a sheet
+  surfaceAlt: "#F1ECE4", // chips, tracks, quiet buttons, hour lines
+  border: "#ECE6DD",
+  borderStrong: "#D9D1C5",
+  backdrop: "rgba(34,32,28,0.38)", // behind a sheet
 
   // Text
-  text: "#34302B",
-  textSoft: "#57514A",
-  textMuted: "#857D73",
+  text: "#22201C",
+  textSoft: "#4A453F",
+  textMuted: "#76706A",
   textFaint: "#ADA59B",
   textFainter: "#CFC8BE", // days of the next/previous month
 
-  // Main colour (sage)
-  accent: "#7C9885",
-  accentStrong: "#4F6B58",
-  accentSoft: "#E7EFE9",
+  // Main colour (teal green)
+  accent: "#0F6E6E",
+  accentStrong: "#0A5454",
+  accentSoft: "#E1F0EE",
 
   // Meaning
-  success: "#6E9E78",
-  successStrong: "#4E7A58",
-  successSoft: "#EAF3EC",
-  successBorder: "#CFE3D4",
+  success: "#3A9466",
+  successStrong: "#25704A",
+  successSoft: "#E6F3EA",
+  successBorder: "#C8E3D2",
   danger: "#B8655B",
   dangerSoft: "#F6E3DF",
   warnText: "#8C6230",
@@ -37,13 +38,13 @@ export const colors = {
 
   // Calendar
   now: "#D97B66", // the red-ish now-line and today's date
-  todayTint: "#F1F4EF", // today's column
+  todayTint: "#EEF5F3", // today's column
   routine: "#C9935A",
   routineStrong: "#9A6A35",
   routineSoft: "#F7EBDD",
   fixedBg: "#EEEAE4",
   fixedBar: "#9B9186",
-  lockedBg: "#DCE7DF",
+  lockedBg: "#D5E8E5",
   doneBg: "#F2EFEA",
   doneBar: "#B9B1A7",
   sleep: "#ECE9F0", // before wake-up and after bedtime
@@ -52,15 +53,19 @@ export const colors = {
 };
 
 /** Year view heatmap: nothing → a lot. */
-export const heatShades = ["#EFEBE5", "#DCE7DF", "#BCD2C3", "#97B6A2", "#7C9885"];
+export const heatShades = ["#F1ECE4", "#D5E8E5", "#A9D0CB", "#5FA3A0", "#0F6E6E"];
 
-/** Nunito, a soft rounded font, loaded in App.tsx. Use these instead of fontWeight. */
+/**
+ * Fonts loaded in App.tsx; use these instead of fontWeight. DM Sans for text,
+ * Bricolage Grotesque (`display`) for screen and sheet titles and big numbers.
+ */
 export const font = {
-  regular: "Nunito_400Regular",
-  medium: "Nunito_500Medium",
-  semibold: "Nunito_600SemiBold",
-  bold: "Nunito_700Bold",
-  heavy: "Nunito_800ExtraBold",
+  regular: "DMSans_400Regular",
+  medium: "DMSans_500Medium",
+  semibold: "DMSans_600SemiBold",
+  bold: "DMSans_700Bold",
+  heavy: "DMSans_800ExtraBold",
+  display: "BricolageGrotesque_700Bold",
 };
 
 export const radius = {

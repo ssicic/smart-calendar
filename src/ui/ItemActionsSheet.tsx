@@ -788,7 +788,7 @@ const styles = StyleSheet.create({
   body: { gap: 12, paddingTop: 8 },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   headerText: { flex: 1 },
-  title: { fontSize: 20, fontFamily: font.heavy, color: colors.text },
+  title: { fontSize: 20, fontFamily: font.display, color: colors.text },
   sub: { marginTop: 2, color: colors.textMuted },
   link: { fontSize: 16, color: colors.accent, fontFamily: font.semibold },
   list: { gap: 2 },
@@ -813,7 +813,7 @@ const styles = StyleSheet.create({
   },
   stepperText: { fontFamily: font.bold, fontSize: 20, color: colors.textSoft },
   lengthValue: {
-    fontFamily: font.heavy,
+    fontFamily: font.display,
     fontSize: 22,
     color: colors.text,
     minWidth: 90,

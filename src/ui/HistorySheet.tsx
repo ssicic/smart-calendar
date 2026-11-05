@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "center", gap: 12 },
   flex: { flex: 1 },
-  heading: { fontFamily: font.heavy, fontSize: 20, color: colors.text },
+  heading: { fontFamily: font.display, fontSize: 20, color: colors.text },
   link: { fontFamily: font.semibold, fontSize: 16, color: colors.accentStrong },
   body: { gap: 10, paddingBottom: 16 },
   muted: { fontFamily: font.regular, fontSize: 15, color: colors.textFaint },

@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   grabBar: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
   header: { flexDirection: "row", alignItems: "center", gap: 12 },
   flex: { flex: 1 },
-  heading: { fontFamily: font.heavy, fontSize: 20, color: colors.text },
+  heading: { fontFamily: font.display, fontSize: 20, color: colors.text },
   link: { fontFamily: font.semibold, fontSize: 16, color: colors.accentStrong },
   body: { gap: 12, paddingBottom: 16 },
   section: { fontFamily: font.bold, fontSize: 13, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
