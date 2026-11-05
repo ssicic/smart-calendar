@@ -27,6 +27,7 @@ import { useWeather } from "./useWeather";
 import { WeatherTag } from "./WeatherTag";
 import { PlanSheet } from "./PlanSheet";
 import { HistorySheet } from "./HistorySheet";
+import { AskWeeksSheet } from "./AskWeeksSheet";
 import { GoalsSheet } from "./GoalsSheet";
 import { JourneySheet } from "./JourneySheet";
 import { stepLabel } from "./journeys";
@@ -101,6 +102,7 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
   const [journeysOpen, setJourneysOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
@@ -386,6 +388,12 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
                 <Text style={styles.todayButtonText}>Review</Text>
               </Pressable>
             )}
+            {view === "month" && (
+              <Pressable onPress={() => setAskOpen(true)} style={[styles.primaryButton, styles.iconButton]} accessibilityRole="button">
+                <Ionicons name="sparkles-outline" size={13} color={colors.white} />
+                <Text style={styles.primaryButtonText}>Ask</Text>
+              </Pressable>
+            )}
             {(view === "month" || view === "year") && (
               <Pressable onPress={() => setGoalsOpen(true)} style={styles.todayButton} accessibilityRole="button">
                 <Text style={styles.todayButtonText}>Goals</Text>
@@ -629,6 +637,21 @@ export function WeekScreen({ onDataReplaced }: { onDataReplaced?: () => void } =
         onWrite={monthSummary.write}
         onClose={() => setSummaryOpen(false)}
       />
+      <AskWeeksSheet
+        db={db}
+        visible={askOpen}
+        thisWeek={thisWeek}
+        todayKey={dateKey(now)}
+        groups={groups}
+        later={later}
+        onOpenMonth={(key) => {
+          const [y, m] = key.split("-").map(Number);
+          setAskOpen(false);
+          setMonth({ year: y ?? year, month: (m ?? 1) - 1 });
+          setView("month");
+        }}
+        onClose={() => setAskOpen(false)}
+      />
       <HistorySheet
         db={db}
         visible={historyOpen}
@@ -773,7 +796,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
   header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.surfaceAlt },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, minHeight: 32 },
+  titleRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4, rowGap: 8, marginTop: 10, minHeight: 32 },
   content: { flex: 1 },
   reviewNudge: {
     alignSelf: "flex-start",
@@ -795,7 +818,7 @@ const styles = StyleSheet.create({
     borderColor: colors.accentSoft,
   },
   panelButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.accentStrong },
-  titleButtons: { marginLeft: "auto", flexDirection: "row", gap: 6 },
+  titleButtons: { marginLeft: "auto", flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 6 },
   strip: {
     flexDirection: "row",
     paddingHorizontal: 8,
@@ -815,6 +838,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.white },
   todayButton: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: colors.borderStrong },
   todayButtonText: { fontSize: 13, fontFamily: font.bold, color: colors.text },
+  iconButton: { flexDirection: "row", alignItems: "center", gap: 4 },
   pointsButton: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 99, borderColor: colors.accentSoft, backgroundColor: colors.accentSoft },
   pointsText: { fontSize: 13, fontFamily: font.bold, color: colors.accentStrong },
   toggle: { flexDirection: "row", backgroundColor: colors.surfaceAlt, borderRadius: 10, padding: 3 },
@@ -822,7 +846,7 @@ const styles = StyleSheet.create({
   toggleOn: { backgroundColor: colors.white, boxShadow: shadow.subtle },
   toggleText: { fontSize: 13, fontFamily: font.semibold, color: colors.textMuted },
   toggleTextOn: { color: colors.text },
-  heading: { flexShrink: 1, fontSize: 22, fontFamily: font.display, color: colors.text, paddingHorizontal: 4 },
+  heading: { flexShrink: 0, maxWidth: "100%", fontSize: 22, fontFamily: font.display, color: colors.text, paddingHorizontal: 4 },
   sub: { marginTop: 4, color: colors.textMuted },
   warn: { marginTop: 4, color: colors.warnText, fontFamily: font.semibold },
   queue: { padding: 12, borderRadius: 10, backgroundColor: colors.warnSoft, gap: 2 },

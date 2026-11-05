@@ -31,6 +31,8 @@ jobs:
       - run: pytest -q
       - name: Eval harness (demo model, no API calls)
         run: python -m evals.run --fake --out /tmp/fake.md || true
+      - name: Ask-your-weeks evals (fake or cached embeddings, demo model)
+        run: python -m evals.rag_run --fake --out /tmp/rag.md
 
   evals:
     if: github.event_name == 'workflow_dispatch'

@@ -1,0 +1,146 @@
+{
+ "docs": [
+  {
+   "id": "week:2026-09-07",
+   "text": "Mon 7 Sep: Gym 07:00-08:00 (done); Work 09:00-17:00. Spanish 0 of 2 done."
+  },
+  {
+   "id": "week:2026-09-14",
+   "text": "Tue 15 Sep: Dentist 10:00-11:00 (done). Work 09:00-17:00. Gym 18:00-19:00 (done)."
+  },
+  {
+   "id": "week:2026-09-21",
+   "text": "Wed 23 Sep: Spanish lesson 18:00-19:00 (done); Spanish sessions 2 of 2 done."
+  },
+  {
+   "id": "week:2026-09-28",
+   "text": "Quiet week. Nothing planned. Habits: No alcohol 7 of 7 days."
+  },
+  {
+   "id": "month:2026-09",
+   "text": "Month summary for September 2026. Wins: gym 6 of 8 sessions, mostly mornings."
+  }
+ ],
+ "vectors": {
+  "week:2026-09-07": [
+   0.9,
+   0.1,
+   0.0
+  ],
+  "week:2026-09-14": [
+   0.6,
+   0.5,
+   0.1
+  ],
+  "week:2026-09-21": [
+   0.0,
+   0.2,
+   0.95
+  ],
+  "week:2026-09-28": [
+   0.1,
+   0.9,
+   0.1
+  ],
+  "month:2026-09": [
+   0.8,
+   0.2,
+   0.2
+  ]
+ },
+ "queries": [
+  {
+   "query": "When did I go to the gym in the morning?",
+   "vector": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "bm25": [
+    "month:2026-09",
+    "week:2026-09-07",
+    "week:2026-09-14"
+   ],
+   "vector_ranked": [
+    "week:2026-09-07",
+    "month:2026-09",
+    "week:2026-09-14",
+    "week:2026-09-28",
+    "week:2026-09-21"
+   ],
+   "hybrid": [
+    "month:2026-09",
+    "week:2026-09-07",
+    "week:2026-09-14"
+   ]
+  },
+  {
+   "query": "Spanish lessons",
+   "vector": [
+    0.0,
+    0.1,
+    1.0
+   ],
+   "bm25": [
+    "week:2026-09-21",
+    "week:2026-09-07"
+   ],
+   "vector_ranked": [
+    "week:2026-09-21",
+    "month:2026-09",
+    "week:2026-09-28",
+    "week:2026-09-14",
+    "week:2026-09-07"
+   ],
+   "hybrid": [
+    "week:2026-09-21",
+    "week:2026-09-07",
+    "month:2026-09"
+   ]
+  },
+  {
+   "query": "dentist appointment",
+   "vector": [
+    0.5,
+    0.5,
+    0.0
+   ],
+   "bm25": [
+    "week:2026-09-14"
+   ],
+   "vector_ranked": [
+    "week:2026-09-14",
+    "month:2026-09",
+    "week:2026-09-07",
+    "week:2026-09-28",
+    "week:2026-09-21"
+   ],
+   "hybrid": [
+    "week:2026-09-14",
+    "month:2026-09",
+    "week:2026-09-07"
+   ]
+  },
+  {
+   "query": "a calm restful week",
+   "vector": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "bm25": [],
+   "vector_ranked": [
+    "week:2026-09-28",
+    "week:2026-09-14",
+    "month:2026-09",
+    "week:2026-09-21",
+    "week:2026-09-07"
+   ],
+   "hybrid": [
+    "week:2026-09-28",
+    "week:2026-09-14",
+    "month:2026-09"
+   ]
+  }
+ ]
+}

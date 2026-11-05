@@ -24,7 +24,7 @@ export interface WeekLog {
   routines: { done: number; total: number };
 }
 
-async function loadWeekLog(db: Db, weekStart: string, todayKey: string, groups: Groups): Promise<WeekLog> {
+export async function loadWeekLog(db: Db, weekStart: string, todayKey: string, groups: Groups): Promise<WeekLog> {
   const loaded = await loadWeek(db, weekStart, addWeeks(weekStart, 1));
   const week = { ...loaded.week, settings: { ...loaded.week.settings, earliestStart: plannableFromKey(weekStart, todayKey) } };
   const rows = rowsByDay(week, planWeek(week), await loadDoneEvents(db, weekStart)).flat();

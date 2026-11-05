@@ -18,6 +18,9 @@ async function dbVersion(db: Db): Promise<number> {
   return row?.user_version ?? 0;
 }
 
+/** Caches that are rebuilt on their own; left out of backups (an import still empties them). */
+const CACHE_TABLES = new Set(["doc_embeddings"]);
+
 /** The app's own tables (not SQLite's internal ones). */
 async function tableNames(db: Db): Promise<string[]> {
   const rows = await db.getAllAsync<{ name: string }>(
@@ -31,7 +34,7 @@ const quote = (name: string) => `"${name.replace(/"/g, '""')}"`;
 
 export async function exportBackup(db: Db, now: Date): Promise<Backup> {
   const tables: Record<string, Row[]> = {};
-  for (const t of await tableNames(db)) tables[t] = await db.getAllAsync<Row>(`SELECT * FROM ${quote(t)}`, []);
+  for (const t of await tableNames(db)) if (!CACHE_TABLES.has(t)) tables[t] = await db.getAllAsync<Row>(`SELECT * FROM ${quote(t)}`, []);
   return { app: "smart-calendar", version: await dbVersion(db), exportedAt: now.toISOString(), tables };
 }
 

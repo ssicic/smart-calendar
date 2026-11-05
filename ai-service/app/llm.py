@@ -44,11 +44,21 @@ class ClaudeLLM:
 class DemoLLM:
     """AI_FAKE=1: no API call, no cost. Weekly review: suggests one fewer session a
     week for the first item with sessions not done, so Accept can be tried.
-    Monthly summary: counts the done sessions. Journey: the same four steps. Check-in: the automatic choice. Brain dump: one habit per wish."""
+    Monthly summary: counts the done sessions. Journey: the same four steps. Check-in: the automatic choice. Brain dump: one habit per wish.
+    Ask your past weeks: cites the first week search found."""
 
     def structured(self, system: str, user: str, schema: type[T]) -> T:
         import json
+        import re
 
+        if schema.__name__ == "WeeksAnswer":
+            # The first document search found, cited as the answer.
+            ids = re.findall(r'<doc id="([^"]+)">', user)
+            if not ids:
+                return schema.model_validate({"answer": "(Demo mode, no AI call.) No weeks to look at.", "found": False, "citations": []})
+            return schema.model_validate(
+                {"answer": f"(Demo mode, no AI call.) The best match is {ids[0]}.", "found": True, "citations": ids[:1]}
+            )
         facts = json.loads(user.split("\n", 1)[1])
         if schema.__name__ == "BrainDumpPlan":
             wishes = [w.strip() for w in facts["wishes"].replace("\n", ",").split(",") if w.strip()]

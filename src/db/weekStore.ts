@@ -420,6 +420,19 @@ const MIGRATIONS: string[] = [
     WHEN '#9A938C' THEN '#8A8178'
     ELSE color END;
   `,
+  // Version 26: "Ask your past weeks". One embedding (a list of numbers that
+  // stands for the meaning of a text) per week or month-summary document, as
+  // JSON. `text_hash` says which text it was made from: a week is embedded
+  // again only when its text (or the embedding model) changes. A cache: it can
+  // always be rebuilt, so backups leave it out.
+  `
+  CREATE TABLE doc_embeddings (
+    doc_id TEXT PRIMARY KEY,
+    text_hash TEXT NOT NULL,
+    model TEXT NOT NULL,
+    vector TEXT NOT NULL
+  );
+  `,
 ];
 
 /** `upTo` (tests only): stop at that version, to test the next step on old data. */

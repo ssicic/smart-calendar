@@ -16,7 +16,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .llm import LLM, ClaudeLLM, DemoLLM, LLMRefused
-from . import agent, brain_dump, coach, journey, monthly, tracing
+from . import agent, ask_weeks, brain_dump, coach, journey, monthly, tracing
+from .embeddings import Embedder, EmbeddingError, default_embedder
 from .review import SYSTEM_PROMPT, ReviewRequest, WeeklyReview, build_user_message, clean
 
 app = FastAPI(title="Smart Calendar AI")
@@ -104,6 +105,36 @@ def brain_dump_plan(
     req: brain_dump.BrainDumpRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)
 ) -> brain_dump.BrainDumpPlan:
     return brain_dump.clean(ask(llm, brain_dump.SYSTEM_PROMPT, brain_dump.build_user_message(req), brain_dump.BrainDumpPlan), req)
+
+
+def get_embedder() -> Embedder | None:
+    """Dependency: Voyage with VOYAGE_API_KEY, the fake one with AI_FAKE=1; tests swap it."""
+    return default_embedder()
+
+
+@app.post("/embed", response_model=ask_weeks.EmbedResponse)
+def embed(
+    req: ask_weeks.EmbedRequest, embedder: Embedder | None = Depends(get_embedder), _: None = Depends(check_token)
+) -> ask_weeks.EmbedResponse:
+    """Embeddings for week documents or a question. The app stores the week ones on the phone."""
+    if embedder is None:
+        # The app then searches by keywords only.
+        raise HTTPException(503, "Embeddings aren't set up: add VOYAGE_API_KEY to the AI service.")
+    if any(len(t) > 8000 for t in req.texts):
+        raise HTTPException(422, "One of the texts is too long.")
+    try:
+        return ask_weeks.EmbedResponse(model=embedder.model, vectors=embedder.embed(req.texts, req.input_type))
+    except EmbeddingError as e:
+        raise HTTPException(503, str(e))
+
+
+@app.post("/ask-weeks", response_model=ask_weeks.WeeksAnswer)
+def ask_weeks_endpoint(
+    req: ask_weeks.AskRequest, llm: LLM = Depends(get_llm), _: None = Depends(check_token)
+) -> ask_weeks.WeeksAnswer:
+    if not req.docs:
+        return ask_weeks.WeeksAnswer(answer="There are no past weeks to look at yet.", found=False, citations=[])
+    return ask_weeks.clean(ask(llm, ask_weeks.SYSTEM_PROMPT, ask_weeks.build_user_message(req), ask_weeks.WeeksAnswer), req)
 
 
 def get_plan_model():
