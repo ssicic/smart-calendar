@@ -4,6 +4,14 @@ A weekly planner for Android and web. Fixed things stay fixed, flexible goals
 ("Gym 60 min, 3x a week") are placed into the free gaps automatically, and the
 app won't quietly overbook a week.
 
+<p>
+  <img src="docs/screenshots/1-calendar.jpg" width="19%" alt="Week calendar with coloured groups and done blocks">
+  <img src="docs/screenshots/2-today.jpg" width="19%" alt="Today: habits, to-dos and the day's plan">
+  <img src="docs/screenshots/3-plan-my-week.jpg" width="19%" alt="Plan my week: the agent proposes a move">
+  <img src="docs/screenshots/4-review.jpg" width="19%" alt="Week review with an AI suggestion">
+  <img src="docs/screenshots/5-rewards.jpg" width="19%" alt="Points and rewards">
+</p>
+
 ## AI features
 
 - **Plan my week**: an agent reads the week and an optional wish ("study Mon–Fri
