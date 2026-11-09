@@ -5,7 +5,7 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "web": "expo start --web",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -31,6 +31,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-android-widget": "^0.26.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-web": "^0.21.4"
   },

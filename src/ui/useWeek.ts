@@ -3,6 +3,7 @@
 // database, then reload from it. The database is the single source of truth,
 // so the screen can never drift out of sync with what's saved.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppState } from "react-native";
 import {
   DAY,
   WEEK,
@@ -110,6 +111,7 @@ import type { SleepScope } from "./SleepSheet";
 import { IMPORTANCE_PRIORITY, TIME_OF_DAY_WINDOWS, type TimeOfDay } from "./quickAdd";
 import { addWeeks, monthGrid, monthOfWeek, monthsFrom, periodsOfWeek, weeksOfYear } from "./weekDate";
 import { isEventKind, type WeekRow } from "./weekRows";
+import { refreshWidget } from "../widget/widgetTask";
 
 /** A journey as the screen shows it: where it is this week and what's done. */
 export interface JourneyView {
@@ -213,10 +215,14 @@ export function useWeek(db: Db, weekStart: string, earliestStart = 0) {
     }
     setJourneys(views);
     setJourneyQueue(await loadQueue(db));
+    refreshWidget(db); // the home screen widget shows the change too
   }, [db, weekStart, nextWeek]);
 
   useEffect(() => {
     refresh();
+    // Back in the app: reload, in case the widget's Done button changed something.
+    const sub = AppState.addEventListener("change", (s) => s === "active" && refresh());
+    return () => sub.remove();
   }, [refresh]);
 
   const week = useMemo(

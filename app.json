@@ -46,6 +46,29 @@
           "resizeMode": "contain",
           "backgroundColor": "#FBF8F3"
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./node_modules/@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf",
+            "./node_modules/@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
+            "./node_modules/@expo-google-fonts/bricolage-grotesque/700Bold/BricolageGrotesque_700Bold.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "Today",
+              "label": "Today",
+              "description": "Your next session, with a Done button",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
       ]
     ],
     "extra": {
