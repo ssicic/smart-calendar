@@ -10,29 +10,28 @@ import { DONE_ACTION, TodayWidget } from "./TodayWidget";
 
 export const WIDGET_NAME = "Today";
 
-let opened: Promise<Db> | undefined;
-function database(): Promise<Db> {
-  opened ??= (async () => {
-    const db = (await openDatabaseAsync("smart-calendar.db")) as unknown as Db;
-    await migrate(db); // in case the widget runs before the app ever has after an update
-    return db;
-  })();
-  return opened;
-}
-
-async function render(db?: Db) {
-  return <TodayWidget today={await loadToday(db ?? (await database()), new Date())} />;
+async function render(db: Db) {
+  return <TodayWidget today={await loadToday(db, new Date())} />;
 }
 
 export async function widgetTaskHandler({ widgetAction, clickAction, clickActionData, renderWidget }: WidgetTaskHandlerProps) {
   if (widgetAction === "WIDGET_DELETED") return;
+  // Its own connection, closed when done. Without useNewConnection, expo-sqlite
+  // hands back the app's open connection, and when the widget's handle was
+  // cleaned up it closed the app's connection too ("NullPointerException" on
+  // the next query in the app).
+  const sqlite = await openDatabaseAsync("smart-calendar.db", { useNewConnection: true });
+  const db = sqlite as unknown as Db;
   try {
+    await migrate(db); // in case the widget runs before the app has after an update
     if (widgetAction === "WIDGET_CLICK" && clickAction === DONE_ACTION && typeof clickActionData?.id === "string") {
-      await markDoneToday(await database(), new Date(), clickActionData.id);
+      await markDoneToday(db, new Date(), clickActionData.id);
     }
-    renderWidget(await render());
+    renderWidget(await render(db));
   } catch (e) {
     console.error(e);
+  } finally {
+    await sqlite.closeAsync().catch(() => {});
   }
 }
 
